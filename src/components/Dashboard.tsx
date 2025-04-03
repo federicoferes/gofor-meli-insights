@@ -2,6 +2,37 @@
 import React from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+
+const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#8dd1e1', '#a4de6c'];
+
+// Sample data for the demo dashboard
+const salesData = [
+  { name: 'Ene', value: 12400 },
+  { name: 'Feb', value: 15600 },
+  { name: 'Mar', value: 14200 },
+  { name: 'Abr', value: 16800 },
+  { name: 'May', value: 18900 },
+  { name: 'Jun', value: 17300 },
+];
+
+const costDistributionData = [
+  { name: 'Comisiones', value: 12500 },
+  { name: 'Impuestos', value: 25600 },
+  { name: 'Envíos', value: 8500 },
+  { name: 'Descuentos', value: 7800 },
+  { name: 'Anulaciones', value: 3600 },
+];
+
+const topProducts = [
+  { id: 1, name: 'Smartphone XYZ', units: 152, revenue: 45600 },
+  { id: 2, name: 'Auriculares Bluetooth', units: 98, revenue: 29400 },
+  { id: 3, name: 'Cargador Tipo C', units: 76, revenue: 15200 },
+  { id: 4, name: 'Funda Protectora', units: 67, revenue: 6700 },
+  { id: 5, name: 'Smartwatch Pro', units: 54, revenue: 32400 },
+];
 
 const Dashboard = () => {
   return (
@@ -17,128 +48,172 @@ const Dashboard = () => {
         <Tabs defaultValue="ventas" className="w-full">
           <TabsList className="grid w-full grid-cols-3 mb-8">
             <TabsTrigger value="ventas">Ventas</TabsTrigger>
-            <TabsTrigger value="margenes">Márgenes</TabsTrigger>
+            <TabsTrigger value="costos">Costos</TabsTrigger>
             <TabsTrigger value="productos">Productos</TabsTrigger>
           </TabsList>
           
           <TabsContent value="ventas" className="bg-white rounded-xl shadow-lg p-4 md:p-8">
-            <div className="aspect-video relative overflow-hidden rounded-lg border border-gray-200">
-              <img 
-                src="https://via.placeholder.com/1200x675?text=Dashboard+de+Ventas" 
-                alt="Dashboard de Ventas" 
-                className="w-full h-full object-cover"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end">
-                <div className="p-6 text-white">
-                  <h3 className="text-2xl font-bold mb-2">Dashboard de Ventas</h3>
-                  <p>Visualizá todas tus métricas de ventas en tiempo real con gráficos detallados.</p>
-                </div>
+            <div className="mb-6">
+              <h3 className="text-xl font-bold mb-4">Ventas Mensuales</h3>
+              <div className="h-80">
+                <ChartContainer 
+                  config={{
+                    sales: { label: 'Ventas', color: '#8884d8' }
+                  }}
+                >
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={salesData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" />
+                      <YAxis />
+                      <ChartTooltip 
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            return (
+                              <div className="bg-white p-3 border rounded shadow-lg">
+                                <p className="font-semibold">{payload[0].payload.name}</p>
+                                <p className="text-gofor-purple">$ {payload[0].value?.toLocaleString('es-AR')}</p>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                      <Legend />
+                      <Bar dataKey="value" name="Ventas ($)" fill="#8884d8" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </ChartContainer>
               </div>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
               <Card>
                 <CardContent className="p-4">
-                  <div className="text-sm text-gray-500 mb-1">Ventas del mes</div>
+                  <div className="text-sm text-gray-500 mb-1">Ventas totales (GMV)</div>
                   <div className="text-2xl font-bold text-gofor-purple">$1,234,567</div>
-                  <div className="text-sm font-medium text-green-500">+12.5% vs mes anterior</div>
+                  <div className="text-sm font-medium text-green-500">+12.5% vs periodo anterior</div>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent className="p-4">
                   <div className="text-sm text-gray-500 mb-1">Unidades vendidas</div>
                   <div className="text-2xl font-bold text-gofor-purple">823</div>
-                  <div className="text-sm font-medium text-green-500">+8.7% vs mes anterior</div>
+                  <div className="text-sm font-medium text-green-500">+8.7% vs periodo anterior</div>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent className="p-4">
                   <div className="text-sm text-gray-500 mb-1">Ticket promedio</div>
                   <div className="text-2xl font-bold text-gofor-purple">$1,500</div>
-                  <div className="text-sm font-medium text-green-500">+3.2% vs mes anterior</div>
+                  <div className="text-sm font-medium text-green-500">+3.2% vs periodo anterior</div>
                 </CardContent>
               </Card>
             </div>
           </TabsContent>
           
-          <TabsContent value="margenes" className="bg-white rounded-xl shadow-lg p-4 md:p-8">
-            <div className="aspect-video relative overflow-hidden rounded-lg border border-gray-200">
-              <img 
-                src="https://via.placeholder.com/1200x675?text=Dashboard+de+Márgenes" 
-                alt="Dashboard de Márgenes" 
-                className="w-full h-full object-cover"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end">
-                <div className="p-6 text-white">
-                  <h3 className="text-2xl font-bold mb-2">Análisis de Márgenes</h3>
-                  <p>Conocé la rentabilidad real de cada producto después de todos los costos.</p>
-                </div>
+          <TabsContent value="costos" className="bg-white rounded-xl shadow-lg p-4 md:p-8">
+            <div className="mb-6">
+              <h3 className="text-xl font-bold mb-4">Distribución de Costos</h3>
+              <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={costDistributionData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                      outerRadius={120}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {costDistributionData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value) => [`$${value.toLocaleString('es-AR')}`, 'Monto']}
+                    />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
               </div>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
               <Card>
                 <CardContent className="p-4">
-                  <div className="text-sm text-gray-500 mb-1">Margen bruto</div>
-                  <div className="text-2xl font-bold text-gofor-purple">32.5%</div>
-                  <div className="text-sm font-medium text-green-500">+2.1% vs mes anterior</div>
+                  <div className="text-sm text-gray-500 mb-1">Comisiones</div>
+                  <div className="text-2xl font-bold text-gofor-purple">$86,419</div>
+                  <div className="text-sm font-medium text-gray-500">7% del GMV</div>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent className="p-4">
-                  <div className="text-sm text-gray-500 mb-1">Margen neto</div>
-                  <div className="text-2xl font-bold text-gofor-purple">18.3%</div>
-                  <div className="text-sm font-medium text-green-500">+1.5% vs mes anterior</div>
+                  <div className="text-sm text-gray-500 mb-1">Impuestos</div>
+                  <div className="text-2xl font-bold text-gofor-purple">$209,876</div>
+                  <div className="text-sm font-medium text-gray-500">17% del GMV</div>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent className="p-4">
-                  <div className="text-sm text-gray-500 mb-1">Ganancia total</div>
-                  <div className="text-2xl font-bold text-gofor-purple">$225,904</div>
-                  <div className="text-sm font-medium text-green-500">+15.7% vs mes anterior</div>
+                  <div className="text-sm text-gray-500 mb-1">Envíos</div>
+                  <div className="text-2xl font-bold text-gofor-purple">$37,037</div>
+                  <div className="text-sm font-medium text-gray-500">3% del GMV</div>
+                </CardContent>
+              </Card>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+              <Card>
+                <CardContent className="p-4">
+                  <div className="text-sm text-gray-500 mb-1">Descuentos</div>
+                  <div className="text-2xl font-bold text-gofor-purple">$61,728</div>
+                  <div className="text-sm font-medium text-gray-500">5% del GMV</div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <div className="text-sm text-gray-500 mb-1">Anulaciones</div>
+                  <div className="text-2xl font-bold text-gofor-purple">$24,691</div>
+                  <div className="text-sm font-medium text-gray-500">2% del GMV</div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <div className="text-sm text-gray-500 mb-1">IVA</div>
+                  <div className="text-2xl font-bold text-gofor-purple">$259,259</div>
+                  <div className="text-sm font-medium text-gray-500">21% del GMV</div>
                 </CardContent>
               </Card>
             </div>
           </TabsContent>
           
           <TabsContent value="productos" className="bg-white rounded-xl shadow-lg p-4 md:p-8">
-            <div className="aspect-video relative overflow-hidden rounded-lg border border-gray-200">
-              <img 
-                src="https://via.placeholder.com/1200x675?text=Ranking+de+Productos" 
-                alt="Ranking de Productos" 
-                className="w-full h-full object-cover"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end">
-                <div className="p-6 text-white">
-                  <h3 className="text-2xl font-bold mb-2">Ranking de Productos</h3>
-                  <p>Identificá fácilmente cuáles son tus productos estrella y más rentables.</p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-              <Card>
-                <CardContent className="p-4">
-                  <div className="text-sm text-gray-500 mb-1">Producto más vendido</div>
-                  <div className="text-xl font-bold text-gofor-purple truncate">Auriculares Inalámbricos</div>
-                  <div className="text-sm font-medium text-gray-500">152 unidades</div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-4">
-                  <div className="text-sm text-gray-500 mb-1">Producto más rentable</div>
-                  <div className="text-xl font-bold text-gofor-purple truncate">Parlante Bluetooth</div>
-                  <div className="text-sm font-medium text-gray-500">Margen: 45.2%</div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-4">
-                  <div className="text-sm text-gray-500 mb-1">Mayor crecimiento</div>
-                  <div className="text-xl font-bold text-gofor-purple truncate">Cargador Rápido USB-C</div>
-                  <div className="text-sm font-medium text-green-500">+67.3% vs mes anterior</div>
-                </CardContent>
-              </Card>
-            </div>
+            <h3 className="text-xl font-bold mb-4">Productos Más Vendidos</h3>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Producto</TableHead>
+                  <TableHead className="text-right">Unidades</TableHead>
+                  <TableHead className="text-right">Ingresos</TableHead>
+                  <TableHead className="text-right">% del Total</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {topProducts.map((product) => (
+                  <TableRow key={product.id}>
+                    <TableCell className="font-medium">{product.name}</TableCell>
+                    <TableCell className="text-right">{product.units}</TableCell>
+                    <TableCell className="text-right">${product.revenue.toLocaleString('es-AR')}</TableCell>
+                    <TableCell className="text-right">
+                      {(product.revenue / topProducts.reduce((sum, p) => sum + p.revenue, 0) * 100).toFixed(1)}%
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </TabsContent>
         </Tabs>
       </div>

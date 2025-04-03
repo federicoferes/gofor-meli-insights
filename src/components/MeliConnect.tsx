@@ -14,15 +14,16 @@ const MeliConnect = () => {
   const { toast } = useToast();
   
   useEffect(() => {
-    // Check if user is logged in
+    // Check if user is logged in and MeLi connection status
     const checkUserSession = async () => {
       try {
         setIsLoading(true);
         const { data } = await supabase.auth.getSession();
-        setIsLoggedIn(!!data.session);
-        setUser(data.session?.user || null);
         
         if (data.session?.user) {
+          setIsLoggedIn(true);
+          setUser(data.session.user);
+          
           // Check if user is already connected to MeLi
           try {
             const { data: connectionData, error } = await supabase.functions.invoke('meli-data', {
@@ -35,6 +36,10 @@ const MeliConnect = () => {
           } catch (error) {
             console.error("Error checking MeLi connection:", error);
           }
+        } else {
+          setIsLoggedIn(false);
+          setUser(null);
+          setIsConnected(false);
         }
       } catch (error) {
         console.error("Error checking session:", error);
@@ -52,6 +57,15 @@ const MeliConnect = () => {
       
       if (!session) {
         setIsConnected(false);
+      } else if (session?.user) {
+        // Check MeLi connection again when auth state changes
+        supabase.functions.invoke('meli-data', {
+          body: { user_id: session.user.id }
+        }).then(({ data, error }) => {
+          if (!error && data?.is_connected) {
+            setIsConnected(true);
+          }
+        });
       }
     });
     
@@ -66,7 +80,7 @@ const MeliConnect = () => {
     
     // Using the actual Mercado Libre app ID
     const MELI_APP_ID = '8830083472538103';
-    const REDIRECT_URI = 'https://gofor-meli-insights.lovable.app/oauth/callback';
+    const REDIRECT_URI = window.location.origin + '/oauth/callback';
     const STATE = `${user.id}:${Math.random().toString(36).substring(2)}`;
     
     // Save state to validate later
