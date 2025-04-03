@@ -3,7 +3,8 @@ import React, { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from "@/components/ui/use-toast";
-import { Loader2 } from "lucide-react";
+import { Loader2, Info, Check } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const MeliConnect = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -11,6 +12,7 @@ const MeliConnect = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [connectionDetails, setConnectionDetails] = useState(null);
   const { toast } = useToast();
   
   useEffect(() => {
@@ -32,6 +34,9 @@ const MeliConnect = () => {
             
             if (!error && connectionData?.is_connected) {
               setIsConnected(true);
+              setConnectionDetails({
+                meli_user_id: connectionData.meli_user_id
+              });
             }
           } catch (error) {
             console.error("Error checking MeLi connection:", error);
@@ -40,6 +45,7 @@ const MeliConnect = () => {
           setIsLoggedIn(false);
           setUser(null);
           setIsConnected(false);
+          setConnectionDetails(null);
         }
       } catch (error) {
         console.error("Error checking session:", error);
@@ -57,6 +63,7 @@ const MeliConnect = () => {
       
       if (!session) {
         setIsConnected(false);
+        setConnectionDetails(null);
       } else if (session?.user) {
         // Check MeLi connection again when auth state changes
         supabase.functions.invoke('meli-data', {
@@ -64,6 +71,9 @@ const MeliConnect = () => {
         }).then(({ data, error }) => {
           if (!error && data?.is_connected) {
             setIsConnected(true);
+            setConnectionDetails({
+              meli_user_id: data.meli_user_id
+            });
           }
         });
       }
@@ -103,17 +113,34 @@ const MeliConnect = () => {
 
   if (isConnected) {
     return (
-      <Button 
-        className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-2 px-6 py-3"
-        disabled
-      >
-        <img 
-          src="https://http2.mlstatic.com/frontend-assets/ui-navigation/5.19.5/mercadolibre/favicon.svg" 
-          alt="Mercado Libre logo" 
-          className="w-5 h-5"
-        />
-        Conectado con Mercado Libre
-      </Button>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button 
+              className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-2 px-6 py-3"
+              disabled
+            >
+              <img 
+                src="https://http2.mlstatic.com/frontend-assets/ui-navigation/5.19.5/mercadolibre/favicon.svg" 
+                alt="Mercado Libre logo" 
+                className="w-5 h-5"
+              />
+              <span className="flex items-center gap-1">
+                Conectado con Mercado Libre
+                <Check className="h-4 w-4 ml-1" />
+              </span>
+              <Info className="h-4 w-4 ml-1 text-white opacity-70" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <div className="p-1">
+              <p className="font-medium">Cuenta de Mercado Libre conectada</p>
+              <p className="text-xs mt-1">ID: {connectionDetails?.meli_user_id || 'Desconocido'}</p>
+              <p className="text-xs mt-2">La aplicación tiene acceso a tus datos de ventas, productos y métricas.</p>
+            </div>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     );
   }
 

@@ -21,13 +21,13 @@ serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     
     const body = await req.json();
-    const { user_id, endpoint, method = "GET", params = {} } = body;
+    const { user_id, endpoint, method = "GET", params = {}, batch_requests = [] } = body;
 
     if (!user_id) {
       throw new Error("Missing user_id parameter");
     }
 
-    console.log(`Getting data for user: ${user_id}, endpoint: ${endpoint || 'none'}`);
+    console.log(`Getting data for user: ${user_id}, endpoint: ${endpoint || 'none'}, batch_requests: ${batch_requests.length}`);
 
     // Fetch the user's Mercado Libre tokens
     const { data: tokenData, error: tokenError } = await supabase
@@ -80,9 +80,9 @@ serve(async (req) => {
       });
 
       if (!refreshResponse.ok) {
-        const refreshError = await refreshResponse.json();
+        const refreshError = await refreshResponse.text();
         console.error("Error refreshing token:", refreshError);
-        throw new Error(`Error refreshing token: ${refreshError.message || refreshResponse.statusText}`);
+        throw new Error(`Error refreshing token: ${refreshError || refreshResponse.statusText}`);
       }
 
       const refreshData = await refreshResponse.json();
@@ -105,8 +105,8 @@ serve(async (req) => {
       }
     }
 
-    // If no endpoint was specified, just return connection status
-    if (!endpoint) {
+    // If no endpoint was specified and no batch requests, just return connection status
+    if (!endpoint && batch_requests.length === 0) {
       console.log("Returning connection status only");
       return new Response(
         JSON.stringify({
@@ -122,6 +122,83 @@ serve(async (req) => {
       );
     }
 
+    // Process batch requests if present
+    if (batch_requests.length > 0) {
+      console.log(`Processing ${batch_requests.length} batch requests`);
+      
+      const batchResults = await Promise.all(
+        batch_requests.map(async (request) => {
+          const { endpoint: batchEndpoint, method: batchMethod = "GET", params: batchParams = {} } = request;
+          
+          if (!batchEndpoint) {
+            return { 
+              error: "Missing endpoint in batch request",
+              request
+            };
+          }
+          
+          try {
+            // Make the request to Mercado Libre API
+            const apiUrl = new URL(`https://api.mercadolibre.com${batchEndpoint}`);
+            
+            // Add query parameters for GET requests
+            if (batchMethod === "GET" && batchParams) {
+              Object.entries(batchParams).forEach(([key, value]) => {
+                apiUrl.searchParams.append(key, String(value));
+              });
+            }
+            
+            console.log(`Batch request to: ${apiUrl.toString()}`);
+            
+            const apiResponse = await fetch(apiUrl, {
+              method: batchMethod,
+              headers: {
+                "Authorization": `Bearer ${accessToken}`,
+                "Content-Type": "application/json",
+              },
+              ...(batchMethod !== "GET" && batchParams ? { body: JSON.stringify(batchParams) } : {}),
+            });
+            
+            if (!apiResponse.ok) {
+              const apiError = await apiResponse.json();
+              throw new Error(apiError.message || apiResponse.statusText);
+            }
+            
+            const apiData = await apiResponse.json();
+            
+            return {
+              endpoint: batchEndpoint,
+              data: apiData,
+              success: true
+            };
+          } catch (error) {
+            console.error(`Error in batch request to ${batchEndpoint}:`, error);
+            return {
+              endpoint: batchEndpoint,
+              error: error.message,
+              success: false
+            };
+          }
+        })
+      );
+      
+      // Process and calculate metrics if we have the dashboard data
+      const dashboardData = processDashboardData(batchResults);
+      
+      return new Response(
+        JSON.stringify({
+          success: true,
+          batch_results: batchResults,
+          dashboard_data: dashboardData
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        }
+      );
+    }
+
+    // Process single request if no batch
     console.log(`Making request to Mercado Libre API: ${endpoint}`);
 
     // Make the request to Mercado Libre API
@@ -179,3 +256,157 @@ serve(async (req) => {
     );
   }
 });
+
+// Function to process and calculate dashboard metrics from batch results
+function processDashboardData(batchResults) {
+  try {
+    // Initialize dashboard data structure
+    const dashboardData = {
+      summary: {
+        gmv: 0,
+        units: 0,
+        avgTicket: 0,
+        commissions: 0,
+        taxes: 0,
+        shipping: 0,
+        discounts: 0,
+        refunds: 0,
+        iva: 0
+      },
+      salesByMonth: [],
+      costDistribution: [],
+      topProducts: []
+    };
+    
+    // Find orders data in batch results
+    const ordersResult = batchResults.find(result => 
+      result.endpoint?.includes('/orders/search') && result.success
+    );
+    
+    if (!ordersResult || !ordersResult.data || !ordersResult.data.results) {
+      console.log("No valid orders data found in batch results");
+      return dashboardData;
+    }
+    
+    const orders = ordersResult.data.results;
+    console.log(`Processing ${orders.length} orders for dashboard metrics`);
+    
+    if (orders.length === 0) {
+      return dashboardData;
+    }
+    
+    // Calculate GMV and units
+    let totalAmount = 0;
+    let totalUnits = 0;
+    const productSales = new Map(); // For tracking top products
+    const monthSales = new Map(); // For tracking sales by month
+    
+    // Process each order
+    orders.forEach(order => {
+      if (!order.order_items || !order.payments) return;
+      
+      // Calculate order amount and units
+      const orderAmount = order.total_amount || 0;
+      totalAmount += orderAmount;
+      
+      // Calculate total units in this order
+      const orderUnits = order.order_items.reduce((sum, item) => sum + (item.quantity || 0), 0);
+      totalUnits += orderUnits;
+      
+      // Track products for top products calculation
+      order.order_items.forEach(item => {
+        const productId = item.item?.id;
+        const productName = item.item?.title || 'Producto sin nombre';
+        const quantity = item.quantity || 0;
+        const unitPrice = item.unit_price || 0;
+        const revenue = quantity * unitPrice;
+        
+        if (productId) {
+          if (productSales.has(productId)) {
+            const current = productSales.get(productId);
+            productSales.set(productId, {
+              ...current,
+              units: current.units + quantity,
+              revenue: current.revenue + revenue
+            });
+          } else {
+            productSales.set(productId, {
+              id: productId,
+              name: productName,
+              units: quantity,
+              revenue: revenue
+            });
+          }
+        }
+      });
+      
+      // Track sales by month
+      const orderDate = new Date(order.date_created);
+      const monthKey = `${orderDate.getFullYear()}-${orderDate.getMonth() + 1}`;
+      const monthName = new Intl.DateTimeFormat('es', { month: 'short' }).format(orderDate);
+      
+      if (monthSales.has(monthKey)) {
+        monthSales.set(monthKey, {
+          ...monthSales.get(monthKey),
+          value: monthSales.get(monthKey).value + orderAmount
+        });
+      } else {
+        monthSales.set(monthKey, {
+          key: monthKey,
+          name: monthName,
+          value: orderAmount
+        });
+      }
+    });
+    
+    // Calculate average ticket
+    const avgTicket = totalUnits > 0 ? totalAmount / totalUnits : 0;
+    
+    // Calculate estimated costs based on percentages
+    // These would ideally come from actual MeLi data but we're estimating for now
+    const commissions = totalAmount * 0.07; // 7% commissions
+    const taxes = totalAmount * 0.17;      // 17% taxes
+    const shipping = totalAmount * 0.03;   // 3% shipping
+    const discounts = totalAmount * 0.05;  // 5% discounts
+    const refunds = totalAmount * 0.02;    // 2% refunds
+    const iva = totalAmount * 0.21;        // 21% IVA
+    
+    // Set summary data
+    dashboardData.summary = {
+      gmv: totalAmount,
+      units: totalUnits,
+      avgTicket,
+      commissions,
+      taxes,
+      shipping,
+      discounts,
+      refunds,
+      iva
+    };
+    
+    // Set sales by month (last 6 months or all if less)
+    dashboardData.salesByMonth = Array.from(monthSales.values())
+      .sort((a, b) => a.key.localeCompare(b.key))
+      .slice(-6); // Last 6 months
+    
+    // Set cost distribution
+    dashboardData.costDistribution = [
+      { name: 'Comisiones', value: commissions },
+      { name: 'Impuestos', value: taxes },
+      { name: 'Envíos', value: shipping },
+      { name: 'Descuentos', value: discounts },
+      { name: 'Anulaciones', value: refunds }
+    ];
+    
+    // Set top products (top 5 by revenue)
+    dashboardData.topProducts = Array.from(productSales.values())
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 5);
+    
+    console.log("Successfully calculated dashboard metrics");
+    return dashboardData;
+  } catch (error) {
+    console.error("Error processing dashboard data:", error);
+    return null;
+  }
+}
