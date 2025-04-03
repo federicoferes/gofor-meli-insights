@@ -13,7 +13,7 @@ const corsHeaders = {
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
@@ -27,6 +27,8 @@ serve(async (req) => {
       throw new Error("Missing user_id parameter");
     }
 
+    console.log(`Getting data for user: ${user_id}, endpoint: ${endpoint || 'none'}`);
+
     // Fetch the user's Mercado Libre tokens
     const { data: tokenData, error: tokenError } = await supabase
       .from('meli_tokens')
@@ -35,10 +37,12 @@ serve(async (req) => {
       .maybeSingle();
 
     if (tokenError) {
+      console.error("Error fetching tokens:", tokenError);
       throw new Error(`Error fetching tokens: ${tokenError.message}`);
     }
 
     if (!tokenData) {
+      console.log("User not connected to Mercado Libre");
       return new Response(
         JSON.stringify({
           success: false,
@@ -77,6 +81,7 @@ serve(async (req) => {
 
       if (!refreshResponse.ok) {
         const refreshError = await refreshResponse.json();
+        console.error("Error refreshing token:", refreshError);
         throw new Error(`Error refreshing token: ${refreshError.message || refreshResponse.statusText}`);
       }
 
@@ -95,12 +100,14 @@ serve(async (req) => {
         .eq('user_id', user_id);
 
       if (updateError) {
+        console.error("Error updating tokens:", updateError);
         throw new Error(`Error updating tokens: ${updateError.message}`);
       }
     }
 
     // If no endpoint was specified, just return connection status
     if (!endpoint) {
+      console.log("Returning connection status only");
       return new Response(
         JSON.stringify({
           success: true,
@@ -115,6 +122,8 @@ serve(async (req) => {
       );
     }
 
+    console.log(`Making request to Mercado Libre API: ${endpoint}`);
+
     // Make the request to Mercado Libre API
     const apiUrl = new URL(`https://api.mercadolibre.com${endpoint}`);
     
@@ -124,6 +133,8 @@ serve(async (req) => {
         apiUrl.searchParams.append(key, String(value));
       });
     }
+
+    console.log(`API URL: ${apiUrl.toString()}`);
 
     const apiResponse = await fetch(apiUrl, {
       method,
@@ -136,10 +147,12 @@ serve(async (req) => {
 
     if (!apiResponse.ok) {
       const apiError = await apiResponse.json();
+      console.error("Error from Mercado Libre API:", apiError);
       throw new Error(`Error from Mercado Libre API: ${apiError.message || apiResponse.statusText}`);
     }
 
     const apiData = await apiResponse.json();
+    console.log("Successfully fetched data from Mercado Libre API");
 
     return new Response(
       JSON.stringify({

@@ -41,6 +41,8 @@ const OAuthCallback = () => {
           throw new Error('Authentication code not provided by Mercado Libre.');
         }
         
+        console.log("Processing OAuth callback with code:", code);
+        
         // Call Supabase edge function to exchange code for access token
         const { data, error } = await supabase.functions.invoke('meli-auth', {
           body: {
@@ -50,7 +52,17 @@ const OAuthCallback = () => {
           }
         });
         
-        if (error) throw new Error(error.message);
+        if (error) {
+          console.error("Edge function error:", error);
+          throw new Error(error.message);
+        }
+        
+        if (!data || !data.success) {
+          console.error("Authentication failed:", data);
+          throw new Error(data?.message || 'Failed to authenticate with Mercado Libre.');
+        }
+        
+        console.log("Authentication successful:", data);
         
         toast({
           title: "Conexión exitosa",

@@ -59,13 +59,22 @@ serve(async (req) => {
       }),
     });
 
+    const tokenResponseText = await tokenResponse.text();
+    console.log("Token response:", tokenResponseText);
+
     if (!tokenResponse.ok) {
-      const errorData = await tokenResponse.json();
-      console.error("Token exchange error:", errorData);
-      throw new Error(`Error exchanging code for token: ${errorData.message || tokenResponse.statusText}`);
+      let errorMessage = "Error exchanging code for token";
+      try {
+        const errorData = JSON.parse(tokenResponseText);
+        errorMessage = `${errorMessage}: ${errorData.message || errorData.error || tokenResponse.statusText}`;
+      } catch (e) {
+        errorMessage = `${errorMessage}: ${tokenResponseText || tokenResponse.statusText}`;
+      }
+      console.error(errorMessage);
+      throw new Error(errorMessage);
     }
 
-    const tokenData = await tokenResponse.json();
+    const tokenData = JSON.parse(tokenResponseText);
     console.log("Successfully obtained access token");
 
     // Store the tokens in the database
