@@ -1,42 +1,75 @@
-
 import React from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-
 const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#8dd1e1', '#a4de6c'];
 
 // Sample data for the demo dashboard
-const salesData = [
-  { name: 'Ene', value: 12400 },
-  { name: 'Feb', value: 15600 },
-  { name: 'Mar', value: 14200 },
-  { name: 'Abr', value: 16800 },
-  { name: 'May', value: 18900 },
-  { name: 'Jun', value: 17300 },
-];
-
-const costDistributionData = [
-  { name: 'Comisiones', value: 12500 },
-  { name: 'Impuestos', value: 25600 },
-  { name: 'Envíos', value: 8500 },
-  { name: 'Descuentos', value: 7800 },
-  { name: 'Anulaciones', value: 3600 },
-];
-
-const topProducts = [
-  { id: 1, name: 'Smartphone XYZ', units: 152, revenue: 45600 },
-  { id: 2, name: 'Auriculares Bluetooth', units: 98, revenue: 29400 },
-  { id: 3, name: 'Cargador Tipo C', units: 76, revenue: 15200 },
-  { id: 4, name: 'Funda Protectora', units: 67, revenue: 6700 },
-  { id: 5, name: 'Smartwatch Pro', units: 54, revenue: 32400 },
-];
-
+const salesData = [{
+  name: 'Ene',
+  value: 12400
+}, {
+  name: 'Feb',
+  value: 15600
+}, {
+  name: 'Mar',
+  value: 14200
+}, {
+  name: 'Abr',
+  value: 16800
+}, {
+  name: 'May',
+  value: 18900
+}, {
+  name: 'Jun',
+  value: 17300
+}];
+const costDistributionData = [{
+  name: 'Comisiones',
+  value: 12500
+}, {
+  name: 'Impuestos',
+  value: 25600
+}, {
+  name: 'Envíos',
+  value: 8500
+}, {
+  name: 'Descuentos',
+  value: 7800
+}, {
+  name: 'Anulaciones',
+  value: 3600
+}];
+const topProducts = [{
+  id: 1,
+  name: 'Smartphone XYZ',
+  units: 152,
+  revenue: 45600
+}, {
+  id: 2,
+  name: 'Auriculares Bluetooth',
+  units: 98,
+  revenue: 29400
+}, {
+  id: 3,
+  name: 'Cargador Tipo C',
+  units: 76,
+  revenue: 15200
+}, {
+  id: 4,
+  name: 'Funda Protectora',
+  units: 67,
+  revenue: 6700
+}, {
+  id: 5,
+  name: 'Smartwatch Pro',
+  units: 54,
+  revenue: 32400
+}];
 const Dashboard = () => {
-  return (
-    <section id="dashboard" className="py-20 bg-gray-50">
+  return <section id="dashboard" className="py-20 bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
           <h2 className="text-3xl md:text-4xl font-bold mb-4">Tu Dashboard en acción</h2>
@@ -52,65 +85,7 @@ const Dashboard = () => {
             <TabsTrigger value="productos">Productos</TabsTrigger>
           </TabsList>
           
-          <TabsContent value="ventas" className="bg-white rounded-xl shadow-lg p-4 md:p-8">
-            <div className="mb-6">
-              <h3 className="text-xl font-bold mb-4">Ventas Mensuales</h3>
-              <div className="h-80">
-                <ChartContainer 
-                  config={{
-                    sales: { label: 'Ventas', color: '#8884d8' }
-                  }}
-                >
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={salesData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
-                      <YAxis />
-                      <ChartTooltip 
-                        content={({ active, payload }) => {
-                          if (active && payload && payload.length) {
-                            return (
-                              <div className="bg-white p-3 border rounded shadow-lg">
-                                <p className="font-semibold">{payload[0].payload.name}</p>
-                                <p className="text-gofor-purple">$ {payload[0].value?.toLocaleString('es-AR')}</p>
-                              </div>
-                            );
-                          }
-                          return null;
-                        }}
-                      />
-                      <Legend />
-                      <Bar dataKey="value" name="Ventas ($)" fill="#8884d8" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </ChartContainer>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-              <Card>
-                <CardContent className="p-4">
-                  <div className="text-sm text-gray-500 mb-1">Ventas totales (GMV)</div>
-                  <div className="text-2xl font-bold text-gofor-purple">$1,234,567</div>
-                  <div className="text-sm font-medium text-green-500">+12.5% vs periodo anterior</div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-4">
-                  <div className="text-sm text-gray-500 mb-1">Unidades vendidas</div>
-                  <div className="text-2xl font-bold text-gofor-purple">823</div>
-                  <div className="text-sm font-medium text-green-500">+8.7% vs periodo anterior</div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-4">
-                  <div className="text-sm text-gray-500 mb-1">Ticket promedio</div>
-                  <div className="text-2xl font-bold text-gofor-purple">$1,500</div>
-                  <div className="text-sm font-medium text-green-500">+3.2% vs periodo anterior</div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
+          
           
           <TabsContent value="costos" className="bg-white rounded-xl shadow-lg p-4 md:p-8">
             <div className="mb-6">
@@ -118,23 +93,13 @@ const Dashboard = () => {
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie
-                      data={costDistributionData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                      outerRadius={120}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {costDistributionData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
+                    <Pie data={costDistributionData} cx="50%" cy="50%" labelLine={false} label={({
+                    name,
+                    percent
+                  }) => `${name}: ${(percent * 100).toFixed(0)}%`} outerRadius={120} fill="#8884d8" dataKey="value">
+                      {costDistributionData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
                     </Pie>
-                    <Tooltip
-                      formatter={(value) => [`$${value.toLocaleString('es-AR')}`, 'Monto']}
-                    />
+                    <Tooltip formatter={value => [`$${value.toLocaleString('es-AR')}`, 'Monto']} />
                     <Legend />
                   </PieChart>
                 </ResponsiveContainer>
@@ -202,23 +167,19 @@ const Dashboard = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {topProducts.map((product) => (
-                  <TableRow key={product.id}>
+                {topProducts.map(product => <TableRow key={product.id}>
                     <TableCell className="font-medium">{product.name}</TableCell>
                     <TableCell className="text-right">{product.units}</TableCell>
                     <TableCell className="text-right">${product.revenue.toLocaleString('es-AR')}</TableCell>
                     <TableCell className="text-right">
                       {(product.revenue / topProducts.reduce((sum, p) => sum + p.revenue, 0) * 100).toFixed(1)}%
                     </TableCell>
-                  </TableRow>
-                ))}
+                  </TableRow>)}
               </TableBody>
             </Table>
           </TabsContent>
         </Tabs>
       </div>
-    </section>
-  );
+    </section>;
 };
-
 export default Dashboard;
