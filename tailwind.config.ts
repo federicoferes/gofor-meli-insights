@@ -1,3 +1,4 @@
+
 import type { Config } from "tailwindcss";
 
 export default {
@@ -61,7 +62,18 @@ export default {
 					'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
+				},
+				gofor: {
+					purple: '#663399',
+					lightPurple: '#8944EB',
+					yellow: '#FFD700',
+					navy: '#081949',
+					darkGray: '#262626',
+					warmWhite: '#FAFFF6'
 				}
+			},
+			fontFamily: {
+				poppins: ['Poppins', 'sans-serif'],
 			},
 			borderRadius: {
 				lg: 'var(--radius)',
