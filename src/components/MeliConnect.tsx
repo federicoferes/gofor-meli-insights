@@ -7,7 +7,7 @@ const MeliConnect = () => {
   const handleMeliConnect = () => {
     // This will be configured with your actual Mercado Libre app details
     const MELI_APP_ID = import.meta.env.VITE_MELI_APP_ID || '123456789'; // Replace with actual APP ID
-    const REDIRECT_URI = window.location.origin + '/oauth/callback';
+    const REDIRECT_URI = 'https://gofor-meli-insights.lovable.app/oauth/callback';
     const STATE = Math.random().toString(36).substring(2);
     
     // Save state to validate later
