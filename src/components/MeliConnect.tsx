@@ -1,8 +1,28 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
+import { supabase } from '@/integrations/supabase/client';
 
 const MeliConnect = () => {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  
+  useEffect(() => {
+    // Check if user is logged in
+    const checkUserSession = async () => {
+      const { data } = await supabase.auth.getSession();
+      setIsLoggedIn(!!data.session);
+    };
+    
+    checkUserSession();
+    
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsLoggedIn(!!session);
+    });
+    
+    return () => subscription.unsubscribe();
+  }, []);
+
   // Function to handle MeLi OAuth connection
   const handleMeliConnect = () => {
     // Using the actual Mercado Libre app ID
@@ -24,6 +44,7 @@ const MeliConnect = () => {
     <Button 
       onClick={handleMeliConnect}
       className="bg-gofor-purple hover:bg-gofor-lightPurple text-white flex items-center gap-2 px-6 py-3"
+      disabled={!isLoggedIn}
     >
       <img 
         src="https://http2.mlstatic.com/frontend-assets/ui-navigation/5.19.5/mercadolibre/favicon.svg" 
@@ -31,6 +52,7 @@ const MeliConnect = () => {
         className="w-5 h-5"
       />
       Conectar con Mercado Libre
+      {!isLoggedIn && <span className="text-xs ml-1">(Regístrate primero)</span>}
     </Button>
   );
 };
