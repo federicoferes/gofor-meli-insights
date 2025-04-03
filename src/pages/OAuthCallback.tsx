@@ -22,13 +22,19 @@ const OAuthCallback = () => {
         const state = params.get('state');
         const storedState = localStorage.getItem('meli_oauth_state');
         
+        // Clean up localStorage
+        localStorage.removeItem('meli_oauth_state');
+        
         // Validate state to prevent CSRF attacks
-        if (!state || state !== storedState) {
+        if (!state || !storedState || state !== storedState) {
           throw new Error('Invalid state parameter. Authentication attempt may have been compromised.');
         }
         
-        // Clean up localStorage
-        localStorage.removeItem('meli_oauth_state');
+        // Extract user ID from state (format: userId:randomString)
+        const userId = state.split(':')[0];
+        if (!userId) {
+          throw new Error('Could not determine user ID from state.');
+        }
         
         // Ensure code is present
         if (!code) {
@@ -39,21 +45,21 @@ const OAuthCallback = () => {
         const { data, error } = await supabase.functions.invoke('meli-auth', {
           body: {
             code,
-            redirect_uri: 'https://gofor-meli-insights.lovable.app/oauth/callback'
+            redirect_uri: 'https://gofor-meli-insights.lovable.app/oauth/callback',
+            user_id: userId
           }
         });
         
         if (error) throw new Error(error.message);
         
-        // Store tokens in Supabase or local state management depending on your needs
         toast({
           title: "Conexión exitosa",
           description: "Tu cuenta de Mercado Libre ha sido conectada correctamente.",
         });
         
-        // Redirect to dashboard or another appropriate page
-        setTimeout(() => navigate('/'), 1500);
-      } catch (err) {
+        // Redirect to dashboard
+        setTimeout(() => navigate('/dashboard'), 1500);
+      } catch (err: any) {
         console.error('OAuth callback error:', err);
         setError(err.message || 'Error al procesar la autenticación con Mercado Libre');
         toast({
@@ -90,10 +96,10 @@ const OAuthCallback = () => {
               <p className="font-semibold">Error:</p>
               <p>{error}</p>
               <button 
-                onClick={() => navigate('/')}
+                onClick={() => navigate('/dashboard')}
                 className="mt-4 text-gofor-purple hover:underline"
               >
-                Volver al inicio
+                Ir al panel de control
               </button>
             </div>
           ) : (
