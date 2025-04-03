@@ -4,8 +4,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Info, AlertTriangle, Code, Webhook } from "lucide-react";
 const ConfigurationGuide = () => {
-  return <section className="py-16 bg-gray-50">
-      
-    </section>;
+  return;
 };
 export default ConfigurationGuide;
