@@ -1,11 +1,8 @@
-
 import React from 'react';
 import { Button } from "@/components/ui/button";
 import MeliConnect from "./MeliConnect";
-
 const Hero = () => {
-  return (
-    <section id="hero" className="pt-20 lg:pt-28 pb-16 lg:pb-24 bg-gradient-to-br from-white to-gofor-warmWhite">
+  return <section id="hero" className="pt-20 lg:pt-28 pb-16 lg:pb-24 bg-gradient-to-br from-white to-gofor-warmWhite">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           <div className="order-2 lg:order-1">
@@ -31,20 +28,12 @@ const Hero = () => {
             </div>
           </div>
           <div className="order-1 lg:order-2 relative">
-            <div className="rounded-xl shadow-2xl overflow-hidden border border-gray-200">
-              <img 
-                src="/lovable-uploads/52ffce12-4b71-448b-9359-0a0ee8b90ccc.png" 
-                alt="Dashboard MeLi Metrics mostrando ganancias y rentabilidad" 
-                className="w-full h-auto"
-              />
-            </div>
+            
             <div className="absolute -bottom-6 -left-6 w-24 h-24 bg-gofor-yellow rounded-lg -z-10"></div>
             <div className="absolute -top-6 -right-6 w-32 h-32 bg-gofor-lightPurple rounded-lg opacity-20 -z-10"></div>
           </div>
         </div>
       </div>
-    </section>
-  );
+    </section>;
 };
-
 export default Hero;
