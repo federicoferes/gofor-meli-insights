@@ -33,8 +33,8 @@ const Hero = () => {
           <div className="order-1 lg:order-2 relative">
             <div className="rounded-xl shadow-2xl overflow-hidden border border-gray-200">
               <img 
-                src="https://via.placeholder.com/600x400?text=Dashboard+Preview" 
-                alt="Dashboard preview" 
+                src="/lovable-uploads/c74dfc96-1e2a-4dee-b07c-ab4e3e96b565.png" 
+                alt="Dashboard GF Marketing" 
                 className="w-full h-auto"
               />
             </div>

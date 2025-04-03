@@ -71,8 +71,7 @@ const Contact = () => {
                     <Mail className="h-6 w-6 text-gofor-purple mt-1" />
                     <div>
                       <h4 className="font-medium mb-1">Email</h4>
-                      <p className="text-gray-600">info@gofor.com.ar</p>
-                      <p className="text-gray-600">soporte@gofor.com.ar</p>
+                      <p className="text-gray-600">hola@gfmarketing.com.ar</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -82,7 +81,7 @@ const Contact = () => {
                     <Phone className="h-6 w-6 text-gofor-purple mt-1" />
                     <div>
                       <h4 className="font-medium mb-1">Teléfono</h4>
-                      <p className="text-gray-600">+54 11 5555-1234</p>
+                      <p className="text-gray-600">+1 302 572-9025</p>
                       <p className="text-sm text-gray-500">Lunes a Viernes: 9:00 - 18:00</p>
                     </div>
                   </CardContent>
@@ -93,7 +92,7 @@ const Contact = () => {
                     <MessageSquare className="h-6 w-6 text-gofor-purple mt-1" />
                     <div>
                       <h4 className="font-medium mb-1">WhatsApp</h4>
-                      <p className="text-gray-600">+54 9 11 5555-1234</p>
+                      <p className="text-gray-600">+1 302 572-9025</p>
                       <p className="text-sm text-gray-500">Respondemos en minutos</p>
                     </div>
                   </CardContent>
