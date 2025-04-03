@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button";
 const MeliConnect = () => {
   // Function to handle MeLi OAuth connection
   const handleMeliConnect = () => {
-    // This will be configured with your actual Mercado Libre app details
-    const MELI_APP_ID = import.meta.env.VITE_MELI_APP_ID || '123456789'; // Replace with actual APP ID
+    // Using the actual Mercado Libre app ID
+    const MELI_APP_ID = '8830083472538103';
     const REDIRECT_URI = 'https://gofor-meli-insights.lovable.app/oauth/callback';
     const STATE = Math.random().toString(36).substring(2);
     

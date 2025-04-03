@@ -1,8 +1,8 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-const MELI_APP_ID = Deno.env.get("MELI_APP_ID") || "";
-const MELI_CLIENT_SECRET = Deno.env.get("MELI_CLIENT_SECRET") || "";
+const MELI_APP_ID = "8830083472538103";
+const MELI_CLIENT_SECRET = "Wqfg0W6BDmK690ceKfiidQmuHposiCfg";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
