@@ -121,7 +121,7 @@ const ConfigurationGuide = () => {
                 
                 <ol className="list-decimal ml-5 space-y-2">
                   <li>Accedé al dashboard de Supabase.</li>
-                  <li>Navegá a la sección Settings > Database > Functions & Secrets.</li>
+                  <li>Navegá a la sección Settings {'>'}  Database {'>'}  Functions & Secrets.</li>
                   <li>Agregá las variables MELI_CLIENT_SECRET y cualquier otra clave sensible.</li>
                 </ol>
                 
