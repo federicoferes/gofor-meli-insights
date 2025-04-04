@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { format } from "date-fns";
+import { format, startOfDay, endOfDay, subDays } from "date-fns";
 import { es } from "date-fns/locale";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
@@ -30,13 +30,53 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
     to: undefined,
   });
 
+  // Function to format dates to ISO 8601 string
+  const formatDateToISO = (date: Date, endOfDayFlag = false): string => {
+    if (endOfDayFlag) {
+      return endOfDay(date).toISOString();
+    }
+    return startOfDay(date).toISOString();
+  };
+
+  // Function to get the date range based on the selected option
+  const getDateRange = (rangeType: string): { from: Date | undefined; to: Date | undefined } => {
+    const today = new Date();
+    let fromDate: Date | undefined;
+    
+    switch (rangeType) {
+      case "today":
+        fromDate = new Date(today);
+        return { from: fromDate, to: today };
+      case "yesterday":
+        fromDate = subDays(today, 1);
+        return { from: fromDate, to: fromDate };
+      case "7d":
+        fromDate = subDays(today, 7);
+        return { from: fromDate, to: today };
+      case "30d":
+        fromDate = subDays(today, 30);
+        return { from: fromDate, to: today };
+      case "custom":
+        return date;
+      default:
+        fromDate = subDays(today, 30);
+        return { from: fromDate, to: today };
+    }
+  };
+
   const handleRangeChange = (value: string) => {
     setSelectedRange(value);
-    onDateRangeChange(value);
     
-    // Reset custom date if selecting a predefined range
+    // Generate date range based on selected option
+    const dateRange = getDateRange(value);
+    
+    // Only pass ISO strings if we have valid dates
     if (value !== "custom") {
-      setDate({ from: undefined, to: undefined });
+      setDate(dateRange);
+      onDateRangeChange(value, dateRange);
+    } else {
+      // For custom, we'll rely on the custom date picker
+      onDateRangeChange(value, date);
     }
   };
 
