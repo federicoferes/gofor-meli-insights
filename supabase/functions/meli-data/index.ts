@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
@@ -185,7 +186,7 @@ serve(async (req) => {
       );
       
       // Process and calculate metrics if we have the dashboard data
-      const dashboardData = processDashboardData(batchResults);
+      const dashboardData = processDashboardData(batchResults, date_range);
       
       return new Response(
         JSON.stringify({
@@ -259,8 +260,23 @@ serve(async (req) => {
   }
 });
 
+// Función para verificar si una fecha está dentro del rango seleccionado
+function isDateInRange(dateStr: string, dateRange: any): boolean {
+  if (!dateStr || !dateRange || !dateRange.begin || !dateRange.end) return true;
+  
+  const date = new Date(dateStr);
+  const from = new Date(dateRange.begin);
+  const to = new Date(dateRange.end);
+  
+  // Ajustar las horas para comparación correcta
+  from.setHours(0, 0, 0, 0);
+  to.setHours(23, 59, 59, 999);
+  
+  return date >= from && date <= to;
+}
+
 // Enhanced function to process orders and calculate GMV
-function processDashboardData(batchResults) {
+function processDashboardData(batchResults, dateRange) {
   try {
     // Initialize dashboard data structure
     const dashboardData = {
@@ -293,7 +309,12 @@ function processDashboardData(batchResults) {
       return dashboardData;
     }
     
-    const orders = ordersResult.data.results;
+    // Filtramos las órdenes por el rango de fechas
+    const allOrders = ordersResult.data.results;
+    const orders = dateRange ? 
+      allOrders.filter(order => isDateInRange(order.date_created, dateRange)) : 
+      allOrders;
+    
     console.log(`Processing ${orders.length} orders for dashboard metrics`);
     
     if (orders.length === 0) {

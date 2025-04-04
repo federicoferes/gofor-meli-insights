@@ -461,7 +461,7 @@ const Dashboard = () => {
       }
     };
     
-    if (meliConnected) {
+    if (meliConnected && meliUser) {
       loadMeliData();
     }
   }, [session, meliConnected, dateFilter, meliUser, customDateRange, toast]);
