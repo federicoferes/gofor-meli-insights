@@ -272,6 +272,8 @@ function isDateInRange(dateStr: string, dateRange: any): boolean {
   from.setHours(0, 0, 0, 0);
   to.setHours(23, 59, 59, 999);
   
+  console.log(`Checking if ${date.toISOString()} is between ${from.toISOString()} and ${to.toISOString()}: ${date >= from && date <= to}`);
+  
   return date >= from && date <= to;
 }
 
@@ -311,11 +313,14 @@ function processDashboardData(batchResults, dateRange) {
     
     // Filtramos las órdenes por el rango de fechas
     const allOrders = ordersResult.data.results;
+    console.log(`Total orders before filtering: ${allOrders.length}`);
+    
     const orders = dateRange ? 
       allOrders.filter(order => isDateInRange(order.date_created, dateRange)) : 
       allOrders;
     
-    console.log(`Processing ${orders.length} orders for dashboard metrics`);
+    console.log(`Processing ${orders.length} orders for dashboard metrics (filtered from ${allOrders.length})`);
+    console.log(`Date range used for filtering: ${JSON.stringify(dateRange)}`);
     
     if (orders.length === 0) {
       return dashboardData;
@@ -459,6 +464,7 @@ function processDashboardData(batchResults, dateRange) {
       .sort((a, b) => b.value - a.value);
     
     console.log("Successfully calculated dashboard metrics");
+    console.log(`GMV calculated: ${totalAmount} from ${orders.length} orders`);
     return dashboardData;
   } catch (error) {
     console.error("Error processing dashboard data:", error);

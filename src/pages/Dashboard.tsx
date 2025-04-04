@@ -12,10 +12,10 @@ import DateRangePicker from '@/components/DateRangePicker';
 import SummaryCard from '@/components/SummaryCard';
 import { formatCurrency, formatNumber, formatPercent, calculateBalance } from '@/lib/formatters';
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import DebugButton from '@/components/DebugButton';
 
 const COLORS = ['#663399', '#FFD700', '#8944EB', '#FF8042', '#9B59B6', '#4ade80'];
 
-// Helper function to format date ranges - keep for backward compatibility
 const getDateRange = (filter: string) => {
   const today = new Date();
   let startDate = new Date();
@@ -35,7 +35,6 @@ const getDateRange = (filter: string) => {
       startDate.setDate(today.getDate() - 30);
       break;
     case 'custom':
-      // Handled separately with custom date range
       break;
     default:
       startDate.setDate(today.getDate() - 30);
@@ -47,7 +46,6 @@ const getDateRange = (filter: string) => {
   };
 };
 
-// Función para verificar si una fecha está dentro del rango seleccionado
 const isDateInRange = (dateStr: string, fromDate: Date | string, toDate: Date | string): boolean => {
   if (!dateStr) return false;
   
@@ -55,7 +53,6 @@ const isDateInRange = (dateStr: string, fromDate: Date | string, toDate: Date | 
   const from = fromDate instanceof Date ? fromDate : new Date(fromDate);
   const to = toDate instanceof Date ? toDate : new Date(toDate);
   
-  // Ajustar las horas para comparación correcta
   from.setHours(0, 0, 0, 0);
   to.setHours(23, 59, 59, 999);
   
@@ -94,7 +91,6 @@ const Dashboard = () => {
   const [dataLoading, setDataLoading] = useState(false);
   const { toast } = useToast();
   
-  // Previous period summary for comparison
   const [prevSalesSummary, setPrevSalesSummary] = useState({
     gmv: 0,
     commissions: 0,
@@ -115,7 +111,6 @@ const Dashboard = () => {
       setSession(session);
       
       if (session) {
-        // Check if MeLi is connected
         try {
           const { data: connectionData, error } = await supabase.functions.invoke('meli-data', {
             body: { user_id: session.user.id }
@@ -141,7 +136,6 @@ const Dashboard = () => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       
-      // Check connection status when auth changes
       if (session) {
         supabase.functions.invoke('meli-data', {
           body: { user_id: session.user.id }
@@ -161,7 +155,6 @@ const Dashboard = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Handle date range change - Updated to use ISO formatted dates
   const handleDateRangeChange = (range: string, dates?: { 
     from: Date | undefined; 
     to: Date | undefined;
@@ -178,12 +171,10 @@ const Dashboard = () => {
       });
     }
     
-    // Mostrar información de depuración sobre el cambio de fechas
     console.log(`Filtro de fecha cambiado a: ${range}`);
     console.log("Rango de fechas:", dates);
   };
 
-  // Load Mercado Libre data when connection status or date filter changes
   useEffect(() => {
     const loadMeliData = async () => {
       if (!session || !meliConnected || !meliUser) {
@@ -195,7 +186,6 @@ const Dashboard = () => {
         setDataLoading(true);
         console.log("Loading MeLi data for user:", meliUser);
         
-        // Use ISO formatted dates from DateRangePicker when available
         let dateFrom, dateTo;
         let fromDate, toDate;
         
@@ -205,7 +195,6 @@ const Dashboard = () => {
           fromDate = customDateRange.from;
           toDate = customDateRange.to;
         } else {
-          // Use the helper function as a fallback
           const dateRange = getDateRange(dateFilter);
           dateFrom = `${dateRange.begin}T00:00:00.000Z`;
           dateTo = `${dateRange.end}T23:59:59.999Z`;
@@ -213,7 +202,6 @@ const Dashboard = () => {
           fromDate = new Date(dateRange.begin);
           toDate = new Date(dateRange.end);
           
-          // Si es hoy, ambas fechas son hoy
           if (dateFilter === 'today') {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
@@ -227,7 +215,6 @@ const Dashboard = () => {
             toDate = yesterday;
           }
           
-          // If we have better dates from the DateRangePicker, use those
           if (customDateRange.fromISO && dateFilter === 'custom') {
             dateFrom = customDateRange.fromISO;
             fromDate = customDateRange.from;
@@ -240,7 +227,6 @@ const Dashboard = () => {
         
         console.log("Using date range:", { dateFrom, dateTo, fromDate, toDate });
         
-        // Create request specifically for orders to calculate GMV
         const ordersRequest = {
           endpoint: '/orders/search',
           params: {
@@ -252,25 +238,19 @@ const Dashboard = () => {
           }
         };
         
-        // Create batch requests for all data we need
         const batchRequests = [
-          // Orders data with proper date filtering
           ordersRequest,
-          // Seller metrics
           {
             endpoint: `/users/${meliUser}/items/search`
           },
-          // Visits metrics (if available)
           {
             endpoint: `/visits/search`,
             params: {
               user_id: meliUser
             }
           }
-          // Add more endpoints as needed
         ];
         
-        // Make a single batch request to get all data at once
         const { data: batchData, error: batchError } = await supabase.functions.invoke('meli-data', {
           body: { 
             user_id: session.user.id,
@@ -279,7 +259,7 @@ const Dashboard = () => {
               begin: dateFrom.split('T')[0],
               end: dateTo.split('T')[0]
             },
-            prev_period: true // Indicate we want previous period data for comparison
+            prev_period: true
           }
         });
         
@@ -293,43 +273,35 @@ const Dashboard = () => {
         
         console.log("Batch data received:", batchData);
         
-        // Process dashboard data if available
         if (batchData.dashboard_data) {
           console.log("Using pre-processed dashboard data");
           
-          // Set sales data for chart
           if (batchData.dashboard_data.salesByMonth?.length > 0) {
             setSalesData(batchData.dashboard_data.salesByMonth);
           }
           
-          // Set sales summary
           if (batchData.dashboard_data.summary) {
             setSalesSummary(batchData.dashboard_data.summary);
           }
-
-          // Set previous period summary for comparison
+          
           if (batchData.dashboard_data.prev_summary) {
             setPrevSalesSummary(batchData.dashboard_data.prev_summary);
           }
           
-          // Set cost distribution
           if (batchData.dashboard_data.costDistribution?.length > 0) {
             setCostData(batchData.dashboard_data.costDistribution);
           }
           
-          // Set top products
           if (batchData.dashboard_data.topProducts?.length > 0) {
             setTopProducts(batchData.dashboard_data.topProducts);
           }
-
-          // Set province data
+          
           if (batchData.dashboard_data.salesByProvince?.length > 0) {
             setProvinceData(batchData.dashboard_data.salesByProvince);
           }
         } else {
           console.log("No pre-processed dashboard data, manually calculating GMV from orders");
           
-          // Find the orders data in batch results
           const ordersResult = batchData.batch_results.find(result => 
             result.endpoint.includes('/orders/search') && result.success
           );
@@ -338,14 +310,12 @@ const Dashboard = () => {
             const allOrders = ordersResult.data.results;
             console.log(`Received ${allOrders.length} orders from API`);
             
-            // Filtrar las órdenes para usar solo aquellas que caen dentro del rango de fechas seleccionado
             const filteredOrders = allOrders.filter(order => 
               isDateInRange(order.date_created, fromDate, toDate)
             );
             
             console.log(`Filtered to ${filteredOrders.length} orders within date range ${dateFilter}`);
             
-            // Calculate GMV by summing total_amount from filtered orders
             let gmv = 0;
             let totalUnits = 0;
             
@@ -354,7 +324,6 @@ const Dashboard = () => {
                 gmv += Number(order.total_amount);
               }
               
-              // Calculate units if order_items exists
               if (order.order_items) {
                 order.order_items.forEach(item => {
                   totalUnits += item.quantity || 0;
@@ -364,16 +333,13 @@ const Dashboard = () => {
             
             console.log(`Calculated GMV: ${gmv}, Units: ${totalUnits} for date range ${dateFilter}`);
             
-            // Calculate average ticket
             const avgTicket = totalUnits > 0 ? gmv / totalUnits : 0;
             
-            // Update sales summary with calculated GMV
             const currentSummary = {
               ...salesSummary,
               gmv: gmv,
               units: totalUnits,
               avgTicket: avgTicket,
-              // Estimate other metrics based on GMV
               commissions: gmv * 0.07,
               taxes: gmv * 0.17,
               shipping: gmv * 0.03,
@@ -385,7 +351,6 @@ const Dashboard = () => {
             };
             setSalesSummary(currentSummary);
             
-            // Set previous period summary with slight variations
             setPrevSalesSummary({
               gmv: currentSummary.gmv * 0.9,
               units: currentSummary.units * 0.85,
@@ -400,7 +365,6 @@ const Dashboard = () => {
               conversion: currentSummary.conversion * 0.95
             });
             
-            // Generate simulated data for other metrics as fallback
             const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
             const lastSixMonths = [];
             const today = new Date();
@@ -423,7 +387,6 @@ const Dashboard = () => {
               { name: 'Anulaciones', value: gmv * 0.02 }
             ]);
             
-            // Generate simulated top products
             setTopProducts([
               { id: 1, name: 'Producto 1', units: Math.floor(totalUnits * 0.3), revenue: Math.floor(gmv * 0.3) },
               { id: 2, name: 'Producto 2', units: Math.floor(totalUnits * 0.25), revenue: Math.floor(gmv * 0.25) },
@@ -431,8 +394,7 @@ const Dashboard = () => {
               { id: 4, name: 'Producto 4', units: Math.floor(totalUnits * 0.15), revenue: Math.floor(gmv * 0.15) },
               { id: 5, name: 'Producto 5', units: Math.floor(totalUnits * 0.1), revenue: Math.floor(gmv * 0.1) }
             ]);
-
-            // Generate simulated province data
+            
             setProvinceData([
               { name: 'Buenos Aires', value: Math.floor(gmv * 0.45) },
               { name: 'CABA', value: Math.floor(gmv * 0.25) },
@@ -466,7 +428,6 @@ const Dashboard = () => {
     }
   }, [session, meliConnected, dateFilter, meliUser, customDateRange, toast]);
 
-  // Calculate percentage changes for metrics
   const calculatePercentChange = (current: number, previous: number): number => {
     if (!previous) return 0;
     return ((current - previous) / previous) * 100;
@@ -759,6 +720,13 @@ const Dashboard = () => {
           </>
         )}
       </div>
+      
+      <DebugButton 
+        dateFilter={dateFilter}
+        dateRange={customDateRange}
+        salesSummary={salesSummary}
+        userId={session?.user?.id}
+      />
     </div>
   );
 };

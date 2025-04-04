@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { format, startOfDay, endOfDay, subDays } from "date-fns";
 import { es } from "date-fns/locale";
 import { Calendar as CalendarIcon } from "lucide-react";
@@ -50,22 +50,22 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
     
     switch (rangeType) {
       case "today":
-        fromDate = new Date(today);
-        return { from: fromDate, to: today };
+        fromDate = startOfDay(new Date(today));
+        return { from: fromDate, to: endOfDay(today) };
       case "yesterday":
-        fromDate = subDays(today, 1);
-        return { from: fromDate, to: fromDate };
+        fromDate = startOfDay(subDays(today, 1));
+        return { from: fromDate, to: endOfDay(subDays(today, 1)) };
       case "7d":
-        fromDate = subDays(today, 7);
-        return { from: fromDate, to: today };
+        fromDate = startOfDay(subDays(today, 7));
+        return { from: fromDate, to: endOfDay(today) };
       case "30d":
-        fromDate = subDays(today, 30);
-        return { from: fromDate, to: today };
+        fromDate = startOfDay(subDays(today, 30));
+        return { from: fromDate, to: endOfDay(today) };
       case "custom":
         return date;
       default:
-        fromDate = subDays(today, 30);
-        return { from: fromDate, to: today };
+        fromDate = startOfDay(subDays(today, 30));
+        return { from: fromDate, to: endOfDay(today) };
     }
   };
 
@@ -88,6 +88,7 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
         toISO = formatDateToISO(dateRange.to, true); // End of day for the to-date
       }
       
+      console.log("📅 DateRangePicker changed:", value, { from: fromISO, to: toISO });
       onDateRangeChange(value, { ...dateRange, fromISO, toISO });
     } else {
       // For custom, we'll rely on the custom date picker
@@ -100,6 +101,7 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
         toISO = formatDateToISO(date.to, true); // End of day for the to-date
       }
       
+      console.log("📅 DateRangePicker custom:", { from: fromISO, to: toISO });
       onDateRangeChange(value, { ...date, fromISO, toISO });
     }
   };
@@ -113,9 +115,15 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
       const fromISO = value.from ? formatDateToISO(value.from) : undefined;
       const toISO = value.to ? formatDateToISO(value.to, true) : undefined; // End of day for the to-date
       
+      console.log("📅 DateRangePicker custom selected:", { from: fromISO, to: toISO });
       onDateRangeChange("custom", { ...value, fromISO, toISO });
     }
   };
+
+  // Initialize with the default date range on mount
+  useEffect(() => {
+    handleRangeChange(selectedRange);
+  }, []);
 
   return (
     <div className="flex items-center space-x-2">
