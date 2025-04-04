@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -22,19 +21,16 @@ import ConfigurationGuide from '@/components/ConfigurationGuide';
 
 const COLORS = ['#663399', '#FFD700', '#4CAF50', '#FF8042', '#9B59B6', '#3498DB'];
 
-// Helper function to safely format numbers (handles undefined values)
 const safeNumberFormat = (value, options = {}) => {
   if (value === undefined || value === null) return '0';
   return value.toLocaleString('es-AR', options);
 };
 
-// Helper function to calculate and format percentage values safely
 const safePercentage = (value, total) => {
   if (!value || !total || total === 0) return '0%';
   return ((value / total) * 100).toFixed(1) + '%';
 };
 
-// Helper function to format date ranges
 const getDateRange = (filter) => {
   const today = new Date();
   let startDate = new Date();
@@ -58,7 +54,6 @@ const getDateRange = (filter) => {
       label = 'Últimos 30 días';
       break;
     case 'custom':
-      // Custom date handled separately
       label = 'Personalizado';
       break;
     default:
@@ -106,14 +101,12 @@ const Dashboard = () => {
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const { toast } = useToast();
 
-  // Effect to check session and MeLi connection
   useEffect(() => {
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       setSession(session);
       
       if (session) {
-        // Check if MeLi is connected
         try {
           const { data: connectionData, error } = await supabase.functions.invoke('meli-data', {
             body: { user_id: session.user.id }
@@ -139,7 +132,6 @@ const Dashboard = () => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       
-      // Check connection status when auth changes
       if (session) {
         supabase.functions.invoke('meli-data', {
           body: { user_id: session.user.id }
@@ -159,10 +151,8 @@ const Dashboard = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Effect to apply date filter changes
   useEffect(() => {
     if (dateFilter === 'custom' && (!customDateRange.from || !customDateRange.to)) {
-      // Don't load data for incomplete custom range
       return;
     }
     
@@ -171,12 +161,10 @@ const Dashboard = () => {
     }
   }, [dateFilter, customDateRange, meliConnected, session, meliUser]);
 
-  // Handle date filter change
   const handleDateFilterChange = (value) => {
     setDateFilter(value);
   };
 
-  // Handle custom date range selection
   const handleCustomDateChange = (range) => {
     setCustomDateRange(range);
     if (range.from && range.to) {
@@ -184,7 +172,6 @@ const Dashboard = () => {
     }
   };
 
-  // Function to get the date range based on selected filter
   const getSelectedDateRange = () => {
     if (dateFilter === 'custom' && customDateRange.from && customDateRange.to) {
       return {
@@ -197,7 +184,6 @@ const Dashboard = () => {
     return getDateRange(dateFilter);
   };
 
-  // Function to format growth indicator with up/down arrow
   const formatGrowth = (current, previous) => {
     if (!previous) return { value: 0, isPositive: true };
     
@@ -208,7 +194,6 @@ const Dashboard = () => {
     };
   };
 
-  // Load Mercado Libre data
   const loadMeliData = async () => {
     if (!session || !meliConnected || !meliUser) {
       console.log("Skipping data load - not connected or no user ID", { session, meliConnected, meliUser });
@@ -219,18 +204,14 @@ const Dashboard = () => {
       setDataLoading(true);
       console.log("Loading MeLi data for user:", meliUser);
       
-      // Get date range based on filter
       const dateRange = getSelectedDateRange();
       console.log("Date range:", dateRange);
       
-      // Calculate previous period for comparison
       const currentPeriodDays = (new Date(dateRange.end) - new Date(dateRange.begin)) / (1000 * 60 * 60 * 24);
       const previousPeriodBegin = new Date(new Date(dateRange.begin).getTime() - currentPeriodDays * 24 * 60 * 60 * 1000).toISOString();
       const previousPeriodEnd = new Date(dateRange.begin).toISOString();
       
-      // Create batch requests for all data we need
       const batchRequests = [
-        // Current period orders
         {
           endpoint: '/orders/search',
           params: {
@@ -240,7 +221,6 @@ const Dashboard = () => {
             date_to: dateRange.end
           }
         },
-        // Previous period orders (for comparison)
         {
           endpoint: '/orders/search',
           params: {
@@ -250,13 +230,11 @@ const Dashboard = () => {
             date_to: previousPeriodEnd
           }
         },
-        // Items data for visits metrics
         {
           endpoint: `/users/${meliUser}/items/search`
         }
       ];
       
-      // Make a single batch request to get all data at once
       const { data: batchData, error: batchError } = await supabase.functions.invoke('meli-data', {
         body: { 
           user_id: session.user.id,
@@ -274,21 +252,17 @@ const Dashboard = () => {
       
       console.log("Batch data received:", batchData);
       
-      // Process dashboard data if available
       if (batchData.dashboard_data) {
         console.log("Using pre-processed dashboard data");
         
-        // Set sales data for chart
         if (batchData.dashboard_data.salesByMonth?.length > 0) {
           setSalesData(batchData.dashboard_data.salesByMonth);
         }
         
-        // Set sales summary
         if (batchData.dashboard_data.summary) {
           setSalesSummary({
             ...salesSummary,
             ...batchData.dashboard_data.summary,
-            // Add simulated previous period data for comparison (to be replaced with real data)
             previousPeriodGmv: batchData.dashboard_data.summary.gmv * 0.9,
             previousPeriodUnits: batchData.dashboard_data.summary.units * 0.92,
             previousPeriodTicket: batchData.dashboard_data.summary.avgTicket * 0.95,
@@ -297,17 +271,14 @@ const Dashboard = () => {
           });
         }
         
-        // Set cost distribution
         if (batchData.dashboard_data.costDistribution?.length > 0) {
           setCostData(batchData.dashboard_data.costDistribution);
         }
         
-        // Set top products
         if (batchData.dashboard_data.topProducts?.length > 0) {
           setTopProducts(batchData.dashboard_data.topProducts);
         }
 
-        // Set province sales data (simulated)
         const provinces = [
           { name: 'Buenos Aires', value: 45 },
           { name: 'CABA', value: 25 },
@@ -320,7 +291,6 @@ const Dashboard = () => {
       } else {
         console.log("No pre-processed dashboard data, using batch results directly");
         
-        // Find the orders data in batch results
         const currentOrdersResult = batchData.batch_results.find(result => 
           result.endpoint.includes('/orders/search') && !result.endpoint.includes('previous') && result.success
         );
@@ -335,7 +305,6 @@ const Dashboard = () => {
           
           console.log(`Processing ${currentOrders.length} current orders and ${previousOrders.length} previous orders`);
           
-          // Process current period orders
           const currentGMV = currentOrders.reduce((sum, order) => sum + (order.total_amount || 0), 0);
           const currentUnits = currentOrders.reduce((sum, order) => {
             if (!order.order_items) return sum;
@@ -343,7 +312,6 @@ const Dashboard = () => {
           }, 0);
           const currentAvgTicket = currentUnits > 0 ? currentGMV / currentUnits : 0;
           
-          // Process previous period orders
           const previousGMV = previousOrders.reduce((sum, order) => sum + (order.total_amount || 0), 0);
           const previousUnits = previousOrders.reduce((sum, order) => {
             if (!order.order_items) return sum;
@@ -351,13 +319,11 @@ const Dashboard = () => {
           }, 0);
           const previousAvgTicket = previousUnits > 0 ? previousGMV / previousUnits : 0;
           
-          // Simulate visits and conversion rate data
           const currentVisits = Math.max(currentUnits * 25, 1000);
           const previousVisits = Math.max(previousUnits * 25, 900);
           const currentConversion = (currentUnits / currentVisits) * 100;
           const previousConversion = (previousUnits / previousVisits) * 100;
           
-          // Set summary data
           setSalesSummary({
             gmv: currentGMV,
             units: currentUnits,
@@ -377,7 +343,6 @@ const Dashboard = () => {
             previousPeriodConversion: previousConversion
           });
           
-          // Generate monthly sales data
           const monthlyData = [];
           const monthMap = new Map();
           
@@ -399,7 +364,6 @@ const Dashboard = () => {
             }
           });
           
-          // Convert map to array and sort by month
           Array.from(monthMap.entries()).forEach(([key, data]) => {
             monthlyData.push(data);
           });
@@ -412,7 +376,6 @@ const Dashboard = () => {
           
           setSalesData(monthlyData);
           
-          // Generate province sales data (simulated)
           const provinces = [
             { name: 'Buenos Aires', value: 45 },
             { name: 'CABA', value: 25 },
@@ -423,7 +386,6 @@ const Dashboard = () => {
           ];
           setProvinceSalesData(provinces);
           
-          // Set cost distribution
           setCostData([
             { name: 'Comisiones', value: currentGMV * 0.07 },
             { name: 'Impuestos', value: currentGMV * 0.17 },
@@ -432,7 +394,6 @@ const Dashboard = () => {
             { name: 'Anulaciones', value: currentGMV * 0.02 }
           ]);
           
-          // Process top products
           const productMap = new Map();
           
           currentOrders.forEach(order => {
@@ -465,7 +426,6 @@ const Dashboard = () => {
             });
           });
           
-          // Convert product map to array and sort by revenue
           const productArray = Array.from(productMap.values())
             .sort((a, b) => b.revenue - a.revenue)
             .slice(0, 5);
@@ -503,7 +463,6 @@ const Dashboard = () => {
     return <Navigate to="/login" replace />;
   }
 
-  // Format growth indicators
   const gmvGrowth = formatGrowth(salesSummary.gmv, salesSummary.previousPeriodGmv);
   const unitsGrowth = formatGrowth(salesSummary.units, salesSummary.previousPeriodUnits);
   const ticketGrowth = formatGrowth(salesSummary.avgTicket, salesSummary.previousPeriodTicket);
@@ -637,7 +596,6 @@ const Dashboard = () => {
                 
                   <TabsContent value="ventas">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                      {/* Balance Card */}
                       <Card className="bg-gradient-to-br from-[#663399] to-[#7c42b8] text-white">
                         <CardContent className="p-6">
                           <div className="flex justify-between items-center mb-2">
@@ -645,13 +603,16 @@ const Dashboard = () => {
                             <div className="text-xs opacity-80">Balance</div>
                           </div>
                           <div className="text-3xl font-bold">
-                            ${safeNumberFormat(salesSummary.gmv - salesSummary.commissions - salesSummary.shipping)}
+                            ${safeNumberFormat(
+                              (Number(salesSummary.gmv) || 0) -
+                              (Number(salesSummary.commissions) || 0) -
+                              (Number(salesSummary.shipping) || 0)
+                            )}
                           </div>
                           <div className="text-xs opacity-80 mt-1">Ventas menos comisiones y envíos</div>
                         </CardContent>
                       </Card>
                       
-                      {/* GMV Card */}
                       <Card className="bg-[#1a1a1a] text-white">
                         <CardContent className="p-6">
                           <div className="flex justify-between items-center mb-2">
@@ -673,7 +634,6 @@ const Dashboard = () => {
                         </CardContent>
                       </Card>
                       
-                      {/* Units Card */}
                       <Card className="bg-[#1a1a1a] text-white">
                         <CardContent className="p-6">
                           <div className="flex justify-between items-center mb-2">
@@ -695,7 +655,6 @@ const Dashboard = () => {
                         </CardContent>
                       </Card>
                       
-                      {/* Average Ticket Card */}
                       <Card className="bg-[#1a1a1a] text-white">
                         <CardContent className="p-6">
                           <div className="flex justify-between items-center mb-2">
@@ -719,7 +678,6 @@ const Dashboard = () => {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-                      {/* Visits Card */}
                       <Card className="bg-[#1a1a1a] text-white">
                         <CardContent className="p-6">
                           <div className="flex justify-between items-center mb-2">
@@ -741,7 +699,6 @@ const Dashboard = () => {
                         </CardContent>
                       </Card>
                       
-                      {/* Conversion Rate Card */}
                       <Card className="bg-[#1a1a1a] text-white">
                         <CardContent className="p-6">
                           <div className="flex justify-between items-center mb-2">
@@ -749,7 +706,7 @@ const Dashboard = () => {
                             <div className="text-xs opacity-80">CR</div>
                           </div>
                           <div className="text-3xl font-bold">
-                            {safeNumberFormat(salesSummary.conversionRate, { maximumFractionDigits: 2 })}%
+                            {safeNumberFormat(salesSummary.conversionRate, {maximumFractionDigits: 2})}%
                           </div>
                           <div className="flex items-center mt-1 text-xs">
                             {conversionGrowth.isPositive ? 
@@ -765,7 +722,6 @@ const Dashboard = () => {
                     </div>
                     
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                      {/* Monthly Sales Chart */}
                       <Card className="overflow-hidden">
                         <CardHeader>
                           <CardTitle className="text-lg font-medium text-[#663399]">Venta mensual</CardTitle>
@@ -805,7 +761,6 @@ const Dashboard = () => {
                         </CardContent>
                       </Card>
                       
-                      {/* Province Distribution Chart */}
                       <Card className="overflow-hidden">
                         <CardHeader>
                           <CardTitle className="text-lg font-medium text-[#663399]">Venta por provincia</CardTitle>
@@ -839,7 +794,6 @@ const Dashboard = () => {
                       </Card>
                     </div>
                     
-                    {/* Top Products Table */}
                     <Card>
                       <CardHeader>
                         <CardTitle className="text-lg font-medium text-[#663399]">Productos más vendidos</CardTitle>
