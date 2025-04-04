@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -46,6 +45,21 @@ const getDateRange = (filter: string) => {
     begin: startDate.toISOString().split('T')[0],
     end: today.toISOString().split('T')[0]
   };
+};
+
+// Función para verificar si una fecha está dentro del rango seleccionado
+const isDateInRange = (dateStr: string, fromDate: Date | string, toDate: Date | string): boolean => {
+  if (!dateStr) return false;
+  
+  const date = new Date(dateStr);
+  const from = fromDate instanceof Date ? fromDate : new Date(fromDate);
+  const to = toDate instanceof Date ? toDate : new Date(toDate);
+  
+  // Ajustar las horas para comparación correcta
+  from.setHours(0, 0, 0, 0);
+  to.setHours(23, 59, 59, 999);
+  
+  return date >= from && date <= to;
 };
 
 const Dashboard = () => {
@@ -163,6 +177,10 @@ const Dashboard = () => {
         toISO: dates.toISO
       });
     }
+    
+    // Mostrar información de depuración sobre el cambio de fechas
+    console.log(`Filtro de fecha cambiado a: ${range}`);
+    console.log("Rango de fechas:", dates);
   };
 
   // Load Mercado Libre data when connection status or date filter changes
@@ -179,26 +197,48 @@ const Dashboard = () => {
         
         // Use ISO formatted dates from DateRangePicker when available
         let dateFrom, dateTo;
+        let fromDate, toDate;
         
         if (dateFilter === 'custom' && customDateRange.fromISO && customDateRange.toISO) {
           dateFrom = customDateRange.fromISO;
           dateTo = customDateRange.toISO;
+          fromDate = customDateRange.from;
+          toDate = customDateRange.to;
         } else {
           // Use the helper function as a fallback
           const dateRange = getDateRange(dateFilter);
           dateFrom = `${dateRange.begin}T00:00:00.000Z`;
           dateTo = `${dateRange.end}T23:59:59.999Z`;
           
+          fromDate = new Date(dateRange.begin);
+          toDate = new Date(dateRange.end);
+          
+          // Si es hoy, ambas fechas son hoy
+          if (dateFilter === 'today') {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            fromDate = today;
+            toDate = today;
+          } else if (dateFilter === 'yesterday') {
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            yesterday.setHours(0, 0, 0, 0);
+            fromDate = yesterday;
+            toDate = yesterday;
+          }
+          
           // If we have better dates from the DateRangePicker, use those
           if (customDateRange.fromISO && dateFilter === 'custom') {
             dateFrom = customDateRange.fromISO;
+            fromDate = customDateRange.from;
           }
           if (customDateRange.toISO && dateFilter === 'custom') {
             dateTo = customDateRange.toISO;
+            toDate = customDateRange.to;
           }
         }
         
-        console.log("Using date range:", { dateFrom, dateTo });
+        console.log("Using date range:", { dateFrom, dateTo, fromDate, toDate });
         
         // Create request specifically for orders to calculate GMV
         const ordersRequest = {
@@ -295,14 +335,21 @@ const Dashboard = () => {
           );
           
           if (ordersResult && ordersResult.data.results) {
-            const orders = ordersResult.data.results;
-            console.log(`Processing ${orders.length} orders for GMV calculation`);
+            const allOrders = ordersResult.data.results;
+            console.log(`Received ${allOrders.length} orders from API`);
             
-            // Calculate GMV by summing total_amount from all orders
+            // Filtrar las órdenes para usar solo aquellas que caen dentro del rango de fechas seleccionado
+            const filteredOrders = allOrders.filter(order => 
+              isDateInRange(order.date_created, fromDate, toDate)
+            );
+            
+            console.log(`Filtered to ${filteredOrders.length} orders within date range ${dateFilter}`);
+            
+            // Calculate GMV by summing total_amount from filtered orders
             let gmv = 0;
             let totalUnits = 0;
             
-            orders.forEach(order => {
+            filteredOrders.forEach(order => {
               if (order.total_amount) {
                 gmv += Number(order.total_amount);
               }
@@ -314,6 +361,8 @@ const Dashboard = () => {
                 });
               }
             });
+            
+            console.log(`Calculated GMV: ${gmv}, Units: ${totalUnits} for date range ${dateFilter}`);
             
             // Calculate average ticket
             const avgTicket = totalUnits > 0 ? gmv / totalUnits : 0;
