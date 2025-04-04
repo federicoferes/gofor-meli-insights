@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -14,7 +13,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const COLORS = ['#663399', '#9b87f5', '#FFD700', '#ff8042', '#8dd1e1', '#a4de6c'];
 
-// Helper function to format date ranges
 const getDateRange = (filter) => {
   const today = new Date();
   let startDate = new Date();
@@ -40,6 +38,20 @@ const getDateRange = (filter) => {
     begin: startDate.toISOString().split('T')[0],
     end: today.toISOString().split('T')[0]
   };
+};
+
+const safeNumberFormat = (value, options = {}) => {
+  if (value === undefined || value === null) {
+    return '0';
+  }
+  return value.toLocaleString('es-AR', options);
+};
+
+const safePercentage = (value, total) => {
+  if (!value || !total || total === 0) {
+    return '0.0';
+  }
+  return ((value / total) * 100).toFixed(1);
 };
 
 const Dashboard = () => {
@@ -74,7 +86,6 @@ const Dashboard = () => {
       setSession(session);
       
       if (session) {
-        // Check if MeLi is connected
         try {
           const { data: connectionData, error } = await supabase.functions.invoke('meli-data', {
             body: { user_id: session.user.id }
@@ -100,7 +111,6 @@ const Dashboard = () => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       
-      // Check connection status when auth changes
       if (session) {
         supabase.functions.invoke('meli-data', {
           body: { user_id: session.user.id }
@@ -120,7 +130,6 @@ const Dashboard = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Load Mercado Libre data when connection status or date filter changes
   useEffect(() => {
     const loadMeliData = async () => {
       if (!session || !meliConnected || !meliUser) {
@@ -132,13 +141,10 @@ const Dashboard = () => {
         setDataLoading(true);
         console.log("Loading MeLi data for user:", meliUser);
         
-        // Get date range based on filter
         const dateRange = getDateRange(dateFilter);
         console.log("Date range:", dateRange);
         
-        // Create batch requests for all data we need
         const batchRequests = [
-          // Orders data - recent orders with date filter
           {
             endpoint: '/orders/search',
             params: {
@@ -149,23 +155,19 @@ const Dashboard = () => {
               end_date: dateRange.end
             }
           },
-          // Item visit data
           {
             endpoint: '/visits/items',
             params: {
-              ids: 'ALL_ITEMS', // This would be replaced with actual item IDs in the edge function
+              ids: 'ALL_ITEMS',
               date_from: dateRange.begin,
               date_to: dateRange.end
             }
           },
-          // Seller metrics
           {
             endpoint: `/users/${meliUser}/items/search`
           }
-          // Add more endpoints as needed
         ];
         
-        // Make a single batch request to get all data at once
         const { data: batchData, error: batchError } = await supabase.functions.invoke('meli-data', {
           body: { 
             user_id: session.user.id,
@@ -183,38 +185,31 @@ const Dashboard = () => {
         
         console.log("Batch data received:", batchData);
         
-        // Process dashboard data if available
         if (batchData.dashboard_data) {
           console.log("Using pre-processed dashboard data");
           
-          // Set sales data for chart
           if (batchData.dashboard_data.salesByMonth?.length > 0) {
             setSalesData(batchData.dashboard_data.salesByMonth);
           }
           
-          // Set sales summary
           if (batchData.dashboard_data.summary) {
             setSalesSummary(batchData.dashboard_data.summary);
           }
           
-          // Set cost distribution
           if (batchData.dashboard_data.costDistribution?.length > 0) {
             setCostData(batchData.dashboard_data.costDistribution);
           }
           
-          // Set top products
           if (batchData.dashboard_data.topProducts?.length > 0) {
             setTopProducts(batchData.dashboard_data.topProducts);
           }
-
-          // Set province data
+          
           if (batchData.dashboard_data.provinceDistribution?.length > 0) {
             setProvinceData(batchData.dashboard_data.provinceDistribution);
           }
         } else {
           console.log("No pre-processed dashboard data, using batch results directly");
           
-          // Find the orders data in batch results
           const ordersResult = batchData.batch_results.find(result => 
             result.endpoint.includes('/orders/search') && result.success
           );
@@ -227,17 +222,12 @@ const Dashboard = () => {
             const orders = ordersResult.data.results;
             console.log(`Processing ${orders.length} orders`);
             
-            // Process the orders data (fallback implementation)
-            // In a real-world scenario, this should be done by the edge function
-            
-            // Simulate loading data based on orders count (fallback)
             const simulatedGMV = orders.length * 1500;
             const simulatedUnits = orders.length * 2;
             const simulatedVisits = visitsResult ? 
               (visitsResult.data.total_visits || orders.length * 20) : 
               orders.length * 20;
             
-            // Set summary data
             setSalesSummary({
               gmv: simulatedGMV,
               units: simulatedUnits,
@@ -252,7 +242,6 @@ const Dashboard = () => {
               conversionRate: (orders.length / simulatedVisits) * 100
             });
             
-            // Generate simulated data for other metrics as a fallback
             const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
             const lastSixMonths = [];
             const today = new Date();
@@ -276,7 +265,6 @@ const Dashboard = () => {
               { name: 'Anulaciones', value: simulatedGMV * 0.02 }
             ]);
             
-            // Generate simulated top products
             setTopProducts([
               { id: 1, name: 'Producto 1', units: Math.floor(simulatedUnits * 0.3), revenue: Math.floor(simulatedGMV * 0.3) },
               { id: 2, name: 'Producto 2', units: Math.floor(simulatedUnits * 0.25), revenue: Math.floor(simulatedGMV * 0.25) },
@@ -284,8 +272,7 @@ const Dashboard = () => {
               { id: 4, name: 'Producto 4', units: Math.floor(simulatedUnits * 0.15), revenue: Math.floor(simulatedGMV * 0.15) },
               { id: 5, name: 'Producto 5', units: Math.floor(simulatedUnits * 0.1), revenue: Math.floor(simulatedGMV * 0.1) }
             ]);
-
-            // Generate simulated province data
+            
             setProvinceData([
               { name: 'Buenos Aires', value: 42 },
               { name: 'CABA', value: 28 },
@@ -329,6 +316,8 @@ const Dashboard = () => {
   if (!session) {
     return <Navigate to="/login" replace />;
   }
+
+  const totalTopProductsRevenue = topProducts.reduce((sum, p) => sum + (p.revenue || 0), 0);
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -401,7 +390,7 @@ const Dashboard = () => {
                           <div className="flex justify-between items-center">
                             <div>
                               <div className="text-xs opacity-80 mb-1">GMV Mensual</div>
-                              <div className="text-2xl font-bold">${salesSummary.gmv.toLocaleString('es-AR', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</div>
+                              <div className="text-2xl font-bold">${safeNumberFormat(salesSummary.gmv, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</div>
                             </div>
                             <CircleDollarSign className="h-8 w-8 opacity-70" />
                           </div>
@@ -417,7 +406,7 @@ const Dashboard = () => {
                           <div className="flex justify-between items-center">
                             <div>
                               <div className="text-xs opacity-80 mb-1">Órdenes</div>
-                              <div className="text-2xl font-bold">{salesSummary.units.toLocaleString('es-AR')}</div>
+                              <div className="text-2xl font-bold">{safeNumberFormat(salesSummary.units)}</div>
                             </div>
                             <ShoppingCart className="h-8 w-8 opacity-70" />
                           </div>
@@ -433,7 +422,7 @@ const Dashboard = () => {
                           <div className="flex justify-between items-center">
                             <div>
                               <div className="text-xs opacity-80 mb-1">Ticket Promedio</div>
-                              <div className="text-2xl font-bold">${salesSummary.avgTicket.toLocaleString('es-AR', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</div>
+                              <div className="text-2xl font-bold">${safeNumberFormat(salesSummary.avgTicket, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</div>
                             </div>
                             <TrendingUp className="h-8 w-8 opacity-70" />
                           </div>
@@ -449,7 +438,7 @@ const Dashboard = () => {
                           <div className="flex justify-between items-center">
                             <div>
                               <div className="text-xs opacity-80 mb-1">Visitas</div>
-                              <div className="text-2xl font-bold">{salesSummary.visits.toLocaleString('es-AR')}</div>
+                              <div className="text-2xl font-bold">{safeNumberFormat(salesSummary.visits)}</div>
                             </div>
                             <Users className="h-8 w-8 opacity-70" />
                           </div>
@@ -467,7 +456,7 @@ const Dashboard = () => {
                           <div className="flex justify-between items-center mb-4">
                             <div>
                               <div className="text-sm text-gray-500 mb-1">Tasa de Conversión</div>
-                              <div className="text-2xl font-bold text-[#663399]">{salesSummary.conversionRate.toFixed(1)}%</div>
+                              <div className="text-2xl font-bold text-[#663399]">{salesSummary.conversionRate ? salesSummary.conversionRate.toFixed(1) : '0.0'}%</div>
                             </div>
                             <div className="bg-green-100 text-green-800 rounded-full px-2 py-1 text-xs flex items-center">
                               <ArrowUp className="w-3 h-3 mr-1" />
@@ -475,7 +464,7 @@ const Dashboard = () => {
                             </div>
                           </div>
                           <div className="h-8 bg-gray-100 rounded-full overflow-hidden">
-                            <div className="h-full bg-gradient-to-r from-[#663399] to-[#9b87f5]" style={{width: `${salesSummary.conversionRate}%`}}></div>
+                            <div className="h-full bg-gradient-to-r from-[#663399] to-[#9b87f5]" style={{width: `${salesSummary.conversionRate || 0}%`}}></div>
                           </div>
                           <div className="mt-2 text-xs text-gray-500">Meta: 5.0%</div>
                         </CardContent>
@@ -486,7 +475,7 @@ const Dashboard = () => {
                           <div className="flex justify-between items-center mb-4">
                             <div>
                               <div className="text-sm text-gray-500 mb-1">Comisiones</div>
-                              <div className="text-2xl font-bold text-[#663399]">${salesSummary.commissions.toLocaleString('es-AR', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</div>
+                              <div className="text-2xl font-bold text-[#663399]">${safeNumberFormat(salesSummary.commissions, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</div>
                             </div>
                             <div className="bg-red-100 text-red-800 rounded-full px-2 py-1 text-xs flex items-center">
                               <ArrowUp className="w-3 h-3 mr-1" />
@@ -515,7 +504,7 @@ const Dashboard = () => {
                             <CartesianGrid strokeDasharray="3 3" />
                             <XAxis dataKey="name" />
                             <YAxis />
-                            <RechartsTooltip formatter={(value) => [`$${value.toLocaleString('es-AR')}`, 'GMV']} />
+                            <RechartsTooltip formatter={(value) => [`$${safeNumberFormat(value)}`, 'GMV']} />
                             <Area type="monotone" dataKey="value" stroke="#663399" fillOpacity={1} fill="url(#colorGMV)" />
                           </AreaChart>
                         </ResponsiveContainer>
@@ -536,8 +525,8 @@ const Dashboard = () => {
                           <TableBody>
                             {topProducts.slice(0, 4).map(product => <TableRow key={product.id}>
                                 <TableCell className="font-medium">{product.name}</TableCell>
-                                <TableCell className="text-right">{product.units}</TableCell>
-                                <TableCell className="text-right">${product.revenue.toLocaleString('es-AR')}</TableCell>
+                                <TableCell className="text-right">{product.units || 0}</TableCell>
+                                <TableCell className="text-right">${safeNumberFormat(product.revenue)}</TableCell>
                               </TableRow>)}
                           </TableBody>
                         </Table>
@@ -580,7 +569,7 @@ const Dashboard = () => {
                             <CartesianGrid strokeDasharray="3 3" />
                             <XAxis dataKey="name" />
                             <YAxis />
-                            <RechartsTooltip formatter={(value) => [`$${value.toLocaleString('es-AR')}`, 'Ventas']} />
+                            <RechartsTooltip formatter={(value) => [`$${safeNumberFormat(value)}`, 'Ventas']} />
                             <Bar dataKey="value" name="Ventas" fill="#663399" />
                             <Bar dataKey="prevValue" name="Período anterior" fill="#DBC8FF" />
                           </BarChart>
@@ -601,7 +590,7 @@ const Dashboard = () => {
                           }) => `${name}: ${(percent * 100).toFixed(0)}%`} outerRadius={120} fill="#8884d8" dataKey="value">
                               {costData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
                             </Pie>
-                            <RechartsTooltip formatter={value => [`$${value.toLocaleString('es-AR')}`, 'Monto']} />
+                            <RechartsTooltip formatter={value => [`$${safeNumberFormat(value)}`, 'Monto']} />
                             <Legend />
                           </PieChart>
                         </ResponsiveContainer>
@@ -612,22 +601,28 @@ const Dashboard = () => {
                       <Card>
                         <CardContent className="p-4">
                           <div className="text-sm text-gray-500 mb-1">Comisiones</div>
-                          <div className="text-2xl font-bold text-[#663399]">${salesSummary.commissions.toLocaleString('es-AR', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</div>
-                          <div className="text-sm font-medium text-gray-500">{(salesSummary.commissions / salesSummary.gmv * 100).toFixed(1)}% del GMV</div>
+                          <div className="text-2xl font-bold text-[#663399]">${safeNumberFormat(salesSummary.commissions, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</div>
+                          <div className="text-sm font-medium text-gray-500">
+                            {salesSummary.gmv ? (salesSummary.commissions / salesSummary.gmv * 100).toFixed(1) : '0.0'}% del GMV
+                          </div>
                         </CardContent>
                       </Card>
                       <Card>
                         <CardContent className="p-4">
                           <div className="text-sm text-gray-500 mb-1">Impuestos</div>
-                          <div className="text-2xl font-bold text-[#663399]">${salesSummary.taxes.toLocaleString('es-AR', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</div>
-                          <div className="text-sm font-medium text-gray-500">{(salesSummary.taxes / salesSummary.gmv * 100).toFixed(1)}% del GMV</div>
+                          <div className="text-2xl font-bold text-[#663399]">${safeNumberFormat(salesSummary.taxes, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</div>
+                          <div className="text-sm font-medium text-gray-500">
+                            {salesSummary.gmv ? (salesSummary.taxes / salesSummary.gmv * 100).toFixed(1) : '0.0'}% del GMV
+                          </div>
                         </CardContent>
                       </Card>
                       <Card>
                         <CardContent className="p-4">
                           <div className="text-sm text-gray-500 mb-1">Envíos</div>
-                          <div className="text-2xl font-bold text-[#663399]">${salesSummary.shipping.toLocaleString('es-AR', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</div>
-                          <div className="text-sm font-medium text-gray-500">{(salesSummary.shipping / salesSummary.gmv * 100).toFixed(1)}% del GMV</div>
+                          <div className="text-2xl font-bold text-[#663399]">${safeNumberFormat(salesSummary.shipping, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</div>
+                          <div className="text-sm font-medium text-gray-500">
+                            {salesSummary.gmv ? (salesSummary.shipping / salesSummary.gmv * 100).toFixed(1) : '0.0'}% del GMV
+                          </div>
                         </CardContent>
                       </Card>
                     </div>
@@ -636,22 +631,28 @@ const Dashboard = () => {
                       <Card>
                         <CardContent className="p-4">
                           <div className="text-sm text-gray-500 mb-1">Descuentos</div>
-                          <div className="text-2xl font-bold text-[#663399]">${salesSummary.discounts.toLocaleString('es-AR', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</div>
-                          <div className="text-sm font-medium text-gray-500">{(salesSummary.discounts / salesSummary.gmv * 100).toFixed(1)}% del GMV</div>
+                          <div className="text-2xl font-bold text-[#663399]">${safeNumberFormat(salesSummary.discounts, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</div>
+                          <div className="text-sm font-medium text-gray-500">
+                            {salesSummary.gmv ? (salesSummary.discounts / salesSummary.gmv * 100).toFixed(1) : '0.0'}% del GMV
+                          </div>
                         </CardContent>
                       </Card>
                       <Card>
                         <CardContent className="p-4">
                           <div className="text-sm text-gray-500 mb-1">Anulaciones</div>
-                          <div className="text-2xl font-bold text-[#663399]">${salesSummary.refunds.toLocaleString('es-AR', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</div>
-                          <div className="text-sm font-medium text-gray-500">{(salesSummary.refunds / salesSummary.gmv * 100).toFixed(1)}% del GMV</div>
+                          <div className="text-2xl font-bold text-[#663399]">${safeNumberFormat(salesSummary.refunds, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</div>
+                          <div className="text-sm font-medium text-gray-500">
+                            {salesSummary.gmv ? (salesSummary.refunds / salesSummary.gmv * 100).toFixed(1) : '0.0'}% del GMV
+                          </div>
                         </CardContent>
                       </Card>
                       <Card>
                         <CardContent className="p-4">
                           <div className="text-sm text-gray-500 mb-1">IVA</div>
-                          <div className="text-2xl font-bold text-[#663399]">${salesSummary.iva.toLocaleString('es-AR', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</div>
-                          <div className="text-sm font-medium text-gray-500">{(salesSummary.iva / salesSummary.gmv * 100).toFixed(1)}% del GMV</div>
+                          <div className="text-2xl font-bold text-[#663399]">${safeNumberFormat(salesSummary.iva, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</div>
+                          <div className="text-sm font-medium text-gray-500">
+                            {salesSummary.gmv ? (salesSummary.iva / salesSummary.gmv * 100).toFixed(1) : '0.0'}% del GMV
+                          </div>
                         </CardContent>
                       </Card>
                     </div>
@@ -673,10 +674,10 @@ const Dashboard = () => {
                           {topProducts.map((product) => (
                             <TableRow key={product.id} className="hover:bg-gray-50">
                               <TableCell>{product.name}</TableCell>
-                              <TableCell className="text-right">{product.units}</TableCell>
-                              <TableCell className="text-right">${product.revenue.toLocaleString('es-AR')}</TableCell>
+                              <TableCell className="text-right">{product.units || 0}</TableCell>
+                              <TableCell className="text-right">${safeNumberFormat(product.revenue)}</TableCell>
                               <TableCell className="text-right">
-                                {(product.revenue / topProducts.reduce((sum, p) => sum + p.revenue, 0) * 100).toFixed(1)}%
+                                {safePercentage(product.revenue, totalTopProductsRevenue)}%
                               </TableCell>
                             </TableRow>
                           ))}
@@ -754,4 +755,3 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
-
