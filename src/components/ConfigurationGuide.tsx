@@ -40,7 +40,15 @@ const ConfigurationGuide = () => {
               </div>
               
               <div>
-                <h3 className="font-semibold mb-1">2. Scopes necesarios</h3>
+                <h3 className="font-semibold mb-1">2. URL de Notificaciones</h3>
+                <div className="bg-slate-100 p-3 rounded-md">
+                  <p className="text-sm font-mono break-all">https://melimetrics.app/api/meli-notifications</p>
+                </div>
+                <p className="text-sm text-slate-600 mt-1">Configura esta URL para recibir notificaciones automáticas de Mercado Libre.</p>
+              </div>
+              
+              <div>
+                <h3 className="font-semibold mb-1">3. Scopes necesarios</h3>
                 <ul className="list-disc pl-5 space-y-1">
                   <li className="text-sm">read</li>
                   <li className="text-sm">write</li>

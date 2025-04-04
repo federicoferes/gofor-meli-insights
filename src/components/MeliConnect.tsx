@@ -90,7 +90,7 @@ const MeliConnect = () => {
     
     // Using the actual Mercado Libre app ID
     const MELI_APP_ID = '8830083472538103';
-    const REDIRECT_URI = window.location.origin + '/oauth/callback';
+    const REDIRECT_URI = 'https://melimetrics.app/oauth/callback';
     const STATE = `${user.id}:${Math.random().toString(36).substring(2)}`;
     
     // Save state to validate later
