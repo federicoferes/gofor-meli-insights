@@ -7,89 +7,129 @@ import { Info, AlertTriangle, Code, Webhook } from "lucide-react";
 
 const ConfigurationGuide = () => {
   return (
-    <Card className="w-full max-w-3xl mx-auto bg-white">
-      <CardHeader className="bg-gofor-purple text-white">
-        <CardTitle className="text-xl font-poppins">Guía de Configuración</CardTitle>
+    <Card className="w-full max-w-3xl mx-auto">
+      <CardHeader>
+        <CardTitle className="text-xl font-medium text-[#663399]">Guía de Integración con Mercado Libre</CardTitle>
       </CardHeader>
-      <CardContent className="p-6">
-        <Tabs defaultValue="initial">
-          <TabsList className="mb-6 bg-gray-100">
-            <TabsTrigger value="initial">Primeros pasos</TabsTrigger>
-            <TabsTrigger value="advanced">Configuración avanzada</TabsTrigger>
-            <TabsTrigger value="troubleshooting">Solución de problemas</TabsTrigger>
+      
+      <CardContent>
+        <Tabs defaultValue="setup">
+          <TabsList className="mb-4">
+            <TabsTrigger value="setup">Configuración</TabsTrigger>
+            <TabsTrigger value="endpoints">Endpoints</TabsTrigger>
+            <TabsTrigger value="metrics">Métricas</TabsTrigger>
           </TabsList>
           
-          <TabsContent value="initial">
+          <TabsContent value="setup">
             <div className="space-y-4">
               <Alert>
-                <Info className="h-5 w-5" />
-                <AlertTitle>Conexión con Mercado Libre</AlertTitle>
+                <Info className="h-4 w-4" />
+                <AlertTitle>Autenticación</AlertTitle>
                 <AlertDescription>
-                  Para comenzar a utilizar el dashboard, primero debes conectar tu cuenta de Mercado Libre haciendo clic en el botón "Conectar con Mercado Libre".
+                  Para acceder a los datos de tu cuenta de Mercado Libre, necesitas autorizar la aplicación usando OAuth.
                 </AlertDescription>
               </Alert>
               
-              <h3 className="text-lg font-medium mt-6">Datos disponibles</h3>
-              <p className="text-gray-600">
-                Una vez conectado, el dashboard mostrará automáticamente tus métricas de ventas, incluyendo:
-              </p>
-              <ul className="list-disc pl-6 mt-2 text-gray-600">
-                <li>Ventas totales (GMV)</li>
-                <li>Unidades vendidas</li>
-                <li>Ticket promedio</li>
-                <li>Comisiones y costos</li>
-                <li>Productos más vendidos</li>
-              </ul>
+              <div className="mt-4">
+                <h4 className="font-medium mb-2">Pasos para la integración:</h4>
+                <ol className="list-decimal ml-5 space-y-2">
+                  <li>Conecta tu cuenta de Mercado Libre usando el botón "Conectar MeLi" en el dashboard</li>
+                  <li>Autoriza los permisos necesarios en Mercado Libre</li>
+                  <li>Una vez autorizada, los datos se cargarán automáticamente</li>
+                  <li>Los tokens de acceso se actualizan automáticamente</li>
+                </ol>
+              </div>
               
-              <h3 className="text-lg font-medium mt-6">Filtros de fechas</h3>
-              <p className="text-gray-600">
-                Utiliza el selector de fechas en la parte superior derecha para filtrar los datos por diferentes períodos: hoy, ayer, últimos 7 días, últimos 30 días o un rango personalizado.
-              </p>
+              <Alert variant="destructive" className="mt-4">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Importante</AlertTitle>
+                <AlertDescription>
+                  Nunca compartas tus credenciales de Mercado Libre con terceros. Esta aplicación utiliza OAuth para una autenticación segura sin almacenar tu contraseña.
+                </AlertDescription>
+              </Alert>
             </div>
           </TabsContent>
           
-          <TabsContent value="advanced">
+          <TabsContent value="endpoints">
             <div className="space-y-4">
-              <h3 className="text-lg font-medium">Webhooks y notificaciones</h3>
-              <p className="text-gray-600">
-                Para mantener tu dashboard actualizado en tiempo real, puedes configurar webhooks de Mercado Libre para recibir notificaciones cuando se produzcan nuevas ventas o cambios en tus productos.
-              </p>
-              
-              <Alert className="bg-gray-50">
-                <Webhook className="h-5 w-5" />
-                <AlertTitle>URL del Webhook</AlertTitle>
-                <AlertDescription className="font-mono bg-gray-100 p-2 mt-2 rounded">
-                  https://melimetrics.app/api/webhook/mercadolibre
-                </AlertDescription>
-              </Alert>
-              
-              <h3 className="text-lg font-medium mt-6">Personalización</h3>
-              <p className="text-gray-600">
-                Próximamente: funciones para personalizar las métricas mostradas en el dashboard, exportar datos y más.
-              </p>
+              <div className="mb-4">
+                <h4 className="font-medium mb-2">Endpoints utilizados:</h4>
+                <ul className="space-y-3">
+                  <li className="flex items-start">
+                    <Code className="h-5 w-5 mr-2 mt-0.5 text-[#663399]" />
+                    <div>
+                      <p className="font-medium">Órdenes de venta</p>
+                      <p className="text-sm text-gray-600 mt-1">
+                        <code className="bg-gray-100 px-1 py-0.5 rounded">GET /orders/search</code>
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">Obtiene todas las órdenes completadas en un rango de fechas</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start">
+                    <Code className="h-5 w-5 mr-2 mt-0.5 text-[#663399]" />
+                    <div>
+                      <p className="font-medium">Visitas</p>
+                      <p className="text-sm text-gray-600 mt-1">
+                        <code className="bg-gray-100 px-1 py-0.5 rounded">GET /visits/items</code>
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">Métricas de visitas a los productos publicados</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start">
+                    <Code className="h-5 w-5 mr-2 mt-0.5 text-[#663399]" />
+                    <div>
+                      <p className="font-medium">Facturación</p>
+                      <p className="text-sm text-gray-600 mt-1">
+                        <code className="bg-gray-100 px-1 py-0.5 rounded">GET /billing/invoices</code>
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">Información de comisiones, impuestos y otros cargos</p>
+                    </div>
+                  </li>
+                </ul>
+              </div>
             </div>
           </TabsContent>
           
-          <TabsContent value="troubleshooting">
+          <TabsContent value="metrics">
             <div className="space-y-4">
-              <Alert variant="destructive">
-                <AlertTriangle className="h-5 w-5" />
-                <AlertTitle>Problemas comunes</AlertTitle>
-                <AlertDescription>
-                  Si no puedes ver datos en el dashboard, verifica lo siguiente:
-                </AlertDescription>
-              </Alert>
-              
-              <ul className="list-disc pl-6 mt-4 text-gray-600">
-                <li>Que tu cuenta de Mercado Libre esté correctamente conectada</li>
-                <li>Que tengas ventas en el período seleccionado</li>
-                <li>Que tu token de acceso no haya expirado (vuelve a conectar si es necesario)</li>
+              <h4 className="font-medium mb-2">Métricas principales:</h4>
+              <ul className="space-y-3">
+                <li className="flex items-start">
+                  <div className="h-6 w-6 rounded-full bg-[#663399] text-white flex items-center justify-center mr-2 mt-0.5">
+                    <span className="text-xs font-bold">$</span>
+                  </div>
+                  <div>
+                    <p className="font-medium">GMV (Gross Merchandise Value)</p>
+                    <p className="text-sm text-gray-600">Valor total de todas las ventas realizadas</p>
+                  </div>
+                </li>
+                <li className="flex items-start">
+                  <div className="h-6 w-6 rounded-full bg-[#663399] text-white flex items-center justify-center mr-2 mt-0.5">
+                    <span className="text-xs font-bold">#</span>
+                  </div>
+                  <div>
+                    <p className="font-medium">Unidades Vendidas</p>
+                    <p className="text-sm text-gray-600">Cantidad total de productos vendidos</p>
+                  </div>
+                </li>
+                <li className="flex items-start">
+                  <div className="h-6 w-6 rounded-full bg-[#663399] text-white flex items-center justify-center mr-2 mt-0.5">
+                    <span className="text-xs font-bold">%</span>
+                  </div>
+                  <div>
+                    <p className="font-medium">Tasa de Conversión (CR)</p>
+                    <p className="text-sm text-gray-600">Porcentaje de visitas que se convierten en ventas</p>
+                  </div>
+                </li>
               </ul>
               
-              <h3 className="text-lg font-medium mt-6">Soporte</h3>
-              <p className="text-gray-600">
-                Si sigues teniendo problemas, contacta a nuestro soporte técnico en <span className="font-medium">soporte@gofor.ar</span>
-              </p>
+              <Alert className="mt-4 bg-blue-50">
+                <Info className="h-4 w-4 text-blue-500" />
+                <AlertTitle className="text-blue-700">Actualización de datos</AlertTitle>
+                <AlertDescription className="text-blue-600">
+                  Los datos se actualizan cada vez que cambias el filtro de fechas o recargas la página
+                </AlertDescription>
+              </Alert>
             </div>
           </TabsContent>
         </Tabs>
