@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
@@ -21,13 +20,16 @@ serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     
     const body = await req.json();
-    const { user_id, endpoint, method = "GET", params = {}, batch_requests = [] } = body;
+    const { user_id, endpoint, method = "GET", params = {}, batch_requests = [], date_range } = body;
 
     if (!user_id) {
       throw new Error("Missing user_id parameter");
     }
 
     console.log(`Getting data for user: ${user_id}, endpoint: ${endpoint || 'none'}, batch_requests: ${batch_requests.length}`);
+    if (date_range) {
+      console.log(`Date range: ${JSON.stringify(date_range)}`);
+    }
 
     // Fetch the user's Mercado Libre tokens
     const { data: tokenData, error: tokenError } = await supabase
@@ -257,7 +259,7 @@ serve(async (req) => {
   }
 });
 
-// Function to process and calculate dashboard metrics from batch results
+// Enhanced function to process orders and calculate GMV
 function processDashboardData(batchResults) {
   try {
     // Initialize dashboard data structure
@@ -271,11 +273,14 @@ function processDashboardData(batchResults) {
         shipping: 0,
         discounts: 0,
         refunds: 0,
-        iva: 0
+        iva: 0,
+        visits: 0,
+        conversion: 0
       },
       salesByMonth: [],
       costDistribution: [],
-      topProducts: []
+      topProducts: [],
+      salesByProvince: []
     };
     
     // Find orders data in batch results
@@ -300,62 +305,81 @@ function processDashboardData(batchResults) {
     let totalUnits = 0;
     const productSales = new Map(); // For tracking top products
     const monthSales = new Map(); // For tracking sales by month
+    const provinceSales = new Map(); // For tracking sales by province
     
     // Process each order
     orders.forEach(order => {
-      if (!order.order_items || !order.payments) return;
+      if (!order) return;
       
-      // Calculate order amount and units
-      const orderAmount = order.total_amount || 0;
+      // Calculate order amount - this is the key calculation for GMV
+      const orderAmount = Number(order.total_amount) || 0;
       totalAmount += orderAmount;
       
       // Calculate total units in this order
-      const orderUnits = order.order_items.reduce((sum, item) => sum + (item.quantity || 0), 0);
+      let orderUnits = 0;
+      if (order.order_items) {
+        orderUnits = order.order_items.reduce((sum, item) => sum + (item.quantity || 0), 0);
+      }
       totalUnits += orderUnits;
       
       // Track products for top products calculation
-      order.order_items.forEach(item => {
-        const productId = item.item?.id;
-        const productName = item.item?.title || 'Producto sin nombre';
-        const quantity = item.quantity || 0;
-        const unitPrice = item.unit_price || 0;
-        const revenue = quantity * unitPrice;
-        
-        if (productId) {
-          if (productSales.has(productId)) {
-            const current = productSales.get(productId);
-            productSales.set(productId, {
-              ...current,
-              units: current.units + quantity,
-              revenue: current.revenue + revenue
-            });
-          } else {
-            productSales.set(productId, {
-              id: productId,
-              name: productName,
-              units: quantity,
-              revenue: revenue
-            });
+      if (order.order_items) {
+        order.order_items.forEach(item => {
+          const productId = item.item?.id;
+          const productName = item.item?.title || 'Producto sin nombre';
+          const quantity = item.quantity || 0;
+          const unitPrice = item.unit_price || 0;
+          const revenue = quantity * unitPrice;
+          
+          if (productId) {
+            if (productSales.has(productId)) {
+              const current = productSales.get(productId);
+              productSales.set(productId, {
+                ...current,
+                units: current.units + quantity,
+                revenue: current.revenue + revenue
+              });
+            } else {
+              productSales.set(productId, {
+                id: productId,
+                name: productName,
+                units: quantity,
+                revenue: revenue
+              });
+            }
           }
-        }
-      });
+        });
+      }
       
       // Track sales by month
-      const orderDate = new Date(order.date_created);
-      const monthKey = `${orderDate.getFullYear()}-${orderDate.getMonth() + 1}`;
-      const monthName = new Intl.DateTimeFormat('es', { month: 'short' }).format(orderDate);
+      if (order.date_created) {
+        const orderDate = new Date(order.date_created);
+        const monthKey = `${orderDate.getFullYear()}-${orderDate.getMonth() + 1}`;
+        const monthName = new Intl.DateTimeFormat('es', { month: 'short' }).format(orderDate);
+        
+        if (monthSales.has(monthKey)) {
+          monthSales.set(monthKey, {
+            ...monthSales.get(monthKey),
+            value: monthSales.get(monthKey).value + orderAmount
+          });
+        } else {
+          monthSales.set(monthKey, {
+            key: monthKey,
+            name: monthName,
+            value: orderAmount
+          });
+        }
+      }
       
-      if (monthSales.has(monthKey)) {
-        monthSales.set(monthKey, {
-          ...monthSales.get(monthKey),
-          value: monthSales.get(monthKey).value + orderAmount
-        });
-      } else {
-        monthSales.set(monthKey, {
-          key: monthKey,
-          name: monthName,
-          value: orderAmount
-        });
+      // Track sales by province if shipping data exists
+      if (order.shipping && order.shipping.receiver_address && order.shipping.receiver_address.state && order.shipping.receiver_address.state.name) {
+        const provinceName = order.shipping.receiver_address.state.name;
+        
+        if (provinceSales.has(provinceName)) {
+          provinceSales.set(provinceName, provinceSales.get(provinceName) + orderAmount);
+        } else {
+          provinceSales.set(provinceName, orderAmount);
+        }
       }
     });
     
@@ -363,13 +387,16 @@ function processDashboardData(batchResults) {
     const avgTicket = totalUnits > 0 ? totalAmount / totalUnits : 0;
     
     // Calculate estimated costs based on percentages
-    // These would ideally come from actual MeLi data but we're estimating for now
     const commissions = totalAmount * 0.07; // 7% commissions
     const taxes = totalAmount * 0.17;      // 17% taxes
     const shipping = totalAmount * 0.03;   // 3% shipping
     const discounts = totalAmount * 0.05;  // 5% discounts
     const refunds = totalAmount * 0.02;    // 2% refunds
     const iva = totalAmount * 0.21;        // 21% IVA
+    
+    // Estimate visits and conversion
+    const visits = totalUnits * 25; // Roughly 25 visits per unit sold
+    const conversion = visits > 0 ? (totalUnits / visits) * 100 : 0;
     
     // Set summary data
     dashboardData.summary = {
@@ -381,7 +408,9 @@ function processDashboardData(batchResults) {
       shipping,
       discounts,
       refunds,
-      iva
+      iva,
+      visits,
+      conversion
     };
     
     // Set sales by month (last 6 months or all if less)
@@ -402,6 +431,11 @@ function processDashboardData(batchResults) {
     dashboardData.topProducts = Array.from(productSales.values())
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 5);
+    
+    // Set sales by province
+    dashboardData.salesByProvince = Array.from(provinceSales.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
     
     console.log("Successfully calculated dashboard metrics");
     return dashboardData;

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -16,7 +15,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const COLORS = ['#663399', '#FFD700', '#8944EB', '#FF8042', '#9B59B6', '#4ade80'];
 
-// Helper function to format date ranges
+// Helper function to format date ranges - keep for backward compatibility
 const getDateRange = (filter: string) => {
   const today = new Date();
   let startDate = new Date();
@@ -54,7 +53,12 @@ const Dashboard = () => {
   const [meliConnected, setMeliConnected] = useState(false);
   const [meliUser, setMeliUser] = useState(null);
   const [dateFilter, setDateFilter] = useState('30d');
-  const [customDateRange, setCustomDateRange] = useState<{from?: Date, to?: Date}>({});
+  const [customDateRange, setCustomDateRange] = useState<{
+    from?: Date, 
+    to?: Date,
+    fromISO?: string,
+    toISO?: string
+  }>({});
   const [salesData, setSalesData] = useState([]);
   const [salesSummary, setSalesSummary] = useState({
     gmv: 0,
@@ -142,13 +146,20 @@ const Dashboard = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Handle date range change
-  const handleDateRangeChange = (range: string, dates?: { from: Date | undefined; to: Date | undefined }) => {
+  // Handle date range change - Updated to use ISO formatted dates
+  const handleDateRangeChange = (range: string, dates?: { 
+    from: Date | undefined; 
+    to: Date | undefined;
+    fromISO?: string;
+    toISO?: string;
+  }) => {
     setDateFilter(range);
-    if (range === 'custom' && dates) {
+    if (dates) {
       setCustomDateRange({
         from: dates.from,
-        to: dates.to
+        to: dates.to,
+        fromISO: dates.fromISO,
+        toISO: dates.toISO
       });
     }
   };
@@ -165,29 +176,45 @@ const Dashboard = () => {
         setDataLoading(true);
         console.log("Loading MeLi data for user:", meliUser);
         
-        // Get date range based on filter
-        const dateRange = getDateRange(dateFilter);
-        console.log("Date range:", dateRange);
+        // Use ISO formatted dates from DateRangePicker when available
+        let dateFrom, dateTo;
         
-        // For custom date range
-        if (dateFilter === 'custom' && customDateRange.from && customDateRange.to) {
-          dateRange.begin = customDateRange.from.toISOString().split('T')[0];
-          dateRange.end = customDateRange.to.toISOString().split('T')[0];
+        if (dateFilter === 'custom' && customDateRange.fromISO && customDateRange.toISO) {
+          dateFrom = customDateRange.fromISO;
+          dateTo = customDateRange.toISO;
+        } else {
+          // Use the helper function as a fallback
+          const dateRange = getDateRange(dateFilter);
+          dateFrom = `${dateRange.begin}T00:00:00.000Z`;
+          dateTo = `${dateRange.end}T23:59:59.999Z`;
+          
+          // If we have better dates from the DateRangePicker, use those
+          if (customDateRange.fromISO && dateFilter === 'custom') {
+            dateFrom = customDateRange.fromISO;
+          }
+          if (customDateRange.toISO && dateFilter === 'custom') {
+            dateTo = customDateRange.toISO;
+          }
         }
+        
+        console.log("Using date range:", { dateFrom, dateTo });
+        
+        // Create request specifically for orders to calculate GMV
+        const ordersRequest = {
+          endpoint: '/orders/search',
+          params: {
+            seller: meliUser,
+            'order.status': 'paid',
+            sort: 'date_desc',
+            date_from: dateFrom,
+            date_to: dateTo
+          }
+        };
         
         // Create batch requests for all data we need
         const batchRequests = [
-          // Orders data - recent orders with date filter
-          {
-            endpoint: '/orders/search',
-            params: {
-              seller: meliUser,
-              order_status: 'paid',
-              sort: 'date_desc',
-              begin_date: dateRange.begin,
-              end_date: dateRange.end
-            }
-          },
+          // Orders data with proper date filtering
+          ordersRequest,
           // Seller metrics
           {
             endpoint: `/users/${meliUser}/items/search`
@@ -207,7 +234,10 @@ const Dashboard = () => {
           body: { 
             user_id: session.user.id,
             batch_requests: batchRequests,
-            date_range: dateRange,
+            date_range: {
+              begin: dateFrom.split('T')[0],
+              end: dateTo.split('T')[0]
+            },
             prev_period: true // Indicate we want previous period data for comparison
           }
         });
@@ -256,7 +286,7 @@ const Dashboard = () => {
             setProvinceData(batchData.dashboard_data.salesByProvince);
           }
         } else {
-          console.log("No pre-processed dashboard data, using batch results directly");
+          console.log("No pre-processed dashboard data, manually calculating GMV from orders");
           
           // Find the orders data in batch results
           const ordersResult = batchData.batch_results.find(result => 
@@ -265,28 +295,43 @@ const Dashboard = () => {
           
           if (ordersResult && ordersResult.data.results) {
             const orders = ordersResult.data.results;
-            console.log(`Processing ${orders.length} orders`);
+            console.log(`Processing ${orders.length} orders for GMV calculation`);
             
-            // Process the orders data (fallback implementation)
-            // In a real-world scenario, this should be done by the edge function
+            // Calculate GMV by summing total_amount from all orders
+            let gmv = 0;
+            let totalUnits = 0;
             
-            // Simulate loading data based on orders count (fallback)
-            const simulatedGMV = orders.length * 1500;
-            const simulatedUnits = orders.length * 2;
+            orders.forEach(order => {
+              if (order.total_amount) {
+                gmv += Number(order.total_amount);
+              }
+              
+              // Calculate units if order_items exists
+              if (order.order_items) {
+                order.order_items.forEach(item => {
+                  totalUnits += item.quantity || 0;
+                });
+              }
+            });
             
-            // Set summary data
+            // Calculate average ticket
+            const avgTicket = totalUnits > 0 ? gmv / totalUnits : 0;
+            
+            // Update sales summary with calculated GMV
             const currentSummary = {
-              gmv: simulatedGMV,
-              units: simulatedUnits,
-              avgTicket: simulatedGMV / Math.max(simulatedUnits, 1),
-              commissions: simulatedGMV * 0.07,
-              taxes: simulatedGMV * 0.17,
-              shipping: simulatedGMV * 0.03,
-              discounts: simulatedGMV * 0.05,
-              refunds: simulatedGMV * 0.02,
-              iva: simulatedGMV * 0.21,
-              visits: simulatedUnits * 25,
-              conversion: (simulatedUnits / (simulatedUnits * 25)) * 100
+              ...salesSummary,
+              gmv: gmv,
+              units: totalUnits,
+              avgTicket: avgTicket,
+              // Estimate other metrics based on GMV
+              commissions: gmv * 0.07,
+              taxes: gmv * 0.17,
+              shipping: gmv * 0.03,
+              discounts: gmv * 0.05,
+              refunds: gmv * 0.02,
+              iva: gmv * 0.21,
+              visits: totalUnits * 25,
+              conversion: (totalUnits / Math.max(totalUnits * 25, 1)) * 100
             };
             setSalesSummary(currentSummary);
             

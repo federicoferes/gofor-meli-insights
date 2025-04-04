@@ -20,7 +20,12 @@ import {
 } from "@/components/ui/select";
 
 type DateRangePickerProps = {
-  onDateRangeChange: (range: string, dates?: { from: Date | undefined; to: Date | undefined }) => void;
+  onDateRangeChange: (range: string, dates?: { 
+    from: Date | undefined; 
+    to: Date | undefined;
+    fromISO?: string;
+    toISO?: string;
+  }) => void;
 };
 
 const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
@@ -73,10 +78,29 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
     // Only pass ISO strings if we have valid dates
     if (value !== "custom") {
       setDate(dateRange);
-      onDateRangeChange(value, dateRange);
+      
+      // Add ISO formatted dates to the callback
+      let fromISO, toISO;
+      if (dateRange.from) {
+        fromISO = formatDateToISO(dateRange.from);
+      }
+      if (dateRange.to) {
+        toISO = formatDateToISO(dateRange.to, true); // End of day for the to-date
+      }
+      
+      onDateRangeChange(value, { ...dateRange, fromISO, toISO });
     } else {
       // For custom, we'll rely on the custom date picker
-      onDateRangeChange(value, date);
+      // Add ISO formatted dates if they exist
+      let fromISO, toISO;
+      if (date.from) {
+        fromISO = formatDateToISO(date.from);
+      }
+      if (date.to) {
+        toISO = formatDateToISO(date.to, true); // End of day for the to-date
+      }
+      
+      onDateRangeChange(value, { ...date, fromISO, toISO });
     }
   };
 
@@ -84,7 +108,12 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
     setDate(value);
     if (value.from && value.to) {
       setSelectedRange("custom");
-      onDateRangeChange("custom", value);
+      
+      // Add ISO formatted dates
+      const fromISO = value.from ? formatDateToISO(value.from) : undefined;
+      const toISO = value.to ? formatDateToISO(value.to, true) : undefined; // End of day for the to-date
+      
+      onDateRangeChange("custom", { ...value, fromISO, toISO });
     }
   };
 
