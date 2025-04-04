@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -350,7 +351,7 @@ const Dashboard = () => {
               conversion: currentSummary.conversion * 0.95
             });
             
-            // Generate simulated data for other metrics as a fallback
+            // Generate simulated data for other metrics as fallback
             const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
             const lastSixMonths = [];
             const today = new Date();
@@ -359,37 +360,37 @@ const Dashboard = () => {
               const month = new Date(today.getFullYear(), today.getMonth() - i, 1);
               lastSixMonths.push({
                 name: monthNames[month.getMonth()],
-                value: Math.floor(simulatedGMV / 6) + Math.floor(Math.random() * 1000)
+                value: Math.floor(gmv / 6) + Math.floor(Math.random() * 1000)
               });
             }
             
             setSalesData(lastSixMonths);
             
             setCostData([
-              { name: 'Comisiones', value: simulatedGMV * 0.07 },
-              { name: 'Impuestos', value: simulatedGMV * 0.17 },
-              { name: 'Envíos', value: simulatedGMV * 0.03 },
-              { name: 'Descuentos', value: simulatedGMV * 0.05 },
-              { name: 'Anulaciones', value: simulatedGMV * 0.02 }
+              { name: 'Comisiones', value: gmv * 0.07 },
+              { name: 'Impuestos', value: gmv * 0.17 },
+              { name: 'Envíos', value: gmv * 0.03 },
+              { name: 'Descuentos', value: gmv * 0.05 },
+              { name: 'Anulaciones', value: gmv * 0.02 }
             ]);
             
             // Generate simulated top products
             setTopProducts([
-              { id: 1, name: 'Producto 1', units: Math.floor(simulatedUnits * 0.3), revenue: Math.floor(simulatedGMV * 0.3) },
-              { id: 2, name: 'Producto 2', units: Math.floor(simulatedUnits * 0.25), revenue: Math.floor(simulatedGMV * 0.25) },
-              { id: 3, name: 'Producto 3', units: Math.floor(simulatedUnits * 0.2), revenue: Math.floor(simulatedGMV * 0.2) },
-              { id: 4, name: 'Producto 4', units: Math.floor(simulatedUnits * 0.15), revenue: Math.floor(simulatedGMV * 0.15) },
-              { id: 5, name: 'Producto 5', units: Math.floor(simulatedUnits * 0.1), revenue: Math.floor(simulatedGMV * 0.1) }
+              { id: 1, name: 'Producto 1', units: Math.floor(totalUnits * 0.3), revenue: Math.floor(gmv * 0.3) },
+              { id: 2, name: 'Producto 2', units: Math.floor(totalUnits * 0.25), revenue: Math.floor(gmv * 0.25) },
+              { id: 3, name: 'Producto 3', units: Math.floor(totalUnits * 0.2), revenue: Math.floor(gmv * 0.2) },
+              { id: 4, name: 'Producto 4', units: Math.floor(totalUnits * 0.15), revenue: Math.floor(gmv * 0.15) },
+              { id: 5, name: 'Producto 5', units: Math.floor(totalUnits * 0.1), revenue: Math.floor(gmv * 0.1) }
             ]);
 
             // Generate simulated province data
             setProvinceData([
-              { name: 'Buenos Aires', value: Math.floor(simulatedGMV * 0.45) },
-              { name: 'CABA', value: Math.floor(simulatedGMV * 0.25) },
-              { name: 'Córdoba', value: Math.floor(simulatedGMV * 0.1) },
-              { name: 'Santa Fe', value: Math.floor(simulatedGMV * 0.08) },
-              { name: 'Mendoza', value: Math.floor(simulatedGMV * 0.05) },
-              { name: 'Otras', value: Math.floor(simulatedGMV * 0.07) }
+              { name: 'Buenos Aires', value: Math.floor(gmv * 0.45) },
+              { name: 'CABA', value: Math.floor(gmv * 0.25) },
+              { name: 'Córdoba', value: Math.floor(gmv * 0.1) },
+              { name: 'Santa Fe', value: Math.floor(gmv * 0.08) },
+              { name: 'Mendoza', value: Math.floor(gmv * 0.05) },
+              { name: 'Otras', value: Math.floor(gmv * 0.07) }
             ]);
           }
         }
