@@ -176,257 +176,280 @@ const Dashboard = () => {
   };
 
   useEffect(() => {
-    const loadMeliData = async () => {
-      if (!session || !meliConnected || !meliUser) {
-        console.log("Skipping data load - not connected or no user ID", { session, meliConnected, meliUser });
-        return;
-      }
+    if (dateFilter === 'custom' && (!customDateRange.from || !customDateRange.to)) return;
+    if (meliConnected && session && meliUser) {
+      setSalesData([]);
+      setTopProducts([]);
+      setCostData([]);
+      setProvinceData([]);
+      setSalesSummary({
+        gmv: 0,
+        commissions: 0,
+        taxes: 0,
+        shipping: 0,
+        discounts: 0,
+        refunds: 0,
+        iva: 0,
+        units: 0,
+        avgTicket: 0,
+        visits: 0,
+        conversion: 0
+      });
       
-      try {
-        setDataLoading(true);
-        console.log("Loading MeLi data for user:", meliUser);
-        
-        let dateFrom, dateTo;
-        let fromDate, toDate;
-        
-        if (dateFilter === 'custom' && customDateRange.fromISO && customDateRange.toISO) {
-          dateFrom = customDateRange.fromISO;
-          dateTo = customDateRange.toISO;
-          fromDate = customDateRange.from;
-          toDate = customDateRange.to;
-        } else {
-          const dateRange = getDateRange(dateFilter);
-          dateFrom = `${dateRange.begin}T00:00:00.000Z`;
-          dateTo = `${dateRange.end}T23:59:59.999Z`;
-          
-          fromDate = new Date(dateRange.begin);
-          toDate = new Date(dateRange.end);
-          
-          if (dateFilter === 'today') {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            fromDate = today;
-            toDate = today;
-          } else if (dateFilter === 'yesterday') {
-            const yesterday = new Date();
-            yesterday.setDate(yesterday.getDate() - 1);
-            yesterday.setHours(0, 0, 0, 0);
-            fromDate = yesterday;
-            toDate = yesterday;
-          }
-          
-          if (customDateRange.fromISO && dateFilter === 'custom') {
-            dateFrom = customDateRange.fromISO;
-            fromDate = customDateRange.from;
-          }
-          if (customDateRange.toISO && dateFilter === 'custom') {
-            dateTo = customDateRange.toISO;
-            toDate = customDateRange.to;
-          }
-        }
-        
-        console.log("Using date range:", { dateFrom, dateTo, fromDate, toDate });
-        
-        const ordersRequest = {
-          endpoint: '/orders/search',
-          params: {
-            seller: meliUser,
-            'order.status': 'paid',
-            sort: 'date_desc',
-            date_from: dateFrom,
-            date_to: dateTo
-          }
-        };
-        
-        const batchRequests = [
-          ordersRequest,
-          {
-            endpoint: `/users/${meliUser}/items/search`
-          },
-          {
-            endpoint: `/visits/search`,
-            params: {
-              user_id: meliUser
-            }
-          }
-        ];
-        
-        const { data: batchData, error: batchError } = await supabase.functions.invoke('meli-data', {
-          body: { 
-            user_id: session.user.id,
-            batch_requests: batchRequests,
-            date_range: {
-              begin: dateFrom.split('T')[0],
-              end: dateTo.split('T')[0]
-            },
-            prev_period: true
-          }
-        });
-        
-        if (batchError) {
-          throw new Error(`Error fetching batch data: ${batchError.message}`);
-        }
-        
-        if (!batchData || !batchData.success) {
-          throw new Error(batchData?.message || 'Error fetching batch data');
-        }
-        
-        console.log("Batch data received:", batchData);
-        
-        if (batchData.dashboard_data) {
-          console.log("Using pre-processed dashboard data");
-          
-          if (batchData.dashboard_data.salesByMonth?.length > 0) {
-            setSalesData(batchData.dashboard_data.salesByMonth);
-          }
-          
-          if (batchData.dashboard_data.summary) {
-            setSalesSummary(batchData.dashboard_data.summary);
-          }
-          
-          if (batchData.dashboard_data.prev_summary) {
-            setPrevSalesSummary(batchData.dashboard_data.prev_summary);
-          }
-          
-          if (batchData.dashboard_data.costDistribution?.length > 0) {
-            setCostData(batchData.dashboard_data.costDistribution);
-          }
-          
-          if (batchData.dashboard_data.topProducts?.length > 0) {
-            setTopProducts(batchData.dashboard_data.topProducts);
-          }
-          
-          if (batchData.dashboard_data.salesByProvince?.length > 0) {
-            setProvinceData(batchData.dashboard_data.salesByProvince);
-          }
-        } else {
-          console.log("No pre-processed dashboard data, manually calculating GMV from orders");
-          
-          const ordersResult = batchData.batch_results.find(result => 
-            result.endpoint.includes('/orders/search') && result.success
-          );
-          
-          if (ordersResult && ordersResult.data.results) {
-            const allOrders = ordersResult.data.results;
-            console.log(`Received ${allOrders.length} orders from API`);
-            
-            const filteredOrders = allOrders.filter(order => 
-              isDateInRange(order.date_created, fromDate, toDate)
-            );
-            
-            console.log(`Filtered to ${filteredOrders.length} orders within date range ${dateFilter}`);
-            
-            let gmv = 0;
-            let totalUnits = 0;
-            
-            filteredOrders.forEach(order => {
-              if (order.total_amount) {
-                gmv += Number(order.total_amount);
-              }
-              
-              if (order.order_items) {
-                order.order_items.forEach(item => {
-                  totalUnits += item.quantity || 0;
-                });
-              }
-            });
-            
-            console.log(`Calculated GMV: ${gmv}, Units: ${totalUnits} for date range ${dateFilter}`);
-            
-            const avgTicket = totalUnits > 0 ? gmv / totalUnits : 0;
-            
-            const currentSummary = {
-              ...salesSummary,
-              gmv: gmv,
-              units: totalUnits,
-              avgTicket: avgTicket,
-              commissions: gmv * 0.07,
-              taxes: gmv * 0.17,
-              shipping: gmv * 0.03,
-              discounts: gmv * 0.05,
-              refunds: gmv * 0.02,
-              iva: gmv * 0.21,
-              visits: totalUnits * 25,
-              conversion: (totalUnits / Math.max(totalUnits * 25, 1)) * 100
-            };
-            setSalesSummary(currentSummary);
-            
-            setPrevSalesSummary({
-              gmv: currentSummary.gmv * 0.9,
-              units: currentSummary.units * 0.85,
-              avgTicket: currentSummary.avgTicket * 1.05,
-              commissions: currentSummary.commissions * 0.9,
-              taxes: currentSummary.taxes * 0.9,
-              shipping: currentSummary.shipping * 0.88,
-              discounts: currentSummary.discounts * 0.93,
-              refunds: currentSummary.refunds * 0.95,
-              iva: currentSummary.iva * 0.9,
-              visits: currentSummary.visits * 0.88,
-              conversion: currentSummary.conversion * 0.95
-            });
-            
-            const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-            const lastSixMonths = [];
-            const today = new Date();
-            
-            for (let i = 5; i >= 0; i--) {
-              const month = new Date(today.getFullYear(), today.getMonth() - i, 1);
-              lastSixMonths.push({
-                name: monthNames[month.getMonth()],
-                value: Math.floor(gmv / 6) + Math.floor(Math.random() * 1000)
-              });
-            }
-            
-            setSalesData(lastSixMonths);
-            
-            setCostData([
-              { name: 'Comisiones', value: gmv * 0.07 },
-              { name: 'Impuestos', value: gmv * 0.17 },
-              { name: 'Envíos', value: gmv * 0.03 },
-              { name: 'Descuentos', value: gmv * 0.05 },
-              { name: 'Anulaciones', value: gmv * 0.02 }
-            ]);
-            
-            setTopProducts([
-              { id: 1, name: 'Producto 1', units: Math.floor(totalUnits * 0.3), revenue: Math.floor(gmv * 0.3) },
-              { id: 2, name: 'Producto 2', units: Math.floor(totalUnits * 0.25), revenue: Math.floor(gmv * 0.25) },
-              { id: 3, name: 'Producto 3', units: Math.floor(totalUnits * 0.2), revenue: Math.floor(gmv * 0.2) },
-              { id: 4, name: 'Producto 4', units: Math.floor(totalUnits * 0.15), revenue: Math.floor(gmv * 0.15) },
-              { id: 5, name: 'Producto 5', units: Math.floor(totalUnits * 0.1), revenue: Math.floor(gmv * 0.1) }
-            ]);
-            
-            setProvinceData([
-              { name: 'Buenos Aires', value: Math.floor(gmv * 0.45) },
-              { name: 'CABA', value: Math.floor(gmv * 0.25) },
-              { name: 'Córdoba', value: Math.floor(gmv * 0.1) },
-              { name: 'Santa Fe', value: Math.floor(gmv * 0.08) },
-              { name: 'Mendoza', value: Math.floor(gmv * 0.05) },
-              { name: 'Otras', value: Math.floor(gmv * 0.07) }
-            ]);
-          }
-        }
-        
-        setDataLoading(false);
-        toast({
-          title: "Datos cargados",
-          description: "Se han cargado los datos de Mercado Libre correctamente.",
-          duration: 3000,
-        });
-      } catch (error) {
-        console.error("Error loading Mercado Libre data:", error);
-        toast({
-          variant: "destructive",
-          title: "Error cargando datos",
-          description: error.message || "No se pudieron cargar los datos de Mercado Libre."
-        });
-        setDataLoading(false);
-      }
-    };
-    
-    if (meliConnected && meliUser) {
       loadMeliData();
     }
-  }, [session, meliConnected, dateFilter, meliUser, customDateRange, toast]);
+  }, [dateFilter, customDateRange, meliConnected, session, meliUser]);
+
+  const loadMeliData = async () => {
+    if (!session || !meliConnected || !meliUser) {
+      console.log("Skipping data load - not connected or no user ID", { session, meliConnected, meliUser });
+      return;
+    }
+    
+    try {
+      setDataLoading(true);
+      console.log("Loading MeLi data for user:", meliUser);
+      
+      let dateFrom, dateTo;
+      let fromDate, toDate;
+      
+      if (dateFilter === 'custom' && customDateRange.fromISO && customDateRange.toISO) {
+        dateFrom = customDateRange.fromISO;
+        dateTo = customDateRange.toISO;
+        fromDate = customDateRange.from;
+        toDate = customDateRange.to;
+      } else {
+        const dateRange = getDateRange(dateFilter);
+        dateFrom = `${dateRange.begin}T00:00:00.000Z`;
+        dateTo = `${dateRange.end}T23:59:59.999Z`;
+        
+        fromDate = new Date(dateRange.begin);
+        toDate = new Date(dateRange.end);
+        
+        if (dateFilter === 'today') {
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          fromDate = today;
+          toDate = today;
+        } else if (dateFilter === 'yesterday') {
+          const yesterday = new Date();
+          yesterday.setDate(yesterday.getDate() - 1);
+          yesterday.setHours(0, 0, 0, 0);
+          fromDate = yesterday;
+          toDate = yesterday;
+        }
+        
+        if (customDateRange.fromISO && dateFilter === 'custom') {
+          dateFrom = customDateRange.fromISO;
+          fromDate = customDateRange.from;
+        }
+        if (customDateRange.toISO && dateFilter === 'custom') {
+          dateTo = customDateRange.toISO;
+          toDate = customDateRange.to;
+        }
+      }
+      
+      console.log("🟣 Filtro aplicado:", dateFilter);
+      console.log("🔢 date_from:", dateFrom);
+      console.log("🔢 date_to:", dateTo);
+      
+      const ordersRequest = {
+        endpoint: '/orders/search',
+        params: {
+          seller: meliUser,
+          'order.status': 'paid',
+          sort: 'date_desc',
+          date_from: dateFrom,
+          date_to: dateTo
+        }
+      };
+      
+      console.log("📦 batchRequests:", [ordersRequest]);
+      
+      const batchRequests = [
+        ordersRequest,
+        {
+          endpoint: `/users/${meliUser}/items/search`
+        },
+        {
+          endpoint: `/visits/search`,
+          params: {
+            user_id: meliUser
+          }
+        }
+      ];
+      
+      const { data: batchData, error: batchError } = await supabase.functions.invoke('meli-data', {
+        body: { 
+          user_id: session.user.id,
+          batch_requests: batchRequests,
+          date_range: {
+            begin: dateFrom.split('T')[0],
+            end: dateTo.split('T')[0]
+          },
+          prev_period: true
+        }
+      });
+      
+      if (batchError) {
+        throw new Error(`Error fetching batch data: ${batchError.message}`);
+      }
+      
+      if (!batchData || !batchData.success) {
+        throw new Error(batchData?.message || 'Error fetching batch data');
+      }
+      
+      console.log("Batch data received:", batchData);
+      
+      if (batchData.dashboard_data) {
+        console.log("Using pre-processed dashboard data");
+        
+        if (batchData.dashboard_data.salesByMonth?.length > 0) {
+          setSalesData(batchData.dashboard_data.salesByMonth);
+        }
+        
+        if (batchData.dashboard_data.summary) {
+          setSalesSummary(batchData.dashboard_data.summary);
+        }
+        
+        if (batchData.dashboard_data.prev_summary) {
+          setPrevSalesSummary(batchData.dashboard_data.prev_summary);
+        }
+        
+        if (batchData.dashboard_data.costDistribution?.length > 0) {
+          setCostData(batchData.dashboard_data.costDistribution);
+        }
+        
+        if (batchData.dashboard_data.topProducts?.length > 0) {
+          setTopProducts(batchData.dashboard_data.topProducts);
+        }
+        
+        if (batchData.dashboard_data.salesByProvince?.length > 0) {
+          setProvinceData(batchData.dashboard_data.salesByProvince);
+        }
+      } else {
+        console.log("No pre-processed dashboard data, manually calculating GMV from orders");
+        
+        const ordersResult = batchData.batch_results.find(result => 
+          result.endpoint.includes('/orders/search') && result.success
+        );
+        
+        if (ordersResult && ordersResult.data.results) {
+          const allOrders = ordersResult.data.results;
+          console.log(`Received ${allOrders.length} orders from API`);
+          
+          const filteredOrders = allOrders.filter(order => 
+            isDateInRange(order.date_created, fromDate, toDate)
+          );
+          
+          console.log(`Filtered to ${filteredOrders.length} orders within date range ${dateFilter}`);
+          
+          let gmv = 0;
+          let totalUnits = 0;
+          
+          filteredOrders.forEach(order => {
+            if (order.total_amount) {
+              gmv += Number(order.total_amount);
+            }
+            
+            if (order.order_items) {
+              order.order_items.forEach(item => {
+                totalUnits += item.quantity || 0;
+              });
+            }
+          });
+          
+          console.log(`Calculated GMV: ${gmv}, Units: ${totalUnits} for date range ${dateFilter}`);
+          
+          const avgTicket = totalUnits > 0 ? gmv / totalUnits : 0;
+          
+          const currentSummary = {
+            ...salesSummary,
+            gmv: gmv,
+            units: totalUnits,
+            avgTicket: avgTicket,
+            commissions: gmv * 0.07,
+            taxes: gmv * 0.17,
+            shipping: gmv * 0.03,
+            discounts: gmv * 0.05,
+            refunds: gmv * 0.02,
+            iva: gmv * 0.21,
+            visits: totalUnits * 25,
+            conversion: (totalUnits / Math.max(totalUnits * 25, 1)) * 100
+          };
+          setSalesSummary(currentSummary);
+          
+          setPrevSalesSummary({
+            gmv: currentSummary.gmv * 0.9,
+            units: currentSummary.units * 0.85,
+            avgTicket: currentSummary.avgTicket * 1.05,
+            commissions: currentSummary.commissions * 0.9,
+            taxes: currentSummary.taxes * 0.9,
+            shipping: currentSummary.shipping * 0.88,
+            discounts: currentSummary.discounts * 0.93,
+            refunds: currentSummary.refunds * 0.95,
+            iva: currentSummary.iva * 0.9,
+            visits: currentSummary.visits * 0.88,
+            conversion: currentSummary.conversion * 0.95
+          });
+          
+          const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+          const lastSixMonths = [];
+          const today = new Date();
+          
+          for (let i = 5; i >= 0; i--) {
+            const month = new Date(today.getFullYear(), today.getMonth() - i, 1);
+            lastSixMonths.push({
+              name: monthNames[month.getMonth()],
+              value: Math.floor(gmv / 6) + Math.floor(Math.random() * 1000)
+            });
+          }
+          
+          setSalesData(lastSixMonths);
+          
+          setCostData([
+            { name: 'Comisiones', value: gmv * 0.07 },
+            { name: 'Impuestos', value: gmv * 0.17 },
+            { name: 'Envíos', value: gmv * 0.03 },
+            { name: 'Descuentos', value: gmv * 0.05 },
+            { name: 'Anulaciones', value: gmv * 0.02 }
+          ]);
+          
+          setTopProducts([
+            { id: 1, name: 'Producto 1', units: Math.floor(totalUnits * 0.3), revenue: Math.floor(gmv * 0.3) },
+            { id: 2, name: 'Producto 2', units: Math.floor(totalUnits * 0.25), revenue: Math.floor(gmv * 0.25) },
+            { id: 3, name: 'Producto 3', units: Math.floor(totalUnits * 0.2), revenue: Math.floor(gmv * 0.2) },
+            { id: 4, name: 'Producto 4', units: Math.floor(totalUnits * 0.15), revenue: Math.floor(gmv * 0.15) },
+            { id: 5, name: 'Producto 5', units: Math.floor(totalUnits * 0.1), revenue: Math.floor(gmv * 0.1) }
+          ]);
+          
+          setProvinceData([
+            { name: 'Buenos Aires', value: Math.floor(gmv * 0.45) },
+            { name: 'CABA', value: Math.floor(gmv * 0.25) },
+            { name: 'Córdoba', value: Math.floor(gmv * 0.1) },
+            { name: 'Santa Fe', value: Math.floor(gmv * 0.08) },
+            { name: 'Mendoza', value: Math.floor(gmv * 0.05) },
+            { name: 'Otras', value: Math.floor(gmv * 0.07) }
+          ]);
+        }
+      }
+      
+      setDataLoading(false);
+      toast({
+        title: "Datos cargados",
+        description: "Se han cargado los datos de Mercado Libre correctamente.",
+        duration: 3000,
+      });
+    } catch (error) {
+      console.error("Error loading Mercado Libre data:", error);
+      toast({
+        variant: "destructive",
+        title: "Error cargando datos",
+        description: error.message || "No se pudieron cargar los datos de Mercado Libre."
+      });
+      setDataLoading(false);
+    }
+  };
 
   const calculatePercentChange = (current: number, previous: number): number => {
     if (!previous) return 0;

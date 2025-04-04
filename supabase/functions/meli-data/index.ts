@@ -260,15 +260,30 @@ serve(async (req) => {
   }
 });
 
-// Función para verificar si una fecha está dentro del rango seleccionado
+// Improved function to check if a date is within the selected range
 function isDateInRange(dateStr: string, dateRange: any): boolean {
   if (!dateStr || !dateRange || !dateRange.begin || !dateRange.end) return true;
   
+  // Parse the input date
   const date = new Date(dateStr);
-  const from = new Date(dateRange.begin);
-  const to = new Date(dateRange.end);
   
-  // Ajustar las horas para comparación correcta
+  // Parse the range dates
+  let from, to;
+  
+  // Handle both ISO string and date object formats
+  if (typeof dateRange.begin === 'string') {
+    from = new Date(dateRange.begin);
+  } else {
+    from = dateRange.begin;
+  }
+  
+  if (typeof dateRange.end === 'string') {
+    to = new Date(dateRange.end);
+  } else {
+    to = dateRange.end;
+  }
+  
+  // Adjust the hours for correct comparison
   from.setHours(0, 0, 0, 0);
   to.setHours(23, 59, 59, 999);
   
@@ -277,7 +292,7 @@ function isDateInRange(dateStr: string, dateRange: any): boolean {
   return date >= from && date <= to;
 }
 
-// Enhanced function to process orders and calculate GMV
+// Enhanced function to process orders and calculate GMV with date filtering
 function processDashboardData(batchResults, dateRange) {
   try {
     // Initialize dashboard data structure

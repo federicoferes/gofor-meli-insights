@@ -51,21 +51,21 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
     switch (rangeType) {
       case "today":
         fromDate = startOfDay(new Date(today));
-        return { from: fromDate, to: endOfDay(today) };
+        return { from: fromDate, to: today }; // No need for endOfDay since we apply that later
       case "yesterday":
         fromDate = startOfDay(subDays(today, 1));
-        return { from: fromDate, to: endOfDay(subDays(today, 1)) };
+        return { from: fromDate, to: subDays(today, 1) };
       case "7d":
         fromDate = startOfDay(subDays(today, 7));
-        return { from: fromDate, to: endOfDay(today) };
+        return { from: fromDate, to: today };
       case "30d":
         fromDate = startOfDay(subDays(today, 30));
-        return { from: fromDate, to: endOfDay(today) };
+        return { from: fromDate, to: today };
       case "custom":
         return date;
       default:
         fromDate = startOfDay(subDays(today, 30));
-        return { from: fromDate, to: endOfDay(today) };
+        return { from: fromDate, to: today };
     }
   };
 
