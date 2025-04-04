@@ -1,960 +1,643 @@
 import React, { useState, useEffect } from 'react';
-import { Navigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
-import { format, subDays, startOfDay, endOfDay, startOfWeek, startOfMonth, addDays } from 'date-fns';
-import { es } from 'date-fns/locale';
-import { AlertCircle, ArrowDown, ArrowUp, Calendar as CalendarIcon, DollarSign, Package, ShoppingCart, TruckIcon, Users, BarChart3, Search, CircleDollarSign } from "lucide-react";
-import { Loader2 } from "lucide-react";
-import MeliConnect from '@/components/MeliConnect';
-import { useToast } from "@/components/ui/use-toast";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, AreaChart, Area } from 'recharts';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import ConfigurationGuide from '@/components/ConfigurationGuide';
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { supabase } from '@/integrations/supabase/client';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { Calendar as CalendarIcon, ChevronDown } from "lucide-react";
+import { format, subDays } from 'date-fns';
+import { DateRange } from 'react-day-picker';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import MeliConnect from '@/components/MeliConnect';
 
-const COLORS = ['#663399', '#FFD700', '#4CAF50', '#FF8042', '#9B59B6', '#3498DB'];
+const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#8dd1e1', '#a4de6c'];
 
-const safeNumberFormat = (value, options = {}) => {
-  if (value === undefined || value === null) return '0';
-  return value.toLocaleString('es-AR', options);
-};
+// Sample data for the demo dashboard
+const salesData = [{
+  name: 'Ene',
+  value: 12400,
+  prevValue: 10200
+}, {
+  name: 'Feb',
+  value: 15600,
+  prevValue: 12300
+}, {
+  name: 'Mar',
+  value: 14200,
+  prevValue: 13100
+}, {
+  name: 'Abr',
+  value: 16800,
+  prevValue: 14500
+}, {
+  name: 'May',
+  value: 18900,
+  prevValue: 15700
+}, {
+  name: 'Jun',
+  value: 17300,
+  prevValue: 16400
+}];
 
-const safePercentage = (value, total) => {
-  if (!value || !total || total === 0) return '0%';
-  return ((value / total) * 100).toFixed(1) + '%';
-};
+const performanceData = [
+  { name: 'Ene', GMV: 1200000, Orders: 2400, Conversion: 3.2 },
+  { name: 'Feb', GMV: 1350000, Orders: 2100, Conversion: 2.9 },
+  { name: 'Mar', GMV: 1800000, Orders: 2800, Conversion: 3.4 },
+  { name: 'Abr', GMV: 2200000, Orders: 3500, Conversion: 3.8 },
+  { name: 'May', GMV: 2800000, Orders: 4200, Conversion: 4.1 },
+  { name: 'Jun', GMV: 3100000, Orders: 4800, Conversion: 4.5 },
+];
 
-const getDateRange = (filter) => {
-  const today = new Date();
-  let startDate = new Date();
-  let label = '';
-  
-  switch(filter) {
-    case 'today':
-      startDate = startOfDay(today);
-      label = 'Hoy';
-      break;
-    case 'yesterday':
-      startDate = startOfDay(subDays(today, 1));
-      label = 'Ayer';
-      break;
-    case '7d':
-      startDate = startOfDay(subDays(today, 7));
-      label = 'Últimos 7 días';
-      break;
-    case '30d':
-      startDate = startOfDay(subDays(today, 30));
-      label = 'Últimos 30 días';
-      break;
-    case 'custom':
-      label = 'Personalizado';
-      break;
-    default:
-      startDate = startOfDay(subDays(today, 30));
-      label = 'Últimos 30 días';
+const costDistributionData = [{
+  name: 'Comisiones',
+  value: 12500
+}, {
+  name: 'Impuestos',
+  value: 25600
+}, {
+  name: 'Envíos',
+  value: 8500
+}, {
+  name: 'Descuentos',
+  value: 7800
+}, {
+  name: 'Anulaciones',
+  value: 3600
+}];
+
+const topProducts = [{
+  id: 1,
+  name: 'Smartphone XYZ',
+  units: 152,
+  revenue: 45600
+}, {
+  id: 2,
+  name: 'Auriculares Bluetooth',
+  units: 98,
+  revenue: 29400
+}, {
+  id: 3,
+  name: 'Cargador Tipo C',
+  units: 76,
+  revenue: 15200
+}, {
+  id: 4,
+  name: 'Funda Protectora',
+  units: 67,
+  revenue: 6700
+}, {
+  id: 5,
+  name: 'Smartwatch Pro',
+  units: 54,
+  revenue: 32400
+}];
+
+const inventoryData = [
+  { name: 'En stock', value: 85, color: '#4ade80' },
+  { name: 'Stock bajo', value: 10, color: '#facc15' },
+  { name: 'Sin stock', value: 5, color: '#f87171' },
+];
+
+// Helper function to safely format numbers
+const safeNumberFormat = (value: number | null | undefined): string => {
+  if (value === null || value === undefined || isNaN(value)) {
+    return '$0';
   }
-  
-  return {
-    begin: startDate.toISOString(),
-    end: endOfDay(today).toISOString(),
-    label
-  };
+  return new Intl.NumberFormat('es-AR', {
+    style: 'currency',
+    currency: 'ARS',
+    maximumFractionDigits: 0
+  }).format(value);
 };
+
+// Helper function to safely format percentages
+const safePercentFormat = (value: number | null | undefined): string => {
+  if (value === null || value === undefined || isNaN(value)) {
+    return '0%';
+  }
+  return new Intl.NumberFormat('es-AR', {
+    style: 'percent',
+    maximumFractionDigits: 1
+  }).format(value / 100);
+};
+
+// Define dashboard data types
+interface SalesSummary {
+  gmv: number;
+  units: number;
+  avgTicket: number;
+  visits: number;
+  conversion: number;
+  commissions: number;
+  taxes: number;
+  shipping: number;
+  discounts: number;
+  refunds: number;
+  iva: number;
+}
+
+interface DashboardData {
+  summary: SalesSummary;
+  salesByMonth: { key: string; name: string; value: number }[];
+  costDistribution: { name: string; value: number }[];
+  topProducts: { id: number; name: string; units: number; revenue: number }[];
+}
 
 const Dashboard = () => {
-  const [session, setSession] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [meliConnected, setMeliConnected] = useState(false);
-  const [meliUser, setMeliUser] = useState(null);
-  const [dateFilter, setDateFilter] = useState('30d');
-  const [customDateRange, setCustomDateRange] = useState({ from: null, to: null });
-  const [salesData, setSalesData] = useState([]);
-  const [provinceSalesData, setProvinceSalesData] = useState([]);
-  const [salesSummary, setSalesSummary] = useState({
-    gmv: 0,
-    commissions: 0,
-    taxes: 0,
-    shipping: 0,
-    discounts: 0,
-    refunds: 0,
-    iva: 0,
-    units: 0,
-    avgTicket: 0,
-    visits: 0,
-    conversionRate: 0,
-    previousPeriodGmv: 0,
-    previousPeriodUnits: 0,
-    previousPeriodTicket: 0,
-    previousPeriodVisits: 0,
-    previousPeriodConversion: 0
+  const [salesSummary, setSalesSummary] = useState<SalesSummary | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isConnected, setIsConnected] = useState(false);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: subDays(new Date(), 30),
+    to: new Date(),
   });
-  const [topProducts, setTopProducts] = useState([]);
-  const [costData, setCostData] = useState([]);
-  const [dataLoading, setDataLoading] = useState(false);
-  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
-  const { toast } = useToast();
 
   useEffect(() => {
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setSession(session);
-      
-      if (session) {
+    const checkMeliConnection = async () => {
+      const { data } = await supabase.auth.getSession();
+        
+      if (data.session?.user) {
         try {
           const { data: connectionData, error } = await supabase.functions.invoke('meli-data', {
-            body: { user_id: session.user.id }
+            body: { user_id: data.session.user.id }
           });
           
           if (!error && connectionData?.is_connected) {
-            setMeliConnected(true);
-            setMeliUser(connectionData.meli_user_id);
-            console.log("MeLi connection verified:", connectionData);
+            setIsConnected(true);
+            fetchDashboardData(dateRange?.from, dateRange?.to);
           } else {
-            console.log("Not connected to MeLi yet:", connectionData, error);
+            setIsConnected(false);
+            setIsLoading(false);
           }
         } catch (error) {
           console.error("Error checking MeLi connection:", error);
+          setIsConnected(false);
+          setIsLoading(false);
         }
-      }
-      
-      setLoading(false);
-    };
-    
-    checkSession();
-    
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      
-      if (session) {
-        supabase.functions.invoke('meli-data', {
-          body: { user_id: session.user.id }
-        }).then(({ data, error }) => {
-          if (!error && data?.is_connected) {
-            setMeliConnected(true);
-            setMeliUser(data.meli_user_id);
-          } else {
-            setMeliConnected(false);
-          }
-        });
       } else {
-        setMeliConnected(false);
+        setIsConnected(false);
+        setIsLoading(false);
       }
-    });
-    
-    return () => subscription.unsubscribe();
+    };
+
+    checkMeliConnection();
   }, []);
 
-  useEffect(() => {
-    if (dateFilter === 'custom' && (!customDateRange.from || !customDateRange.to)) {
-      return;
-    }
-    
-    if (meliConnected && session) {
-      loadMeliData();
-    }
-  }, [dateFilter, customDateRange, meliConnected, session, meliUser]);
+  const fetchDashboardData = async (startDate: Date | undefined, endDate: Date | undefined) => {
+    if (!startDate || !endDate) return;
 
-  const handleDateFilterChange = (value) => {
-    setDateFilter(value);
-  };
-
-  const handleCustomDateChange = (range) => {
-    setCustomDateRange(range);
-    if (range.from && range.to) {
-      setIsDatePickerOpen(false);
-    }
-  };
-
-  const getSelectedDateRange = () => {
-    if (dateFilter === 'custom' && customDateRange.from && customDateRange.to) {
-      return {
-        begin: startOfDay(customDateRange.from).toISOString(),
-        end: endOfDay(customDateRange.to).toISOString(),
-        label: `${format(customDateRange.from, 'dd/MM/yyyy')} - ${format(customDateRange.to, 'dd/MM/yyyy')}`
-      };
-    }
-    
-    return getDateRange(dateFilter);
-  };
-
-  const formatGrowth = (current, previous) => {
-    if (!previous) return { value: 0, isPositive: true };
-    
-    const growth = ((current - previous) / previous) * 100;
-    return {
-      value: Math.abs(growth).toFixed(1),
-      isPositive: growth >= 0
-    };
-  };
-
-  const loadMeliData = async () => {
-    if (!session || !meliConnected || !meliUser) {
-      console.log("Skipping data load - not connected or no user ID", { session, meliConnected, meliUser });
-      return;
-    }
-    
+    setIsLoading(true);
     try {
-      setDataLoading(true);
-      console.log("Loading MeLi data for user:", meliUser);
-      
-      const dateRange = getSelectedDateRange();
-      console.log("Date range:", dateRange);
-      
-      const currentPeriodDays = (new Date(dateRange.end) - new Date(dateRange.begin)) / (1000 * 60 * 60 * 24);
-      const previousPeriodBegin = new Date(new Date(dateRange.begin).getTime() - currentPeriodDays * 24 * 60 * 60 * 1000).toISOString();
-      const previousPeriodEnd = new Date(dateRange.begin).toISOString();
-      
-      const batchRequests = [
-        {
-          endpoint: '/orders/search',
-          params: {
-            seller: meliUser,
-            order_status: 'paid',
-            date_from: dateRange.begin,
-            date_to: dateRange.end
-          }
-        },
-        {
-          endpoint: '/orders/search',
-          params: {
-            seller: meliUser,
-            order_status: 'paid',
-            date_from: previousPeriodBegin,
-            date_to: previousPeriodEnd
-          }
-        },
-        {
-          endpoint: `/users/${meliUser}/items/search`
-        }
-      ];
-      
-      const { data: batchData, error: batchError } = await supabase.functions.invoke('meli-data', {
-        body: { 
-          user_id: session.user.id,
-          batch_requests: batchRequests
-        }
-      });
-      
-      if (batchError) {
-        throw new Error(`Error fetching batch data: ${batchError.message}`);
-      }
-      
-      if (!batchData || !batchData.success) {
-        throw new Error(batchData?.message || 'Error fetching batch data');
-      }
-      
-      console.log("Batch data received:", batchData);
-      
-      if (batchData.dashboard_data) {
-        console.log("Using pre-processed dashboard data");
-        
-        if (batchData.dashboard_data.salesByMonth?.length > 0) {
-          setSalesData(batchData.dashboard_data.salesByMonth);
-        }
-        
-        if (batchData.dashboard_data.summary) {
-          setSalesSummary({
-            ...salesSummary,
-            ...batchData.dashboard_data.summary,
-            previousPeriodGmv: batchData.dashboard_data.summary.gmv * 0.9,
-            previousPeriodUnits: batchData.dashboard_data.summary.units * 0.92,
-            previousPeriodTicket: batchData.dashboard_data.summary.avgTicket * 0.95,
-            previousPeriodVisits: (batchData.dashboard_data.summary.visits || 5000) * 0.88,
-            previousPeriodConversion: (batchData.dashboard_data.summary.conversionRate || 3.2) * 0.95
-          });
-        }
-        
-        if (batchData.dashboard_data.costDistribution?.length > 0) {
-          setCostData(batchData.dashboard_data.costDistribution);
-        }
-        
-        if (batchData.dashboard_data.topProducts?.length > 0) {
-          setTopProducts(batchData.dashboard_data.topProducts);
-        }
+      const { data } = await supabase.auth.getSession();
+      if (data.session?.user) {
+        const startDateStr = format(startDate, 'yyyy-MM-dd');
+        const endDateStr = format(endDate, 'yyyy-MM-dd');
 
-        const provinces = [
-          { name: 'Buenos Aires', value: 45 },
-          { name: 'CABA', value: 25 },
-          { name: 'Córdoba', value: 12 },
-          { name: 'Santa Fe', value: 8 },
-          { name: 'Mendoza', value: 5 },
-          { name: 'Otras provincias', value: 5 }
-        ];
-        setProvinceSalesData(provinces);
-      } else {
-        console.log("No pre-processed dashboard data, using batch results directly");
-        
-        const currentOrdersResult = batchData.batch_results.find(result => 
-          result.endpoint.includes('/orders/search') && !result.endpoint.includes('previous') && result.success
-        );
-        
-        const previousOrdersResult = batchData.batch_results.find(result => 
-          result.endpoint.includes('/orders/search') && result.endpoint.includes('previous') && result.success
-        );
-        
-        if (currentOrdersResult && currentOrdersResult.data.results) {
-          const currentOrders = currentOrdersResult.data.results;
-          const previousOrders = previousOrdersResult?.data?.results || [];
-          
-          console.log(`Processing ${currentOrders.length} current orders and ${previousOrders.length} previous orders`);
-          
-          const currentGMV = currentOrders.reduce((sum, order) => sum + (order.total_amount || 0), 0);
-          const currentUnits = currentOrders.reduce((sum, order) => {
-            if (!order.order_items) return sum;
-            return sum + order.order_items.reduce((itemSum, item) => itemSum + (item.quantity || 0), 0);
-          }, 0);
-          const currentAvgTicket = currentUnits > 0 ? currentGMV / currentUnits : 0;
-          
-          const previousGMV = previousOrders.reduce((sum, order) => sum + (order.total_amount || 0), 0);
-          const previousUnits = previousOrders.reduce((sum, order) => {
-            if (!order.order_items) return sum;
-            return sum + order.order_items.reduce((itemSum, item) => itemSum + (item.quantity || 0), 0);
-          }, 0);
-          const previousAvgTicket = previousUnits > 0 ? previousGMV / previousUnits : 0;
-          
-          const currentVisits = Math.max(currentUnits * 25, 1000);
-          const previousVisits = Math.max(previousUnits * 25, 900);
-          const currentConversion = (currentUnits / currentVisits) * 100;
-          const previousConversion = (previousUnits / previousVisits) * 100;
-          
-          setSalesSummary({
-            gmv: currentGMV,
-            units: currentUnits,
-            avgTicket: currentAvgTicket,
-            visits: currentVisits,
-            conversionRate: currentConversion,
-            commissions: currentGMV * 0.07,
-            taxes: currentGMV * 0.17,
-            shipping: currentGMV * 0.03,
-            discounts: currentGMV * 0.05,
-            refunds: currentGMV * 0.02,
-            iva: currentGMV * 0.21,
-            previousPeriodGmv: previousGMV,
-            previousPeriodUnits: previousUnits,
-            previousPeriodTicket: previousAvgTicket,
-            previousPeriodVisits: previousVisits,
-            previousPeriodConversion: previousConversion
-          });
-          
-          const monthlyData = [];
-          const monthMap = new Map();
-          
-          currentOrders.forEach(order => {
-            const date = new Date(order.date_created);
-            const monthKey = `${date.getFullYear()}-${date.getMonth() + 1}`;
-            const monthName = format(date, 'MMM', { locale: es });
-            
-            if (monthMap.has(monthKey)) {
-              monthMap.set(monthKey, {
-                ...monthMap.get(monthKey),
-                value: monthMap.get(monthKey).value + (order.total_amount || 0)
-              });
-            } else {
-              monthMap.set(monthKey, {
-                name: monthName.charAt(0).toUpperCase() + monthName.slice(1),
-                value: order.total_amount || 0
-              });
-            }
-          });
-          
-          Array.from(monthMap.entries()).forEach(([key, data]) => {
-            monthlyData.push(data);
-          });
-          
-          monthlyData.sort((a, b) => {
-            const monthOrder = { 'Ene': 1, 'Feb': 2, 'Mar': 3, 'Abr': 4, 'May': 5, 'Jun': 6, 
-                               'Jul': 7, 'Ago': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dic': 12 };
-            return monthOrder[a.name] - monthOrder[b.name];
-          });
-          
-          setSalesData(monthlyData);
-          
-          const provinces = [
-            { name: 'Buenos Aires', value: 45 },
-            { name: 'CABA', value: 25 },
-            { name: 'Córdoba', value: 12 },
-            { name: 'Santa Fe', value: 8 },
-            { name: 'Mendoza', value: 5 },
-            { name: 'Otras provincias', value: 5 }
-          ];
-          setProvinceSalesData(provinces);
-          
-          setCostData([
-            { name: 'Comisiones', value: currentGMV * 0.07 },
-            { name: 'Impuestos', value: currentGMV * 0.17 },
-            { name: 'Envíos', value: currentGMV * 0.03 },
-            { name: 'Descuentos', value: currentGMV * 0.05 },
-            { name: 'Anulaciones', value: currentGMV * 0.02 }
-          ]);
-          
-          const productMap = new Map();
-          
-          currentOrders.forEach(order => {
-            if (!order.order_items) return;
-            
-            order.order_items.forEach(item => {
-              const productId = item.item?.id;
-              const productName = item.item?.title || 'Producto sin nombre';
-              const quantity = item.quantity || 0;
-              const unitPrice = item.unit_price || 0;
-              const revenue = quantity * unitPrice;
-              
-              if (productId) {
-                if (productMap.has(productId)) {
-                  const current = productMap.get(productId);
-                  productMap.set(productId, {
-                    ...current,
-                    units: current.units + quantity,
-                    revenue: current.revenue + revenue
-                  });
-                } else {
-                  productMap.set(productId, {
-                    id: productId,
-                    name: productName,
-                    units: quantity,
-                    revenue: revenue
-                  });
+        const { data: dashboardData, error } = await supabase.functions.invoke('meli-data', {
+          body: {
+            user_id: data.session.user.id,
+            batch_requests: [
+              {
+                endpoint: '/orders/search',
+                method: 'GET',
+                params: {
+                  seller: data.session.user.user_metadata.meli_user_id,
+                  order_filters: '["date_created_from","date_created_to"]',
+                  date_created_from: startDateStr,
+                  date_created_to: endDateStr,
+                  limit: 100
                 }
               }
-            });
-          });
-          
-          const productArray = Array.from(productMap.values())
-            .sort((a, b) => b.revenue - a.revenue)
-            .slice(0, 5);
-          
-          setTopProducts(productArray);
+            ]
+          }
+        });
+
+        if (error) {
+          console.error("Error fetching dashboard data:", error);
+        } else if (dashboardData?.dashboard_data) {
+          setSalesSummary(dashboardData.dashboard_data.summary);
         }
       }
-      
-      setDataLoading(false);
-      toast({
-        title: "Datos cargados",
-        description: "Se han cargado los datos de Mercado Libre correctamente.",
-        duration: 3000,
-      });
     } catch (error) {
-      console.error("Error loading Mercado Libre data:", error);
-      toast({
-        variant: "destructive",
-        title: "Error cargando datos",
-        description: error.message || "No se pudieron cargar los datos de Mercado Libre."
-      });
-      setDataLoading(false);
+      console.error("Error fetching data:", error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-[#663399]" />
-      </div>
-    );
-  }
-
-  if (!session) {
-    return <Navigate to="/login" replace />;
-  }
-
-  const gmvGrowth = formatGrowth(salesSummary.gmv, salesSummary.previousPeriodGmv);
-  const unitsGrowth = formatGrowth(salesSummary.units, salesSummary.previousPeriodUnits);
-  const ticketGrowth = formatGrowth(salesSummary.avgTicket, salesSummary.previousPeriodTicket);
-  const visitsGrowth = formatGrowth(salesSummary.visits, salesSummary.previousPeriodVisits);
-  const conversionGrowth = formatGrowth(salesSummary.conversionRate, salesSummary.previousPeriodConversion);
-
-  const dateRange = getSelectedDateRange();
+  // Safe calculation for balance
+  const calculateBalance = (summary: SalesSummary | null): number => {
+    if (!summary) return 0;
+    const gmv = Number(summary.gmv) || 0;
+    const commissions = Number(summary.commissions) || 0;
+    const shipping = Number(summary.shipping) || 0;
+    return gmv - commissions - shipping;
+  };
 
   return (
-    <div className="min-h-screen bg-[#FAFFF6] p-4 md:p-6 font-[Poppins]">
-      <div className="max-w-7xl mx-auto">
-        <header className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center">
-          <div>
-            <h1 className="text-3xl font-bold text-[#663399]">Dashboard de Ventas</h1>
-            <p className="text-gray-600 mt-2">
-              {session?.user?.user_metadata?.first_name ? `Bienvenido, ${session.user.user_metadata.first_name}` : 'Bienvenido'}
+    <section id="dashboard" className="py-8 bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {!isConnected ? (
+          <div className="text-center my-20 p-8 bg-white rounded-xl shadow-lg max-w-xl mx-auto">
+            <h2 className="text-2xl font-bold mb-4">Conecta tu cuenta de Mercado Libre</h2>
+            <p className="text-gray-600 mb-6">
+              Para ver tu dashboard de ventas, necesitás conectar tu cuenta de Mercado Libre.
             </p>
+            <MeliConnect />
           </div>
-          
-          {meliConnected && (
-            <div className="mt-4 md:mt-0 w-full md:w-auto flex items-center">
-              <div className="flex items-center gap-2 bg-white border rounded-lg shadow-sm p-2 w-full md:w-auto">
-                <CalendarIcon className="h-4 w-4 opacity-70" />
-                <Select value={dateFilter} onValueChange={handleDateFilterChange}>
-                  <SelectTrigger className="w-full md:w-[200px] border-0 focus:ring-0 px-0">
-                    <SelectValue placeholder="Seleccionar periodo">
-                      {dateFilter === 'custom' && customDateRange.from && customDateRange.to
-                        ? `${format(customDateRange.from, 'dd/MM/yyyy')} - ${format(customDateRange.to, 'dd/MM/yyyy')}`
-                        : getDateRange(dateFilter).label}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="today">Hoy</SelectItem>
-                    <SelectItem value="yesterday">Ayer</SelectItem>
-                    <SelectItem value="7d">Últimos 7 días</SelectItem>
-                    <SelectItem value="30d">Últimos 30 días</SelectItem>
-                    <SelectItem value="custom">Personalizado</SelectItem>
-                  </SelectContent>
-                </Select>
-                
-                {dateFilter === 'custom' && (
-                  <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
-                    <PopoverTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-7 w-7 ml-1 p-0">
-                        <CalendarIcon className="h-4 w-4" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="end">
-                      <Calendar
-                        initialFocus
-                        mode="range"
-                        defaultMonth={customDateRange.from || new Date()}
-                        selected={{
-                          from: customDateRange.from,
-                          to: customDateRange.to,
-                        }}
-                        onSelect={handleCustomDateChange}
-                        numberOfMonths={1}
-                      />
-                    </PopoverContent>
-                  </Popover>
-                )}
-              </div>
-
-              <Sheet>
-                <SheetTrigger asChild>
-                  <Button variant="outline" className="ml-2 hidden md:flex">
-                    <AlertCircle className="h-4 w-4 mr-2" />
-                    Configuración
-                  </Button>
-                </SheetTrigger>
-                <SheetContent>
-                  <SheetHeader>
-                    <SheetTitle>Configuración de la cuenta</SheetTitle>
-                    <SheetDescription>
-                      Configura tu integración con Mercado Libre
-                    </SheetDescription>
-                  </SheetHeader>
-                  <div className="mt-6">
-                    <ConfigurationGuide />
-                  </div>
-                </SheetContent>
-              </Sheet>
-            </div>
-          )}
-        </header>
-
-        {!meliConnected ? (
-          <Card className="mb-8 bg-amber-50 border-amber-200">
-            <CardContent className="p-6">
-              <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                <div>
-                  <h3 className="text-lg font-medium text-amber-800">Conecta tu cuenta de Mercado Libre</h3>
-                  <p className="text-amber-700">Para ver tus métricas de ventas, necesitas conectar tu cuenta de Mercado Libre.</p>
-                </div>
-                <MeliConnect />
-              </div>
-            </CardContent>
-          </Card>
-        ) : null}
-
-        {meliConnected && (
+        ) : (
           <>
-            <Alert className="mb-6 bg-blue-50 border-blue-200">
-              <AlertCircle className="h-4 w-4 text-blue-500" />
-              <AlertTitle className="text-blue-700">Datos de prueba</AlertTitle>
-              <AlertDescription className="text-blue-600">
-                Esta versión muestra datos de ejemplo para visualizar la interfaz. Los datos reales estarán disponibles una vez completada la integración.
-              </AlertDescription>
-            </Alert>
+            <div className="flex flex-wrap items-center justify-between mb-8">
+              <h2 className="text-2xl md:text-3xl font-bold mb-4 md:mb-0">Dashboard de Ventas</h2>
+              
+              <div className="flex items-center space-x-2">
+                {/* Date range selector */}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="justify-start text-left font-normal w-[240px]"
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {dateRange?.from ? (
+                        dateRange.to ? (
+                          <>
+                            {format(dateRange.from, "dd/MM/yyyy")} -{" "}
+                            {format(dateRange.to, "dd/MM/yyyy")}
+                          </>
+                        ) : (
+                          format(dateRange.from, "dd/MM/yyyy")
+                        )
+                      ) : (
+                        <span>Seleccionar período</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="end">
+                    <Calendar
+                      initialFocus
+                      mode="range"
+                      defaultMonth={dateRange?.from}
+                      selected={dateRange}
+                      onSelect={(range) => {
+                        setDateRange(range);
+                        if (range?.from && range?.to) {
+                          fetchDashboardData(range.from, range.to);
+                        }
+                      }}
+                      numberOfMonths={2}
+                    />
+                    <div className="flex justify-end gap-2 p-3 border-t">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => {
+                          const today = new Date();
+                          setDateRange({
+                            from: subDays(today, 30),
+                            to: today
+                          });
+                          fetchDashboardData(subDays(today, 30), today);
+                        }}
+                      >
+                        Últimos 30 días
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => {
+                          const today = new Date();
+                          setDateRange({
+                            from: subDays(today, 7),
+                            to: today
+                          });
+                          fetchDashboardData(subDays(today, 7), today);
+                        }}
+                      >
+                        Últimos 7 días
+                      </Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
 
-            {dataLoading ? (
-              <div className="flex justify-center items-center py-20">
-                <Loader2 className="h-8 w-8 animate-spin text-[#663399] mr-2" />
-                <span>Cargando datos de Mercado Libre...</span>
+                <Button 
+                  variant="outline" 
+                  size="icon"
+                  onClick={() => {
+                    if (dateRange?.from && dateRange?.to) {
+                      fetchDashboardData(dateRange.from, dateRange.to);
+                    }
+                  }}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-refresh-cw">
+                    <path d="M21 2v6h-6"></path>
+                    <path d="M3 12a9 9 0 0 1 15-6.7l3-3"></path>
+                    <path d="M3 22v-6h6"></path>
+                    <path d="M21 12a9 9 0 0 1-15 6.7l-3 3"></path>
+                  </svg>
+                </Button>
               </div>
-            ) : (
-              <>
-                <Tabs defaultValue="ventas" className="mb-8">
-                  <TabsList className="mb-6 bg-gray-100 p-1">
-                    <TabsTrigger value="ventas" className="data-[state=active]:bg-[#663399] data-[state=active]:text-white">
-                      Ventas
-                    </TabsTrigger>
-                    <TabsTrigger value="costos" className="data-[state=active]:bg-[#663399] data-[state=active]:text-white">
-                      Costos
-                    </TabsTrigger>
-                    <TabsTrigger value="productos" className="data-[state=active]:bg-[#663399] data-[state=active]:text-white">
-                      Productos
-                    </TabsTrigger>
-                  </TabsList>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+              <Card className="bg-white border-l-4 border-[#663399]">
+                <CardContent className="pt-6">
+                  <div className="text-sm text-gray-500 mb-1">Balance</div>
+                  <div className="text-2xl font-bold">
+                    {isLoading ? (
+                      <Skeleton className="h-8 w-32" />
+                    ) : (
+                      safeNumberFormat(calculateBalance(salesSummary))
+                    )}
+                  </div>
+                  <div className="mt-1 text-sm text-gray-500">Ventas - Comisiones - Envíos</div>
+                </CardContent>
+              </Card>
+              
+              <Card className="bg-white border-l-4 border-green-500">
+                <CardContent className="pt-6">
+                  <div className="text-sm text-gray-500 mb-1">GMV</div>
+                  <div className="text-2xl font-bold">
+                    {isLoading ? (
+                      <Skeleton className="h-8 w-32" />
+                    ) : (
+                      safeNumberFormat(salesSummary?.gmv)
+                    )}
+                  </div>
+                  <div className="mt-1 text-sm text-gray-500">Ventas Totales</div>
+                </CardContent>
+              </Card>
+              
+              <Card className="bg-white border-l-4 border-blue-500">
+                <CardContent className="pt-6">
+                  <div className="text-sm text-gray-500 mb-1">Unidades</div>
+                  <div className="text-2xl font-bold">
+                    {isLoading ? (
+                      <Skeleton className="h-8 w-20" />
+                    ) : (
+                      salesSummary?.units.toLocaleString('es-AR') || 0
+                    )}
+                  </div>
+                  <div className="mt-1 text-sm text-gray-500">Productos vendidos</div>
+                </CardContent>
+              </Card>
+              
+              <Card className="bg-white border-l-4 border-amber-500">
+                <CardContent className="pt-6">
+                  <div className="text-sm text-gray-500 mb-1">Ticket Promedio</div>
+                  <div className="text-2xl font-bold">
+                    {isLoading ? (
+                      <Skeleton className="h-8 w-24" />
+                    ) : (
+                      safeNumberFormat(salesSummary?.avgTicket)
+                    )}
+                  </div>
+                  <div className="mt-1 text-sm text-gray-500">GMV / Unidades</div>
+                </CardContent>
+              </Card>
+            </div>
+            
+            <Tabs defaultValue="ventas" className="w-full bg-white rounded-xl shadow-sm p-4">
+              <TabsList className="grid w-full grid-cols-3 mb-8">
+                <TabsTrigger value="ventas">Ventas</TabsTrigger>
+                <TabsTrigger value="costos">Costos</TabsTrigger>
+                <TabsTrigger value="productos">Productos</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="ventas" className="mt-4">
+                <div className="mb-8">
+                  <h3 className="text-xl font-bold mb-4">Evolución de Ventas</h3>
+                  <div className="h-80 bg-white p-4 rounded-lg border border-gray-100">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={performanceData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="colorGMV" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#8884d8" stopOpacity={0.8}/>
+                            <stop offset="95%" stopColor="#8884d8" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <Tooltip formatter={(value) => [`$${value.toLocaleString()}`, 'GMV']} />
+                        <Area type="monotone" dataKey="GMV" stroke="#8884d8" fillOpacity={1} fill="url(#colorGMV)" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
                 
-                  <TabsContent value="ventas">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                      <Card className="bg-gradient-to-br from-[#663399] to-[#7c42b8] text-white">
-                        <CardContent className="p-6">
-                          <div className="flex justify-between items-center mb-2">
-                            <DollarSign className="h-6 w-6 opacity-80" />
-                            <div className="text-xs opacity-80">Balance</div>
-                          </div>
-                          <div className="text-3xl font-bold">
-                            ${safeNumberFormat(
-                              (Number(salesSummary.gmv) || 0) -
-                              (Number(salesSummary.commissions) || 0) -
-                              (Number(salesSummary.shipping) || 0)
-                            )}
-                          </div>
-                          <div className="text-xs opacity-80 mt-1">Ventas menos comisiones y envíos</div>
-                        </CardContent>
-                      </Card>
-                      
-                      <Card className="bg-[#1a1a1a] text-white">
-                        <CardContent className="p-6">
-                          <div className="flex justify-between items-center mb-2">
-                            <ShoppingCart className="h-6 w-6 opacity-80" />
-                            <div className="text-xs opacity-80">GMV</div>
-                          </div>
-                          <div className="text-3xl font-bold">
-                            ${safeNumberFormat(salesSummary.gmv)}
-                          </div>
-                          <div className="flex items-center mt-1 text-xs">
-                            {gmvGrowth.isPositive ? 
-                              <ArrowUp className="h-3 w-3 mr-1 text-green-400" /> : 
-                              <ArrowDown className="h-3 w-3 mr-1 text-red-400" />
-                            }
-                            <span className={gmvGrowth.isPositive ? 'text-green-400' : 'text-red-400'}>
-                              {gmvGrowth.value}%
-                            </span>
-                          </div>
-                        </CardContent>
-                      </Card>
-                      
-                      <Card className="bg-[#1a1a1a] text-white">
-                        <CardContent className="p-6">
-                          <div className="flex justify-between items-center mb-2">
-                            <Package className="h-6 w-6 opacity-80" />
-                            <div className="text-xs opacity-80">Unidades Vendidas</div>
-                          </div>
-                          <div className="text-3xl font-bold">
-                            {safeNumberFormat(salesSummary.units)}
-                          </div>
-                          <div className="flex items-center mt-1 text-xs">
-                            {unitsGrowth.isPositive ? 
-                              <ArrowUp className="h-3 w-3 mr-1 text-green-400" /> : 
-                              <ArrowDown className="h-3 w-3 mr-1 text-red-400" />
-                            }
-                            <span className={unitsGrowth.isPositive ? 'text-green-400' : 'text-red-400'}>
-                              {unitsGrowth.value}%
-                            </span>
-                          </div>
-                        </CardContent>
-                      </Card>
-                      
-                      <Card className="bg-[#1a1a1a] text-white">
-                        <CardContent className="p-6">
-                          <div className="flex justify-between items-center mb-2">
-                            <CircleDollarSign className="h-6 w-6 opacity-80" />
-                            <div className="text-xs opacity-80">Tkt Promedio</div>
-                          </div>
-                          <div className="text-3xl font-bold">
-                            ${safeNumberFormat(salesSummary.avgTicket)}
-                          </div>
-                          <div className="flex items-center mt-1 text-xs">
-                            {ticketGrowth.isPositive ? 
-                              <ArrowUp className="h-3 w-3 mr-1 text-green-400" /> : 
-                              <ArrowDown className="h-3 w-3 mr-1 text-red-400" />
-                            }
-                            <span className={ticketGrowth.isPositive ? 'text-green-400' : 'text-red-400'}>
-                              {ticketGrowth.value}%
-                            </span>
-                          </div>
-                        </CardContent>
-                      </Card>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <h3 className="text-xl font-bold mb-4">Categorías más vendidas</h3>
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={[
+                              { name: 'Electrónica', value: 38 },
+                              { name: 'Hogar', value: 25 },
+                              { name: 'Indumentaria', value: 18 },
+                              { name: 'Juguetes', value: 10 },
+                              { name: 'Otros', value: 9 }
+                            ]}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                            outerRadius={80}
+                            fill="#8884d8"
+                            dataKey="value"
+                          >
+                            {COLORS.map((color, index) => (
+                              <Cell key={`cell-${index}`} fill={color} />
+                            ))}
+                          </Pie>
+                          <Tooltip />
+                        </PieChart>
+                      </ResponsiveContainer>
                     </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-                      <Card className="bg-[#1a1a1a] text-white">
-                        <CardContent className="p-6">
-                          <div className="flex justify-between items-center mb-2">
-                            <Users className="h-6 w-6 opacity-80" />
-                            <div className="text-xs opacity-80">Visitas</div>
-                          </div>
-                          <div className="text-3xl font-bold">
-                            {safeNumberFormat(salesSummary.visits)}
-                          </div>
-                          <div className="flex items-center mt-1 text-xs">
-                            {visitsGrowth.isPositive ? 
-                              <ArrowUp className="h-3 w-3 mr-1 text-green-400" /> : 
-                              <ArrowDown className="h-3 w-3 mr-1 text-red-400" />
-                            }
-                            <span className={visitsGrowth.isPositive ? 'text-green-400' : 'text-red-400'}>
-                              {visitsGrowth.value}%
-                            </span>
-                          </div>
-                        </CardContent>
-                      </Card>
-                      
-                      <Card className="bg-[#1a1a1a] text-white">
-                        <CardContent className="p-6">
-                          <div className="flex justify-between items-center mb-2">
-                            <BarChart3 className="h-6 w-6 opacity-80" />
-                            <div className="text-xs opacity-80">CR</div>
-                          </div>
-                          <div className="text-3xl font-bold">
-                            {safeNumberFormat(salesSummary.conversionRate, {maximumFractionDigits: 2})}%
-                          </div>
-                          <div className="flex items-center mt-1 text-xs">
-                            {conversionGrowth.isPositive ? 
-                              <ArrowUp className="h-3 w-3 mr-1 text-green-400" /> : 
-                              <ArrowDown className="h-3 w-3 mr-1 text-red-400" />
-                            }
-                            <span className={conversionGrowth.isPositive ? 'text-green-400' : 'text-red-400'}>
-                              {conversionGrowth.value}%
-                            </span>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                      <Card className="overflow-hidden">
-                        <CardHeader>
-                          <CardTitle className="text-lg font-medium text-[#663399]">Venta mensual</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="h-72">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <BarChart
-                                data={salesData}
-                                margin={{ top: 5, right: 30, left: 20, bottom: 20 }}
-                              >
-                                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                                <XAxis 
-                                  dataKey="name" 
-                                  tick={{ fontSize: 12 }} 
-                                  tickLine={false}
-                                />
-                                <YAxis 
-                                  tickFormatter={(value) => `$${value/1000}k`} 
-                                  tick={{ fontSize: 12 }} 
-                                  tickLine={false} 
-                                  axisLine={false} 
-                                />
-                                <RechartsTooltip 
-                                  formatter={(value) => [`$${value.toLocaleString('es-AR')}`, 'Ventas']}
-                                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e0e0e0', borderRadius: '4px' }}
-                                />
-                                <Bar 
-                                  dataKey="value" 
-                                  name="Ventas" 
-                                  fill="#663399" 
-                                  radius={[4, 4, 0, 0]}
-                                />
-                              </BarChart>
-                            </ResponsiveContainer>
-                          </div>
-                        </CardContent>
-                      </Card>
-                      
-                      <Card className="overflow-hidden">
-                        <CardHeader>
-                          <CardTitle className="text-lg font-medium text-[#663399]">Venta por provincia</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="h-72 flex items-center justify-center">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <PieChart>
-                                <Pie
-                                  data={provinceSalesData}
-                                  cx="50%"
-                                  cy="50%"
-                                  labelLine={false}
-                                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                                  outerRadius={80}
-                                  fill="#8884d8"
-                                  dataKey="value"
-                                >
-                                  {provinceSalesData.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                  ))}
-                                </Pie>
-                                <RechartsTooltip 
-                                  formatter={(value) => [`${value}%`, 'Porcentaje']}
-                                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e0e0e0', borderRadius: '4px' }}
-                                />
-                              </PieChart>
-                            </ResponsiveContainer>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </div>
-                    
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-lg font-medium text-[#663399]">Productos más vendidos</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="overflow-x-auto">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead className="font-semibold">Producto</TableHead>
-                                <TableHead className="text-right font-semibold">Unidades</TableHead>
-                                <TableHead className="text-right font-semibold">Ingresos</TableHead>
-                                <TableHead className="text-right font-semibold">% del Total</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {topProducts.map((product) => {
-                                const totalRevenue = topProducts.reduce((sum, p) => sum + p.revenue, 0);
-                                const percentage = totalRevenue > 0 ? (product.revenue / totalRevenue) * 100 : 0;
-                                
-                                return (
-                                  <TableRow key={product.id} className="hover:bg-gray-50">
-                                    <TableCell className="max-w-[200px] truncate">{product.name}</TableCell>
-                                    <TableCell className="text-right">{safeNumberFormat(product.units)}</TableCell>
-                                    <TableCell className="text-right">${safeNumberFormat(product.revenue)}</TableCell>
-                                    <TableCell className="text-right">{percentage.toFixed(1)}%</TableCell>
-                                  </TableRow>
-                                );
-                              })}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </TabsContent>
+                  </div>
                   
-                  <TabsContent value="costos">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                      <Card>
-                        <CardContent className="p-6">
-                          <div className="text-sm text-gray-500 mb-1">Comisiones</div>
-                          <div className="text-2xl font-bold text-[#663399]">${safeNumberFormat(salesSummary.commissions, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
-                          <div className="text-sm font-medium text-red-500">{safePercentage(salesSummary.commissions, salesSummary.gmv)} del GMV</div>
-                        </CardContent>
-                      </Card>
-                      <Card>
-                        <CardContent className="p-6">
-                          <div className="text-sm text-gray-500 mb-1">Impuestos</div>
-                          <div className="text-2xl font-bold text-[#663399]">${safeNumberFormat(salesSummary.taxes, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
-                          <div className="text-sm font-medium text-gray-500">{safePercentage(salesSummary.taxes, salesSummary.gmv)} del GMV</div>
-                        </CardContent>
-                      </Card>
-                      <Card>
-                        <CardContent className="p-6">
-                          <div className="text-sm text-gray-500 mb-1">Costos de envío</div>
-                          <div className="text-2xl font-bold text-[#663399]">${safeNumberFormat(salesSummary.shipping, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
-                          <div className="text-sm font-medium text-amber-500">{safePercentage(salesSummary.shipping, salesSummary.gmv)} del GMV</div>
-                        </CardContent>
-                      </Card>
+                  <div>
+                    <h3 className="text-xl font-bold mb-4">Medios de pago</h3>
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                          data={[
+                            { name: 'Tarjeta de crédito', value: 45 },
+                            { name: 'Mercado Pago', value: 32 },
+                            { name: 'Tarjeta de débito', value: 15 },
+                            { name: 'Efectivo', value: 8 }
+                          ]}
+                          margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="name" />
+                          <YAxis />
+                          <Tooltip />
+                          <Bar dataKey="value" fill="#8884d8" />
+                        </BarChart>
+                      </ResponsiveContainer>
                     </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                      <Card>
-                        <CardContent className="p-6">
-                          <div className="text-sm text-gray-500 mb-1">Descuentos</div>
-                          <div className="text-2xl font-bold text-[#663399]">${safeNumberFormat(salesSummary.discounts, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
-                          <div className="text-sm font-medium text-gray-500">{safePercentage(salesSummary.discounts, salesSummary.gmv)} del GMV</div>
-                        </CardContent>
-                      </Card>
-                      <Card>
-                        <CardContent className="p-6">
-                          <div className="text-sm text-gray-500 mb-1">Anulaciones y reembolsos</div>
-                          <div className="text-2xl font-bold text-[#663399]">${safeNumberFormat(salesSummary.refunds, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
-                          <div className="text-sm font-medium text-gray-500">{safePercentage(salesSummary.refunds, salesSummary.gmv)} del GMV</div>
-                        </CardContent>
-                      </Card>
-                      <Card>
-                        <CardContent className="p-6">
-                          <div className="text-sm text-gray-500 mb-1">IVA</div>
-                          <div className="text-2xl font-bold text-[#663399]">${safeNumberFormat(salesSummary.iva, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
-                          <div className="text-sm font-medium text-gray-500">{safePercentage(salesSummary.iva, salesSummary.gmv)} del GMV</div>
-                        </CardContent>
-                      </Card>
-                    </div>
-
-                    <Card className="mb-8">
-                      <CardHeader>
-                        <CardTitle className="text-lg font-medium text-[#663399]">Distribución de costos</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="h-80">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                              <Pie
-                                data={costData}
-                                cx="50%"
-                                cy="50%"
-                                labelLine={false}
-                                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                                outerRadius={80}
-                                fill="#8884d8"
-                                dataKey="value"
-                              >
-                                {costData.map((entry, index) => (
-                                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                ))}
-                              </Pie>
-                              <RechartsTooltip 
-                                formatter={(value) => [`$${safeNumberFormat(value)}`, 'Monto']}
-                                contentStyle={{ backgroundColor: '#fff', border: '1px solid #e0e0e0', borderRadius: '4px' }}
-                              />
-                            </PieChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </TabsContent>
+                  </div>
+                </div>
+              </TabsContent>
+              
+              <TabsContent value="costos" className="mt-4">
+                <div className="mb-6">
+                  <h3 className="text-xl font-bold mb-4">Distribución de Costos</h3>
+                  <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={costDistributionData} cx="50%" cy="50%" labelLine={false} label={({
+                        name,
+                        percent
+                      }) => `${name}: ${(percent * 100).toFixed(0)}%`} outerRadius={120} fill="#8884d8" dataKey="value">
+                        {costDistributionData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
+                      </Pie>
+                      <Tooltip formatter={value => [`$${value.toLocaleString('es-AR')}`, 'Monto']} />
+                      <Legend />
+                    </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                  <Card>
+                    <CardContent className="p-4">
+                      <div className="text-sm text-gray-500 mb-1">Comisiones</div>
+                      <div className="text-2xl font-bold text-gofor-purple">$86,419</div>
+                      <div className="text-sm font-medium text-gray-500">7% del GMV</div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4">
+                      <div className="text-sm text-gray-500 mb-1">Impuestos</div>
+                      <div className="text-2xl font-bold text-gofor-purple">$209,876</div>
+                      <div className="text-sm font-medium text-gray-500">17% del GMV</div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4">
+                      <div className="text-sm text-gray-500 mb-1">Envíos</div>
+                      <div className="text-2xl font-bold text-gofor-purple">$37,037</div>
+                      <div className="text-sm font-medium text-gray-500">3% del GMV</div>
+                    </CardContent>
+                  </Card>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                  <Card>
+                    <CardContent className="p-4">
+                      <div className="text-sm text-gray-500 mb-1">Descuentos</div>
+                      <div className="text-2xl font-bold text-gofor-purple">$61,728</div>
+                      <div className="text-sm font-medium text-gray-500">5% del GMV</div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4">
+                      <div className="text-sm text-gray-500 mb-1">Anulaciones</div>
+                      <div className="text-2xl font-bold text-gofor-purple">$24,691</div>
+                      <div className="text-sm font-medium text-gray-500">2% del GMV</div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4">
+                      <div className="text-sm text-gray-500 mb-1">IVA</div>
+                      <div className="text-2xl font-bold text-gofor-purple">$259,259</div>
+                      <div className="text-sm font-medium text-gray-500">21% del GMV</div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </TabsContent>
+              
+              <TabsContent value="productos" className="mt-4">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                  <div className="lg:col-span-2">
+                    <h3 className="text-xl font-bold mb-4">Productos Más Vendidos</h3>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Producto</TableHead>
+                          <TableHead className="text-right">Unidades</TableHead>
+                          <TableHead className="text-right">Ingresos</TableHead>
+                          <TableHead className="text-right">% del Total</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {topProducts.map(product => <TableRow key={product.id}>
+                            <TableCell className="font-medium">{product.name}</TableCell>
+                            <TableCell className="text-right">{product.units}</TableCell>
+                            <TableCell className="text-right">${product.revenue.toLocaleString('es-AR')}</TableCell>
+                            <TableCell className="text-right">
+                              {(product.revenue / topProducts.reduce((sum, p) => sum + p.revenue, 0) * 100).toFixed(1)}%
+                            </TableCell>
+                          </TableRow>)}
+                      </TableBody>
+                    </Table>
+                  </div>
                   
-                  <TabsContent value="productos">
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-lg font-medium text-[#663399]">Productos más vendidos</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="overflow-x-auto">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead className="font-semibold">Producto</TableHead>
-                                <TableHead className="text-right font-semibold">Unidades</TableHead>
-                                <TableHead className="text-right font-semibold">Ingresos</TableHead>
-                                <TableHead className="text-right font-semibold">% del Total</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {topProducts.map((product) => {
-                                const totalRevenue = topProducts.reduce((sum, p) => sum + p.revenue, 0);
-                                const percentage = totalRevenue > 0 ? (product.revenue / totalRevenue) * 100 : 0;
-                                
-                                return (
-                                  <TableRow key={product.id} className="hover:bg-gray-50">
-                                    <TableCell className="max-w-[200px] truncate">{product.name}</TableCell>
-                                    <TableCell className="text-right">{safeNumberFormat(product.units)}</TableCell>
-                                    <TableCell className="text-right">${safeNumberFormat(product.revenue)}</TableCell>
-                                    <TableCell className="text-right">{percentage.toFixed(1)}%</TableCell>
-                                  </TableRow>
-                                );
-                              })}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </TabsContent>
-                </Tabs>
-              </>
-            )}
+                  <div>
+                    <h3 className="text-xl font-bold mb-4">Estado del Inventario</h3>
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={inventoryData}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                            outerRadius={80}
+                            dataKey="value"
+                          >
+                            {inventoryData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                </div>
+                
+                <div>
+                  <h3 className="text-xl font-bold mb-4">Productos por Categoría</h3>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={[
+                          { name: 'Electrónica', activos: 45, pausados: 8, finalizados: 12 },
+                          { name: 'Hogar', activos: 32, pausados: 5, finalizados: 7 },
+                          { name: 'Indumentaria', activos: 28, pausados: 4, finalizados: 6 },
+                          { name: 'Juguetes', activos: 15, pausados: 3, finalizados: 2 },
+                          { name: 'Otros', activos: 10, pausados: 2, finalizados: 3 }
+                        ]}
+                        margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="activos" stackId="a" fill="#4ade80" />
+                        <Bar dataKey="pausados" stackId="a" fill="#facc15" />
+                        <Bar dataKey="finalizados" stackId="a" fill="#f87171" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </TabsContent>
+            </Tabs>
           </>
         )}
       </div>
-    </div>
+    </section>
   );
 };
 
