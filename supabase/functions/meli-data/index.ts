@@ -293,7 +293,7 @@ function isDateInRange(dateStr: string, dateRange: any): boolean {
 }
 
 // Enhanced function to process orders and calculate GMV with date filtering
-function processDashboardData(batchResults, dateRange) {
+function processDashboardData(batchResults: any[], dateRange: any) {
   try {
     // Initialize dashboard data structure
     const dashboardData = {

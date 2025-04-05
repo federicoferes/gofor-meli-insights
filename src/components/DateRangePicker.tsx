@@ -29,7 +29,7 @@ type DateRangePickerProps = {
 };
 
 const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
-  const [selectedRange, setSelectedRange] = useState<string>("today"); // Changed default from "30d" to "today"
+  const [selectedRange, setSelectedRange] = useState<string>("today");
   const [date, setDate] = useState<{ from: Date | undefined; to: Date | undefined }>({
     from: undefined,
     to: undefined,
@@ -51,7 +51,7 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
     switch (rangeType) {
       case "today":
         fromDate = startOfDay(new Date(today));
-        return { from: fromDate, to: today }; // No need for endOfDay since we apply that later
+        return { from: fromDate, to: today };
       case "yesterday":
         fromDate = startOfDay(subDays(today, 1));
         return { from: fromDate, to: subDays(today, 1) };
@@ -70,6 +70,7 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
   };
 
   const handleRangeChange = (value: string) => {
+    console.log(`🔄 DateRangePicker: Range changing to ${value}`);
     setSelectedRange(value);
     
     // Generate date range based on selected option
@@ -88,7 +89,13 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
         toISO = formatDateToISO(dateRange.to, true); // End of day for the to-date
       }
       
-      console.log("📅 DateRangePicker changed:", value, { from: fromISO, to: toISO });
+      console.log("📅 DateRangePicker changed:", value, { 
+        from: dateRange.from?.toISOString(), 
+        to: dateRange.to?.toISOString(),
+        fromISO, 
+        toISO 
+      });
+      
       onDateRangeChange(value, { ...dateRange, fromISO, toISO });
     } else {
       // For custom, we'll rely on the custom date picker
@@ -101,12 +108,19 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
         toISO = formatDateToISO(date.to, true); // End of day for the to-date
       }
       
-      console.log("📅 DateRangePicker custom:", { from: fromISO, to: toISO });
+      console.log("📅 DateRangePicker custom:", { 
+        from: date.from?.toISOString(), 
+        to: date.to?.toISOString(),
+        fromISO, 
+        toISO 
+      });
+      
       onDateRangeChange(value, { ...date, fromISO, toISO });
     }
   };
 
   const handleCustomDateChange = (value: { from: Date | undefined; to: Date | undefined }) => {
+    console.log("📅 Custom date selection changed:", value);
     setDate(value);
     if (value.from && value.to) {
       setSelectedRange("custom");
@@ -115,13 +129,20 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
       const fromISO = value.from ? formatDateToISO(value.from) : undefined;
       const toISO = value.to ? formatDateToISO(value.to, true) : undefined; // End of day for the to-date
       
-      console.log("📅 DateRangePicker custom selected:", { from: fromISO, to: toISO });
+      console.log("📅 DateRangePicker custom selected:", { 
+        from: value.from?.toISOString(), 
+        to: value.to?.toISOString(),
+        fromISO, 
+        toISO 
+      });
+      
       onDateRangeChange("custom", { ...value, fromISO, toISO });
     }
   };
 
   // Initialize with the default date range on mount
   useEffect(() => {
+    console.log("📅 DateRangePicker initialized with default range:", selectedRange);
     handleRangeChange(selectedRange);
   }, []);
 

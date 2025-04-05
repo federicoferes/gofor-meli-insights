@@ -162,6 +162,7 @@ const Dashboard = () => {
     fromISO?: string;
     toISO?: string;
   }) => {
+    console.log(`📅 Date range changed to: ${range}`, dates);
     setDateFilter(range);
     if (dates) {
       setCustomDateRange({
@@ -171,14 +172,18 @@ const Dashboard = () => {
         toISO: dates.toISO
       });
     }
-    
-    console.log(`Filtro de fecha cambiado a: ${range}`);
-    console.log("Rango de fechas:", dates);
   };
 
   useEffect(() => {
-    if (dateFilter === 'custom' && (!customDateRange.from || !customDateRange.to)) return;
+    if (dateFilter === 'custom' && (!customDateRange.from || !customDateRange.to)) {
+      console.log("⚠️ Custom date range is incomplete. Skipping data fetch.");
+      return;
+    }
+    
     if (meliConnected && session && meliUser) {
+      console.log(`🔄 Date filter or range changed. Resetting data and fetching new data for: ${dateFilter}`, customDateRange);
+      
+      // Reset states to avoid showing stale data
       setSalesData([]);
       setTopProducts([]);
       setCostData([]);
@@ -197,7 +202,10 @@ const Dashboard = () => {
         conversion: 0
       });
       
-      loadMeliData();
+      // Trigger data loading with a small delay to ensure state updates first
+      setTimeout(() => {
+        loadMeliData();
+      }, 100);
     }
   }, [dateFilter, customDateRange, meliConnected, session, meliUser]);
 
@@ -219,6 +227,7 @@ const Dashboard = () => {
         dateTo = customDateRange.toISO;
         fromDate = customDateRange.from;
         toDate = customDateRange.to;
+        console.log("📊 Using custom date range:", { dateFrom, dateTo });
       } else {
         const dateRange = getDateRange(dateFilter);
         dateFrom = `${dateRange.begin}T00:00:00.000Z`;
@@ -226,6 +235,8 @@ const Dashboard = () => {
         
         fromDate = new Date(dateRange.begin);
         toDate = new Date(dateRange.end);
+        
+        console.log(`📊 Using predefined date range for filter "${dateFilter}":`, { dateFrom, dateTo });
         
         if (dateFilter === 'today') {
           const today = new Date();
@@ -265,7 +276,14 @@ const Dashboard = () => {
         }
       };
       
-      console.log("📦 batchRequests:", [ordersRequest]);
+      console.log("📦 Request config:", {
+        filter: dateFilter,
+        ordersParams: ordersRequest.params,
+        date_range: {
+          begin: dateFrom ? dateFrom.split('T')[0] : null,
+          end: dateTo ? dateTo.split('T')[0] : null
+        }
+      });
       
       const batchRequests = [
         ordersRequest,
@@ -280,16 +298,20 @@ const Dashboard = () => {
         }
       ];
       
+      const requestPayload = {
+        user_id: session.user.id,
+        batch_requests: batchRequests,
+        date_range: {
+          begin: dateFrom ? dateFrom.split('T')[0] : null,
+          end: dateTo ? dateTo.split('T')[0] : null
+        },
+        prev_period: true
+      };
+      
+      console.log("🔶 Making request to supabase function with payload:", JSON.stringify(requestPayload));
+      
       const { data: batchData, error: batchError } = await supabase.functions.invoke('meli-data', {
-        body: { 
-          user_id: session.user.id,
-          batch_requests: batchRequests,
-          date_range: {
-            begin: dateFrom.split('T')[0],
-            end: dateTo.split('T')[0]
-          },
-          prev_period: true
-        }
+        body: requestPayload
       });
       
       if (batchError) {
@@ -300,36 +322,42 @@ const Dashboard = () => {
         throw new Error(batchData?.message || 'Error fetching batch data');
       }
       
-      console.log("Batch data received:", batchData);
+      console.log("✅ Batch data received:", batchData);
       
       if (batchData.dashboard_data) {
-        console.log("Using pre-processed dashboard data");
+        console.log("🧮 Using pre-processed dashboard data for period:", requestPayload.date_range);
         
         if (batchData.dashboard_data.salesByMonth?.length > 0) {
+          console.log("📊 Setting sales data:", batchData.dashboard_data.salesByMonth);
           setSalesData(batchData.dashboard_data.salesByMonth);
         }
         
         if (batchData.dashboard_data.summary) {
+          console.log("📊 Setting summary data:", batchData.dashboard_data.summary);
           setSalesSummary(batchData.dashboard_data.summary);
         }
         
         if (batchData.dashboard_data.prev_summary) {
+          console.log("📊 Setting previous period summary data");
           setPrevSalesSummary(batchData.dashboard_data.prev_summary);
         }
         
         if (batchData.dashboard_data.costDistribution?.length > 0) {
+          console.log("📊 Setting cost distribution data");
           setCostData(batchData.dashboard_data.costDistribution);
         }
         
         if (batchData.dashboard_data.topProducts?.length > 0) {
+          console.log("📊 Setting top products data");
           setTopProducts(batchData.dashboard_data.topProducts);
         }
         
         if (batchData.dashboard_data.salesByProvince?.length > 0) {
+          console.log("📊 Setting sales by province data");
           setProvinceData(batchData.dashboard_data.salesByProvince);
         }
       } else {
-        console.log("No pre-processed dashboard data, manually calculating GMV from orders");
+        console.log("⚠️ No pre-processed dashboard data, manually calculating GMV from orders");
         
         const ordersResult = batchData.batch_results.find(result => 
           result.endpoint.includes('/orders/search') && result.success
@@ -438,7 +466,7 @@ const Dashboard = () => {
       setDataLoading(false);
       toast({
         title: "Datos cargados",
-        description: "Se han cargado los datos de Mercado Libre correctamente.",
+        description: `Se han cargado los datos de Mercado Libre para el período: ${dateFilter}`,
         duration: 3000,
       });
     } catch (error) {
