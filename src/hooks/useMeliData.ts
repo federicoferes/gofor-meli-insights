@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
@@ -15,6 +16,7 @@ interface MeliDataOptions {
   dateFilter: string;
   dateRange: DateRange;
   isConnected: boolean;
+  productCostsCalculator?: (orders: any[]) => number;
 }
 
 interface UseMeliDataReturn {
@@ -25,6 +27,7 @@ interface UseMeliDataReturn {
   costData: any[];
   provinceData: any[];
   prevSalesSummary: any;
+  ordersData: any[];
   refresh: () => Promise<void>;
 }
 
@@ -40,22 +43,24 @@ export function useMeliData({
   meliUserId,
   dateFilter,
   dateRange,
-  isConnected
+  isConnected,
+  productCostsCalculator
 }: MeliDataOptions): UseMeliDataReturn {
   const [isLoading, setIsLoading] = useState(false);
   const [salesData, setSalesData] = useState([]);
   const [salesSummary, setSalesSummary] = useState({
     gmv: 0, commissions: 0, taxes: 0, shipping: 0, discounts: 0,
     refunds: 0, iva: 0, units: 0, avgTicket: 0, visits: 0, conversion: 0,
-    advertising: 0
+    advertising: 0, productCosts: 0
   });
   const [topProducts, setTopProducts] = useState([]);
   const [costData, setCostData] = useState([]);
   const [provinceData, setProvinceData] = useState([]);
+  const [ordersData, setOrdersData] = useState([]);
   const [prevSalesSummary, setPrevSalesSummary] = useState({
     gmv: 0, commissions: 0, taxes: 0, shipping: 0, discounts: 0,
     refunds: 0, iva: 0, units: 0, avgTicket: 0, visits: 0, conversion: 0,
-    advertising: 0
+    advertising: 0, productCosts: 0
   });
 
   const isMounted = useRef(true);
@@ -104,6 +109,13 @@ export function useMeliData({
           if (dashData.costDistribution?.length > 0) setCostData(dashData.costDistribution);
           if (dashData.topProducts?.length > 0) setTopProducts(dashData.topProducts);
           if (dashData.salesByProvince?.length > 0) setProvinceData(dashData.salesByProvince);
+          if (dashData.orders?.length > 0) setOrdersData(dashData.orders);
+          
+          // Calculate product costs if calculator is provided
+          if (productCostsCalculator && dashData.orders?.length > 0) {
+            const productCosts = productCostsCalculator(dashData.orders);
+            setSalesSummary(prev => ({ ...prev, productCosts }));
+          }
         }
       }
       return;
@@ -287,6 +299,16 @@ export function useMeliData({
           if (batchData.dashboard_data.salesByProvince?.length > 0) {
             setProvinceData(batchData.dashboard_data.salesByProvince);
           }
+          
+          if (batchData.dashboard_data.orders) {
+            setOrdersData(batchData.dashboard_data.orders);
+            
+            // Calculate product costs if calculator is provided
+            if (productCostsCalculator) {
+              const productCosts = productCostsCalculator(batchData.dashboard_data.orders);
+              setSalesSummary(prev => ({ ...prev, productCosts }));
+            }
+          }
         } else {
           console.warn("⚠️ No se recibieron datos del dashboard");
         }
@@ -303,7 +325,7 @@ export function useMeliData({
       if (isMounted.current) setIsLoading(false);
       requestInProgress.current = null;
     }
-  }, [userId, meliUserId, dateFilter, dateRange, isConnected, getCacheKey, toast]);
+  }, [userId, meliUserId, dateFilter, dateRange, isConnected, getCacheKey, toast, productCostsCalculator]);
 
   useEffect(() => {
     const validDateRange = dateFilter !== 'custom' || 
@@ -325,6 +347,7 @@ export function useMeliData({
     costData,
     provinceData,
     prevSalesSummary,
+    ordersData,
     refresh: () => loadData(0)
   };
 }

@@ -4,14 +4,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { TrendingUp, TrendingDown } from "lucide-react";
 
 interface SummaryCardProps {
-  title: React.ReactNode; // Changed from string to ReactNode to accept elements
+  title: React.ReactNode; 
   value: string | number;
   percentChange?: number;
   icon?: React.ReactNode;
   colorClass?: string;
   isLoading?: boolean;
   suffix?: string;
-  additionalInfo?: string; // Added for showing additional info like "3.5% of GMV"
+  additionalInfo?: string | null; 
 }
 
 const SummaryCard = ({ 
@@ -24,17 +24,17 @@ const SummaryCard = ({
   suffix = "",
   additionalInfo
 }: SummaryCardProps) => {
-  // Determinar si el cambio porcentual es positivo
+  // Determine if percent change is positive
   const isPositiveChange = percentChange !== undefined && percentChange >= 0;
   
-  // Verificar si tenemos un valor de cambio porcentual válido
+  // Check if we have a valid percent change value
   const hasPercentChange = percentChange !== undefined && !isNaN(percentChange);
   
-  // Mejorar la validación para valores
+  // Improve validation for values
   const hasValue = value !== undefined && value !== null && value !== '' && value !== 0;
   const displayValue = isLoading ? "Cargando..." : (hasValue ? `${value}${suffix}` : "Sin datos");
   
-  // Color dinámico por porcentaje
+  // Dynamic color by percentage
   const percentColor = isPositiveChange ? 'text-green-600' : 'text-red-600';
   
   return (

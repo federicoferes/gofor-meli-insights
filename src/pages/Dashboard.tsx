@@ -1,10 +1,11 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Navigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
-import { Loader2, DollarSign, ShoppingBag, CreditCard, Users, BarChart3, Percent, Truck, Calculator, PieChart as PieChartIcon, Megaphone } from "lucide-react";
+import { Loader2, DollarSign, ShoppingBag, CreditCard, Users, BarChart3, Percent, Truck, Calculator, PieChart as PieChartIcon, Megaphone, Package } from "lucide-react";
 import MeliConnect from '@/components/MeliConnect';
 import { useToast } from "@/components/ui/use-toast";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -14,15 +15,17 @@ import { formatCurrency, formatNumber, formatPercent } from '@/lib/formatters';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import DebugButton from '@/components/DebugButton';
 import { useMeliData } from '@/hooks/useMeliData';
+import { useProducts } from '@/hooks/useProducts';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import ProductsTable from '@/components/ProductsTable';
 
 const COLORS = ['#663399', '#FFD700', '#8944EB', '#FF8042', '#9B59B6', '#4ade80'];
 
-const calculateBalance = (gmv: number, commissions: number, shipping: number, taxes: number, ivaRate: number, advertising: number = 0) => {
+const calculateBalance = (gmv: number, commissions: number, shipping: number, taxes: number, ivaRate: number, advertising: number = 0, productCosts: number = 0) => {
   const iva = (gmv * ivaRate) / 100;
-  return gmv - commissions - shipping - taxes - iva - advertising;
+  return gmv - commissions - shipping - taxes - iva - advertising - productCosts;
 };
 
 const Dashboard = () => {
@@ -38,9 +41,24 @@ const Dashboard = () => {
     toISO?: string
   }>({});
   const [ivaRate, setIvaRate] = useState(21);
+  const [activeTab, setActiveTab] = useState('ventas');
 
   const { toast } = useToast();
   const isMounted = useRef(true);
+
+  const { 
+    products, 
+    isLoading: productsLoading, 
+    fetchProducts, 
+    updateProductCost, 
+    calculateSoldProductsCost 
+  } = useProducts({
+    userId: session?.user?.id,
+    meliUserId: meliUser,
+    dateFilter,
+    dateRange: customDateRange,
+    isConnected: meliConnected
+  });
 
   const {
     isLoading: dataLoading,
@@ -50,13 +68,15 @@ const Dashboard = () => {
     costData,
     provinceData,
     prevSalesSummary,
+    ordersData,
     refresh: refreshData
   } = useMeliData({
     userId: session?.user?.id,
     meliUserId: meliUser,
     dateFilter,
     dateRange: customDateRange,
-    isConnected: meliConnected
+    isConnected: meliConnected,
+    productCostsCalculator: calculateSoldProductsCost
   });
 
   useEffect(() => {
@@ -180,7 +200,8 @@ const Dashboard = () => {
     salesSummary.shipping, 
     salesSummary.taxes, 
     ivaRate,
-    salesSummary.advertising || 0
+    salesSummary.advertising || 0,
+    salesSummary.productCosts || 0
   );
 
   const previousBalance = calculateBalance(
@@ -189,7 +210,8 @@ const Dashboard = () => {
     prevSalesSummary.shipping, 
     prevSalesSummary.taxes, 
     ivaRate,
-    prevSalesSummary.advertising || 0
+    prevSalesSummary.advertising || 0,
+    prevSalesSummary.productCosts || 0
   );
 
   const currentIva = (salesSummary.gmv * ivaRate) / 100;
@@ -199,12 +221,17 @@ const Dashboard = () => {
     ? ((salesSummary.advertising / salesSummary.gmv) * 100).toFixed(1)
     : null;
 
+  const productCostsGmvPercent = salesSummary.gmv > 0 && salesSummary.productCosts > 0
+    ? ((salesSummary.productCosts / salesSummary.gmv) * 100).toFixed(1)
+    : null;
+
   const costDistributionData = [
     { name: 'Comisiones', value: salesSummary.commissions },
     { name: 'Impuestos', value: salesSummary.taxes },
     { name: 'Envíos', value: salesSummary.shipping },
     { name: 'IVA', value: currentIva },
-    ...(salesSummary.advertising > 0 ? [{ name: 'Publicidad', value: salesSummary.advertising }] : [])
+    ...(salesSummary.advertising > 0 ? [{ name: 'Publicidad', value: salesSummary.advertising }] : []),
+    ...(salesSummary.productCosts > 0 ? [{ name: 'Costo de productos', value: salesSummary.productCosts }] : [])
   ];
 
   return (
@@ -275,7 +302,7 @@ const Dashboard = () => {
                                 </div>
                                 <p className="text-sm text-gray-500">
                                   La tasa de IVA se usa para calcular el balance total:
-                                  GMV - comisiones - envíos - impuestos - IVA({ivaRate}% del GMV) - publicidad
+                                  GMV - comisiones - envíos - impuestos - IVA({ivaRate}% del GMV) - publicidad - costo productos
                                 </p>
                               </div>
                             </PopoverContent>
@@ -361,7 +388,7 @@ const Dashboard = () => {
                   />
                 </div>
 
-                <div className="mb-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
                   <SummaryCard 
                     title="Gastos de Publicidad"
                     value={formatCurrency(salesSummary.advertising || 0)}
@@ -373,9 +400,25 @@ const Dashboard = () => {
                     isLoading={dataLoading}
                     additionalInfo={advertisingGmvPercent ? `${advertisingGmvPercent}% del GMV` : null}
                   />
+                  <SummaryCard 
+                    title="Costo de Productos Vendidos"
+                    value={formatCurrency(salesSummary.productCosts || 0)}
+                    percentChange={calculatePercentChange(
+                      salesSummary.productCosts || 0, 
+                      prevSalesSummary.productCosts || 0
+                    )}
+                    icon={<Package className="h-5 w-5" />}
+                    isLoading={dataLoading}
+                    additionalInfo={productCostsGmvPercent ? `${productCostsGmvPercent}% del GMV` : null}
+                  />
                 </div>
                 
-                <Tabs defaultValue="ventas" className="mb-6">
+                <Tabs 
+                  defaultValue="ventas" 
+                  className="mb-6"
+                  value={activeTab}
+                  onValueChange={setActiveTab}
+                >
                   <TabsList className="mb-6 bg-white border">
                     <TabsTrigger 
                       value="ventas" 
@@ -393,7 +436,13 @@ const Dashboard = () => {
                       value="productos" 
                       className="data-[state=active]:bg-gofor-purple data-[state=active]:text-white"
                     >
-                      Productos
+                      Productos Vendidos
+                    </TabsTrigger>
+                    <TabsTrigger 
+                      value="inventario" 
+                      className="data-[state=active]:bg-gofor-purple data-[state=active]:text-white"
+                    >
+                      Inventario
                     </TabsTrigger>
                   </TabsList>
                 
@@ -547,6 +596,15 @@ const Dashboard = () => {
                         </div>
                       </CardContent>
                     </Card>
+                  </TabsContent>
+                  
+                  <TabsContent value="inventario">
+                    <ProductsTable 
+                      products={products}
+                      isLoading={productsLoading}
+                      onRefresh={fetchProducts}
+                      onUpdateCost={updateProductCost}
+                    />
                   </TabsContent>
                 </Tabs>
               </>
