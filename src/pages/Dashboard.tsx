@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
-import { Loader2, DollarSign, ShoppingBag, CreditCard, Users, BarChart3, Percent, Truck, Calculator } from "lucide-react";
+import { Loader2, DollarSign, ShoppingBag, CreditCard, Users, BarChart3, Percent, Truck, Calculator, PieChart as PieChartIcon } from "lucide-react";
 import MeliConnect from '@/components/MeliConnect';
 import { useToast } from "@/components/ui/use-toast";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -22,12 +22,12 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 const COLORS = ['#663399', '#FFD700', '#8944EB', '#FF8042', '#9B59B6', '#4ade80'];
 
 // Function to calculate the complete balance considering all factors
-const calculateBalance = (gmv: number, commissions: number, shipping: number, taxes: number, ivaRate: number) => {
+const calculateBalance = (gmv: number, commissions: number, shipping: number, taxes: number, ivaRate: number, advertising: number = 0) => {
   // Calculate IVA based on the provided rate (as a percentage)
   const iva = (gmv * ivaRate) / 100;
   
-  // Calculate total balance: GMV - commissions - shipping - taxes - IVA
-  return gmv - commissions - shipping - taxes - iva;
+  // Calculate total balance: GMV - commissions - shipping - taxes - IVA - advertising
+  return gmv - commissions - shipping - taxes - iva - advertising;
 };
 
 const Dashboard = () => {
@@ -135,6 +135,15 @@ const Dashboard = () => {
     fromISO?: string;
     toISO?: string;
   }) => {
+    // Evitar actualización si el rango ya es el seleccionado
+    if (range === dateFilter && 
+        ((range !== 'custom') || 
+         (customDateRange.fromISO === dates?.fromISO && 
+          customDateRange.toISO === dates?.toISO))) {
+      console.log("📅 Ignorando cambio de fecha duplicado");
+      return;
+    }
+    
     console.log(`📅 Date range changed to: ${range}`, dates);
     setDateFilter(range);
     if (dates) {
@@ -171,23 +180,38 @@ const Dashboard = () => {
     return <Navigate to="/login" replace />;
   }
 
-  // Calculate current balance with the specified IVA rate
+  // Calcular el balance utilizando todos los factores
   const currentBalance = calculateBalance(
     salesSummary.gmv, 
     salesSummary.commissions, 
     salesSummary.shipping, 
     salesSummary.taxes, 
-    ivaRate
+    ivaRate,
+    salesSummary.advertising || 0
   );
 
-  // Calculate previous period balance for percent change
+  // Calcular el balance del período anterior
   const previousBalance = calculateBalance(
     prevSalesSummary.gmv, 
     prevSalesSummary.commissions, 
     prevSalesSummary.shipping, 
     prevSalesSummary.taxes, 
-    ivaRate
+    ivaRate,
+    prevSalesSummary.advertising || 0
   );
+
+  // Calcular el monto del IVA
+  const currentIva = (salesSummary.gmv * ivaRate) / 100;
+  const previousIva = (prevSalesSummary.gmv * ivaRate) / 100;
+
+  // Preparar datos para el gráfico de distribución de costos
+  const costDistributionData = [
+    { name: 'Comisiones', value: salesSummary.commissions },
+    { name: 'Impuestos', value: salesSummary.taxes },
+    { name: 'Envíos', value: salesSummary.shipping },
+    { name: 'IVA', value: currentIva },
+    ...(salesSummary.advertising > 0 ? [{ name: 'Publicidad', value: salesSummary.advertising }] : [])
+  ];
 
   return (
     <div className="min-h-screen bg-gofor-warmWhite font-poppins p-6">
@@ -257,7 +281,7 @@ const Dashboard = () => {
                                 </div>
                                 <p className="text-sm text-gray-500">
                                   La tasa de IVA se usa para calcular el balance total:
-                                  GMV - comisiones - envíos - impuestos - IVA({ivaRate}% del GMV)
+                                  GMV - comisiones - envíos - impuestos - IVA({ivaRate}% del GMV) - publicidad
                                 </p>
                               </div>
                             </PopoverContent>
@@ -312,11 +336,8 @@ const Dashboard = () => {
                   />
                   <SummaryCard 
                     title="IVA (aplicado)"
-                    value={formatCurrency((salesSummary.gmv * ivaRate) / 100)}
-                    percentChange={calculatePercentChange(
-                      (salesSummary.gmv * ivaRate) / 100,
-                      (prevSalesSummary.gmv * ivaRate) / 100
-                    )}
+                    value={formatCurrency(currentIva)}
+                    percentChange={calculatePercentChange(currentIva, previousIva)}
                     icon={<DollarSign className="h-5 w-5" />}
                     isLoading={dataLoading}
                   />
@@ -345,6 +366,18 @@ const Dashboard = () => {
                     isLoading={dataLoading}
                   />
                 </div>
+
+                {salesSummary.advertising > 0 && (
+                  <div className="mb-8">
+                    <SummaryCard 
+                      title="Gastos de Publicidad"
+                      value={formatCurrency(salesSummary.advertising)}
+                      percentChange={calculatePercentChange(salesSummary.advertising, prevSalesSummary.advertising)}
+                      icon={<PieChartIcon className="h-5 w-5" />}
+                      isLoading={dataLoading}
+                    />
+                  </div>
+                )}
                 
                 <Tabs defaultValue="ventas" className="mb-6">
                   <TabsList className="mb-6 bg-white border">
@@ -447,7 +480,7 @@ const Dashboard = () => {
                       <Card>
                         <CardContent className="p-6">
                           <div className="text-sm text-gray-500 mb-1">IVA ({ivaRate}%)</div>
-                          <div className="text-2xl font-bold text-gofor-purple">{formatCurrency((salesSummary.gmv * ivaRate) / 100)}</div>
+                          <div className="text-2xl font-bold text-gofor-purple">{formatCurrency(currentIva)}</div>
                           <div className="text-sm font-medium text-amber-500">{ivaRate}% del GMV</div>
                         </CardContent>
                       </Card>
@@ -462,10 +495,7 @@ const Dashboard = () => {
                           <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
                               <Pie
-                                data={[
-                                  ...costData,
-                                  { name: 'IVA', value: (salesSummary.gmv * ivaRate) / 100 }
-                                ]}
+                                data={costDistributionData}
                                 cx="50%"
                                 cy="50%"
                                 labelLine={false}
@@ -474,7 +504,7 @@ const Dashboard = () => {
                                 fill="#8884d8"
                                 dataKey="value"
                               >
-                                {[...costData, { name: 'IVA', value: (salesSummary.gmv * ivaRate) / 100 }].map((entry, index) => (
+                                {costDistributionData.map((entry, index) => (
                                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                 ))}
                               </Pie>

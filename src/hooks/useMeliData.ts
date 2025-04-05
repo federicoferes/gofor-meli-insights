@@ -50,20 +50,21 @@ export function useMeliData({
   const [salesData, setSalesData] = useState([]);
   const [salesSummary, setSalesSummary] = useState({
     gmv: 0, commissions: 0, taxes: 0, shipping: 0, discounts: 0,
-    refunds: 0, iva: 0, units: 0, avgTicket: 0, visits: 0, conversion: 0
+    refunds: 0, iva: 0, units: 0, avgTicket: 0, visits: 0, conversion: 0,
+    advertising: 0 // Agregamos campo para gastos de publicidad
   });
   const [topProducts, setTopProducts] = useState([]);
   const [costData, setCostData] = useState([]);
   const [provinceData, setProvinceData] = useState([]);
   const [prevSalesSummary, setPrevSalesSummary] = useState({
     gmv: 0, commissions: 0, taxes: 0, shipping: 0, discounts: 0,
-    refunds: 0, iva: 0, units: 0, avgTicket: 0, visits: 0, conversion: 0
+    refunds: 0, iva: 0, units: 0, avgTicket: 0, visits: 0, conversion: 0,
+    advertising: 0 // Agregamos campo para gastos de publicidad
   });
 
   const isMounted = useRef(true);
   const requestInProgress = useRef<string | null>(null);
   const lastRequestPayload = useRef<string | null>(null);
-  const pendingRequests = useRef<Set<string>>(new Set());
   const { toast } = useToast();
   
   // Limpiar el efecto al desmontar
@@ -97,13 +98,6 @@ export function useMeliData({
       return;
     }
 
-    // Verificar si esta solicitud está pendiente
-    if (pendingRequests.current.has(cacheKey)) {
-      console.log("🔄 Solicitud ya pendiente para:", cacheKey);
-      return;
-    }
-    pendingRequests.current.add(cacheKey);
-
     // Verificar caché
     const cachedResponse = responseCache.get(cacheKey);
     const now = Date.now();
@@ -121,7 +115,6 @@ export function useMeliData({
           if (dashData.salesByProvince?.length > 0) setProvinceData(dashData.salesByProvince);
         }
       }
-      pendingRequests.current.delete(cacheKey);
       return;
     }
 
@@ -161,45 +154,48 @@ export function useMeliData({
       
       console.log("🟣 Cargando datos para filtro:", dateFilter);
       console.log("📅 Rango de fechas:", { dateFrom, dateTo });
-      
-      // Verificar si no hay reemplazo de tokens ni productos se hace con listas
-      const ordersRequest = {
-        endpoint: '/orders/search',
-        params: {
-          seller: meliUserId,
-          'order.status': 'paid',
-          sort: 'date_desc',
-          date_from: dateFrom,
-          date_to: dateTo,
-          limit: 50 // Limitar el tamaño de página para evitar timeouts
-        }
-      };
-      
-      // Solicitud para obtener los productos del usuario
-      const itemsRequest = {
-        endpoint: `/users/${meliUserId}/items/search`,
-        params: {
-          limit: 100
-        }
-      };
-      
-      // Solicitud para obtener métricas de visitas por item
-      const visitsMetricsRequest = {
-        endpoint: `/users/${meliUserId}/items_visits/time_window`,
-        params: {
-          date_from: dateFrom?.split('T')[0],
-          date_to: dateTo?.split('T')[0],
-          time_window: 'day'
-        }
-      };
 
-      // Agregamos las solicitudes en lotes más pequeños
+      // Crear un array con todos los requests necesarios
       const batchRequests = [
-        ordersRequest,
-        itemsRequest,
-        visitsMetricsRequest
+        // Solicitud para órdenes (usando search para filtrar por fechas)
+        {
+          endpoint: '/orders/search',
+          params: {
+            seller: meliUserId,
+            'order.status': 'paid',
+            sort: 'date_desc',
+            date_from: dateFrom,
+            date_to: dateTo,
+            limit: 50 // Limitar el tamaño de página para evitar timeouts
+          }
+        },
+        
+        // Solicitud para obtener los productos del usuario
+        {
+          endpoint: `/users/${meliUserId}/items/search`,
+          params: {
+            limit: 100
+          }
+        },
+        
+        // Solicitud para obtener métricas de visitas
+        {
+          endpoint: `/users/${meliUserId}/items_visits/time_window`,
+          params: {
+            date_from: dateFrom?.split('T')[0],
+            date_to: dateTo?.split('T')[0],
+            time_window: 'day'
+          }
+        },
+        
+        // Solicitud para datos de publicidad
+        {
+          endpoint: `/users/${meliUserId}/ads/campaigns`,
+          params: {}
+        }
       ];
       
+      // Estructura completa del payload con ambos rangos de fechas
       const requestPayload = {
         user_id: userId,
         batch_requests: batchRequests,
@@ -207,7 +203,7 @@ export function useMeliData({
           begin: dateFrom ? dateFrom.split('T')[0] : null,
           end: dateTo ? dateTo.split('T')[0] : null
         },
-        prev_period: true,
+        prev_period: true, // Solicitar datos del período anterior para comparación
         use_cache: true // Indicar al backend que puede usar caché interna
       };
       
@@ -217,7 +213,6 @@ export function useMeliData({
         console.log("🔄 Ignorando solicitud duplicada con el mismo payload");
         if (isMounted.current) setIsLoading(false);
         requestInProgress.current = null;
-        pendingRequests.current.delete(cacheKey);
         return;
       }
       
@@ -244,7 +239,6 @@ export function useMeliData({
             await new Promise(resolve => setTimeout(resolve, delay));
             
             // Reintentar la solicitud
-            pendingRequests.current.delete(cacheKey);
             return loadData(retryCount + 1);
           }
         }
@@ -284,6 +278,11 @@ export function useMeliData({
               summary.conversion = 0;
             }
             
+            // Asegurar que el ticket promedio es GMV dividido por el número de órdenes, no de ítems
+            if (summary.gmv > 0 && summary.orders > 0) {
+              summary.avgTicket = summary.gmv / summary.orders;
+            }
+            
             setSalesSummary(summary);
           }
           
@@ -295,6 +294,11 @@ export function useMeliData({
               prevSummary.conversion = (prevSummary.units / prevSummary.visits) * 100;
             } else {
               prevSummary.conversion = 0;
+            }
+            
+            // Ajustar ticket promedio para período anterior también
+            if (prevSummary.gmv > 0 && prevSummary.orders > 0) {
+              prevSummary.avgTicket = prevSummary.gmv / prevSummary.orders;
             }
             
             setPrevSalesSummary(prevSummary);
@@ -326,7 +330,6 @@ export function useMeliData({
     } finally {
       if (isMounted.current) setIsLoading(false);
       requestInProgress.current = null;
-      pendingRequests.current.delete(cacheKey);
     }
   }, [userId, meliUserId, dateFilter, dateRange, isConnected, getCacheKey, toast]);
 
