@@ -4,13 +4,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { TrendingUp, TrendingDown } from "lucide-react";
 
 interface SummaryCardProps {
-  title: string;
+  title: React.ReactNode; // Changed from string to ReactNode to accept elements
   value: string | number;
   percentChange?: number;
   icon?: React.ReactNode;
   colorClass?: string;
   isLoading?: boolean;
-  suffix?: string; // Added suffix prop for % or other units
+  suffix?: string;
 }
 
 const SummaryCard = ({ 
@@ -20,7 +20,7 @@ const SummaryCard = ({
   icon, 
   colorClass = "bg-white",
   isLoading = false,
-  suffix = "" // Default to empty string if not provided
+  suffix = ""
 }: SummaryCardProps) => {
   // Determinar si el cambio porcentual es positivo
   const isPositiveChange = percentChange !== undefined && percentChange >= 0;
@@ -40,7 +40,7 @@ const SummaryCard = ({
       <CardContent className="p-4">
         <div className="flex justify-between items-start">
           <div className="w-full">
-            <p className="text-sm text-gray-600 font-medium">{title}</p>
+            <div className="text-sm text-gray-600 font-medium">{title}</div>
             <p className={`text-2xl font-bold font-poppins mt-1 ${isLoading ? 'opacity-50' : ''}`}>
               {displayValue}
             </p>
