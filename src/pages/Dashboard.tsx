@@ -366,8 +366,13 @@ const Dashboard = () => {
       } else {
         console.log("⚠️ No pre-processed dashboard data, manually calculating GMV from orders");
         
-        const ordersResult = batchData.batch_results.find(result => 
-          result.endpoint.includes('/orders/search') && result.success
+        if (!batchData?.batch_results) {
+          console.error("❌ batch_results is undefined", batchData);
+          throw new Error("No batch results returned from Supabase function");
+        }
+        
+        const ordersResult = batchData?.batch_results?.find(result => 
+          result.endpoint?.includes('/orders/search') && result.success
         );
         
         if (ordersResult && ordersResult.data.results) {
