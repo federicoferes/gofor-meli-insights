@@ -35,9 +35,12 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
     to: undefined,
   });
 
-  // Function to format dates to ISO 8601 string
+  // Function to safely format dates to ISO 8601 string
   const formatDateToISO = (date: Date | undefined, endOfDayFlag = false): string | undefined => {
-    if (!date) return undefined;
+    if (!date) {
+      console.log("⚠️ Cannot format undefined date to ISO");
+      return undefined;
+    }
     
     try {
       if (endOfDayFlag) {
@@ -52,10 +55,10 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
 
   // Function to get the date range based on the selected option
   const getDateRange = (rangeType: string): { from: Date | undefined; to: Date | undefined } => {
-    const today = new Date();
-    let fromDate: Date | undefined;
-    
     try {
+      const today = new Date();
+      let fromDate: Date | undefined;
+      
       switch (rangeType) {
         case "today":
           fromDate = startOfDay(new Date(today));
@@ -70,18 +73,25 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
           fromDate = startOfDay(subDays(today, 30));
           return { from: fromDate, to: today };
         case "custom":
-          return date || { from: undefined, to: undefined };
+          // Make sure to return a safe copy of date to avoid mutation issues
+          return date ? { from: date.from, to: date.to } : { from: undefined, to: undefined };
         default:
           fromDate = startOfDay(subDays(today, 30));
           return { from: fromDate, to: today };
       }
     } catch (error) {
-      console.error("Error calculating date range:", error, rangeType);
+      console.error("Error calculating date range:", error, "rangeType:", rangeType);
+      // Return safe defaults
       return { from: undefined, to: undefined };
     }
   };
 
   const handleRangeChange = (value: string) => {
+    if (!value) {
+      console.error("⚠️ DateRangePicker: Range value is undefined or empty");
+      return;
+    }
+    
     console.log(`🔄 DateRangePicker: Range changing to ${value}`);
     setSelectedRange(value);
     
@@ -89,18 +99,12 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
       // Generate date range based on selected option
       const dateRange = getDateRange(value);
       
-      if (!dateRange) {
-        console.error("⚠️ DateRangePicker: dateRange is undefined for value:", value);
-        return;
-      }
-      
-      // Only pass ISO strings if we have valid dates
       if (value !== "custom") {
         setDate(dateRange);
         
         // Add ISO formatted dates to the callback
         const fromISO = dateRange.from ? formatDateToISO(dateRange.from) : undefined;
-        const toISO = dateRange.to ? formatDateToISO(dateRange.to, true) : undefined; // End of day for the to-date
+        const toISO = dateRange.to ? formatDateToISO(dateRange.to, true) : undefined;
         
         console.log("📅 DateRangePicker changed:", value, { 
           from: dateRange.from?.toISOString(), 
@@ -117,67 +121,88 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
         });
       } else {
         // For custom, we'll rely on the custom date picker
-        // Add ISO formatted dates if they exist
-        const fromISO = date?.from ? formatDateToISO(date.from) : undefined;
-        const toISO = date?.to ? formatDateToISO(date.to, true) : undefined; // End of day for the to-date
-        
-        console.log("📅 DateRangePicker custom:", { 
-          from: date?.from?.toISOString(), 
-          to: date?.to?.toISOString(),
-          fromISO, 
-          toISO 
-        });
-        
-        onDateRangeChange(value, { 
-          from: date?.from, 
-          to: date?.to,
-          fromISO, 
-          toISO 
-        });
+        // Only trigger a change if we have valid dates
+        if (date?.from && date?.to) {
+          const fromISO = formatDateToISO(date.from);
+          const toISO = formatDateToISO(date.to, true);
+          
+          console.log("📅 DateRangePicker custom:", { 
+            from: date.from?.toISOString(), 
+            to: date.to?.toISOString(),
+            fromISO, 
+            toISO 
+          });
+          
+          onDateRangeChange(value, { 
+            from: date.from, 
+            to: date.to,
+            fromISO, 
+            toISO 
+          });
+        } else {
+          console.log("⚠️ DateRangePicker: Custom date range is incomplete", date);
+          // Still notify the parent component but with undefined dates
+          onDateRangeChange(value, {
+            from: undefined,
+            to: undefined,
+            fromISO: undefined,
+            toISO: undefined
+          });
+        }
       }
     } catch (error) {
       console.error("Error in handleRangeChange:", error, value);
+      // Notify with safe defaults
+      onDateRangeChange(value, {
+        from: undefined,
+        to: undefined,
+        fromISO: undefined,
+        toISO: undefined
+      });
     }
   };
 
-  const handleCustomDateChange = (value: { from?: Date; to?: Date } | undefined) => {
+  const handleCustomDateChange = (newDateRange: { from?: Date; to?: Date } | undefined) => {
     // Safely handle potentially undefined value
-    if (!value) {
+    if (!newDateRange) {
       console.log("📅 Custom date selection cleared or undefined");
+      setDate({ from: undefined, to: undefined });
       return;
     }
 
     try {
-      console.log("📅 Custom date selection changed:", value);
-      setDate({
-        from: value.from || undefined,
-        to: value.to || undefined
-      });
+      const updatedRange = {
+        from: newDateRange.from || undefined,
+        to: newDateRange.to || undefined
+      };
+      
+      console.log("📅 Custom date selection changed:", updatedRange);
+      setDate(updatedRange);
 
       // Only trigger the callback if we have both from and to dates
-      if (value.from && value.to) {
+      if (newDateRange.from && newDateRange.to) {
         setSelectedRange("custom");
         
         // Add ISO formatted dates
-        const fromISO = formatDateToISO(value.from);
-        const toISO = formatDateToISO(value.to, true); // End of day for the to-date
+        const fromISO = formatDateToISO(newDateRange.from);
+        const toISO = formatDateToISO(newDateRange.to, true);
         
         console.log("📅 DateRangePicker custom selected:", { 
-          from: value.from?.toISOString(), 
-          to: value.to?.toISOString(),
+          from: newDateRange.from?.toISOString(), 
+          to: newDateRange.to?.toISOString(),
           fromISO, 
           toISO 
         });
         
         onDateRangeChange("custom", { 
-          from: value.from, 
-          to: value.to,
+          from: newDateRange.from, 
+          to: newDateRange.to,
           fromISO, 
           toISO 
         });
       }
     } catch (error) {
-      console.error("Error in handleCustomDateChange:", error, value);
+      console.error("Error in handleCustomDateChange:", error, newDateRange);
     }
   };
 
@@ -185,7 +210,21 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
   useEffect(() => {
     try {
       console.log("📅 DateRangePicker initialized with default range:", selectedRange);
-      handleRangeChange(selectedRange);
+      
+      // Safely initialize the date range
+      const initialDateRange = getDateRange(selectedRange);
+      setDate(initialDateRange);
+      
+      // Notify parent component
+      const fromISO = initialDateRange.from ? formatDateToISO(initialDateRange.from) : undefined;
+      const toISO = initialDateRange.to ? formatDateToISO(initialDateRange.to, true) : undefined;
+      
+      onDateRangeChange(selectedRange, {
+        from: initialDateRange.from,
+        to: initialDateRange.to,
+        fromISO,
+        toISO
+      });
     } catch (error) {
       console.error("Error initializing DateRangePicker:", error);
     }
@@ -206,19 +245,19 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
         </SelectContent>
       </Select>
 
-      {selectedRange === "custom" && date && (
+      {selectedRange === "custom" && (
         <Popover>
           <PopoverTrigger asChild>
             <Button
               variant={"outline"}
               className={cn(
                 "justify-start text-left font-normal bg-white",
-                !date.from && "text-muted-foreground"
+                !date?.from && "text-muted-foreground"
               )}
             >
               <CalendarIcon className="mr-2 h-4 w-4" />
-              {date.from ? (
-                date.to ? (
+              {date?.from ? (
+                date?.to ? (
                   <>
                     {format(date.from, "P", { locale: es })} -{" "}
                     {format(date.to, "P", { locale: es })}
@@ -235,8 +274,11 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
             <Calendar
               initialFocus
               mode="range"
-              defaultMonth={date.from}
-              selected={date}
+              defaultMonth={date?.from}
+              selected={{
+                from: date?.from,
+                to: date?.to
+              }}
               onSelect={handleCustomDateChange}
               numberOfMonths={2}
               className="pointer-events-auto"
