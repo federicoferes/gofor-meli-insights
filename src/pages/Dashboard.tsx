@@ -189,6 +189,10 @@ const Dashboard = () => {
         fromISO: dates.fromISO,
         toISO: dates.toISO
       });
+      
+      if (range === 'custom' && (!dates.from || !dates.to)) {
+        console.warn("⚠️ Custom range selected but dates are incomplete:", dates);
+      }
     } else {
       console.warn("⚠️ handleDateRangeChange received undefined dates");
       setCustomDateRange({});
@@ -246,29 +250,34 @@ const Dashboard = () => {
       let fromDate, toDate;
       
       if (dateFilter === 'custom') {
-        if (!customDateRange.fromISO || !customDateRange.toISO) {
-          console.warn("⚠️ Custom date range is missing ISO values:", customDateRange);
+        if (!customDateRange || !customDateRange.from || !customDateRange.to) {
+          console.warn("⚠️ Custom date range is incomplete:", customDateRange);
           
-          if (customDateRange.from && customDateRange.to) {
+          const fallbackRange = getDateRange('30d');
+          dateFrom = `${fallbackRange.begin}T00:00:00.000Z`;
+          dateTo = `${fallbackRange.end}T23:59:59.999Z`;
+          fromDate = new Date(fallbackRange.begin);
+          toDate = new Date(fallbackRange.end);
+          
+          console.log("⚠️ Using fallback date range due to incomplete custom range:", { dateFrom, dateTo });
+        } else {
+          if (customDateRange.fromISO && customDateRange.toISO) {
+            dateFrom = customDateRange.fromISO;
+            dateTo = customDateRange.toISO;
+          } else if (customDateRange.from && customDateRange.to) {
             dateFrom = customDateRange.from.toISOString();
             dateTo = customDateRange.to.toISOString();
-            fromDate = customDateRange.from;
-            toDate = customDateRange.to;
           } else {
-            console.error("❌ Invalid custom date range. Using fallback dates.");
             const fallbackRange = getDateRange('30d');
             dateFrom = `${fallbackRange.begin}T00:00:00.000Z`;
             dateTo = `${fallbackRange.end}T23:59:59.999Z`;
-            fromDate = new Date(fallbackRange.begin);
-            toDate = new Date(fallbackRange.end);
           }
-        } else {
-          dateFrom = customDateRange.fromISO;
-          dateTo = customDateRange.toISO;
+          
           fromDate = customDateRange.from;
           toDate = customDateRange.to;
+          
+          console.log("📊 Using custom date range:", { dateFrom, dateTo });
         }
-        console.log("📊 Using custom date range:", { dateFrom, dateTo });
       } else {
         const dateRange = getDateRange(dateFilter);
         dateFrom = `${dateRange.begin}T00:00:00.000Z`;
@@ -370,9 +379,12 @@ const Dashboard = () => {
       if (batchData.dashboard_data) {
         console.log("🧮 Using pre-processed dashboard data for period:", requestPayload.date_range);
         
-        if (batchData.dashboard_data.salesByMonth?.length > 0) {
+        if (Array.isArray(batchData.dashboard_data.salesByMonth) && batchData.dashboard_data.salesByMonth.length > 0) {
           console.log("📊 Setting sales data:", batchData.dashboard_data.salesByMonth);
           setSalesData(batchData.dashboard_data.salesByMonth);
+        } else {
+          console.log("⚠️ No valid salesByMonth data");
+          setSalesData([]);
         }
         
         if (batchData.dashboard_data.summary) {
@@ -402,16 +414,16 @@ const Dashboard = () => {
       } else {
         console.log("⚠️ No pre-processed dashboard data, manually calculating GMV from orders");
         
-        if (!batchData?.batch_results) {
-          console.error("❌ batch_results is undefined", batchData);
+        if (!batchData?.batch_results || !Array.isArray(batchData.batch_results)) {
+          console.error("❌ batch_results is undefined or not an array", batchData);
           throw new Error("No batch results returned from Supabase function");
         }
         
         const ordersResult = batchData.batch_results.find(result => 
-          result.endpoint?.includes('/orders/search') && result.success
+          result && result.endpoint && result.endpoint.includes('/orders/search') && result.success
         );
         
-        if (ordersResult && ordersResult.data && ordersResult.data.results) {
+        if (ordersResult && ordersResult.data && Array.isArray(ordersResult.data.results)) {
           const allOrders = ordersResult.data.results;
           console.log(`Received ${allOrders.length} orders from API`);
           

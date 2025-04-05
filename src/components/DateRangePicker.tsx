@@ -74,7 +74,12 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
           return { from: fromDate, to: today };
         case "custom":
           // Make sure to return a safe copy of date to avoid mutation issues
-          return date ? { from: date.from, to: date.to } : { from: undefined, to: undefined };
+          // Add safety check to avoid "Cannot read properties of undefined" errors
+          if (!date) {
+            console.warn("⚠️ Date is undefined when requesting custom date range");
+            return { from: undefined, to: undefined };
+          }
+          return { from: date.from, to: date.to };
         default:
           fromDate = startOfDay(subDays(today, 30));
           return { from: fromDate, to: today };
@@ -98,6 +103,12 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
     try {
       // Generate date range based on selected option
       const dateRange = getDateRange(value);
+      
+      // Safety check - ensure dateRange is properly defined
+      if (!dateRange) {
+        console.error("⚠️ DateRangePicker: dateRange is undefined");
+        return;
+      }
       
       if (value !== "custom") {
         setDate(dateRange);
@@ -213,6 +224,13 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
       
       // Safely initialize the date range
       const initialDateRange = getDateRange(selectedRange);
+      
+      // Safety check - ensure initialDateRange is properly defined
+      if (!initialDateRange) {
+        console.error("⚠️ DateRangePicker: initialDateRange is undefined");
+        return;
+      }
+      
       setDate(initialDateRange);
       
       // Notify parent component
@@ -275,10 +293,10 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
               initialFocus
               mode="range"
               defaultMonth={date?.from}
-              selected={{
-                from: date?.from,
-                to: date?.to
-              }}
+              selected={date?.from && date?.to ? {
+                from: date.from,
+                to: date.to
+              } : undefined}
               onSelect={handleCustomDateChange}
               numberOfMonths={2}
               className="pointer-events-auto"

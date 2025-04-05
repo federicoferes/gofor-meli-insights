@@ -151,7 +151,11 @@ serve(async (req) => {
               // Add query parameters for GET requests
               if (batchMethod === "GET" && batchParams) {
                 Object.entries(batchParams).forEach(([key, value]) => {
-                  apiUrl.searchParams.append(key, String(value));
+                  if (value !== undefined && value !== null) {
+                    apiUrl.searchParams.append(key, String(value));
+                  } else {
+                    console.warn(`⚠️ Parameter ${key} is undefined or null and will be skipped`);
+                  }
                 });
               }
               
@@ -302,9 +306,15 @@ serve(async (req) => {
 });
 
 function isDateInRange(dateStr: string, dateRange: any): boolean {
-  if (!dateStr || !dateRange || !dateRange.begin || !dateRange.end) return true;
+  if (!dateStr || !dateRange) return false;
   
   try {
+    // Ensure dateRange has begin and end properties
+    if (!dateRange.begin || !dateRange.end) {
+      console.warn("⚠️ Invalid date range for comparison:", dateRange);
+      return true; // Default to include the item if date range is invalid
+    }
+    
     // Parse the input date
     const date = new Date(dateStr);
     
@@ -324,11 +334,15 @@ function isDateInRange(dateStr: string, dateRange: any): boolean {
       to = dateRange.end;
     }
     
+    // Ensure the dates are valid
+    if (isNaN(from.getTime()) || isNaN(to.getTime())) {
+      console.warn("⚠️ Invalid date objects created:", { from, to });
+      return true; // Default to include the item if dates are invalid
+    }
+    
     // Adjust the hours for correct comparison
     from.setHours(0, 0, 0, 0);
     to.setHours(23, 59, 59, 999);
-    
-    console.log(`Checking if ${date.toISOString()} is between ${from.toISOString()} and ${to.toISOString()}: ${date >= from && date <= to}`);
     
     return date >= from && date <= to;
   } catch (error) {
