@@ -119,9 +119,20 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
     }
   };
 
-  const handleCustomDateChange = (value: { from: Date | undefined; to: Date | undefined }) => {
+  const handleCustomDateChange = (value: { from?: Date; to?: Date } | undefined) => {
+    // Safely handle potentially undefined value
+    if (!value) {
+      console.log("📅 Custom date selection cleared or undefined");
+      return;
+    }
+
     console.log("📅 Custom date selection changed:", value);
-    setDate(value);
+    setDate({
+      from: value.from || undefined,
+      to: value.to || undefined
+    });
+
+    // Only trigger the callback if we have both from and to dates
     if (value.from && value.to) {
       setSelectedRange("custom");
       
@@ -136,7 +147,12 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
         toISO 
       });
       
-      onDateRangeChange("custom", { ...value, fromISO, toISO });
+      onDateRangeChange("custom", { 
+        from: value.from, 
+        to: value.to,
+        fromISO, 
+        toISO 
+      });
     }
   };
 
