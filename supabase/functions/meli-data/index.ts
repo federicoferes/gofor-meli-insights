@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
@@ -50,7 +49,8 @@ serve(async (req) => {
         JSON.stringify({
           success: false,
           message: "User not connected to Mercado Libre",
-          is_connected: false
+          is_connected: false,
+          batch_results: []
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -116,7 +116,8 @@ serve(async (req) => {
           success: true,
           message: "User is connected to Mercado Libre",
           is_connected: true,
-          meli_user_id: tokenData.meli_user_id
+          meli_user_id: tokenData.meli_user_id,
+          batch_results: []
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -237,7 +238,8 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        data: apiData
+        data: apiData,
+        batch_results: []
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -251,6 +253,7 @@ serve(async (req) => {
       JSON.stringify({
         success: false,
         message: error.message || "An unexpected error occurred",
+        batch_results: []
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -260,7 +263,6 @@ serve(async (req) => {
   }
 });
 
-// Improved function to check if a date is within the selected range
 function isDateInRange(dateStr: string, dateRange: any): boolean {
   if (!dateStr || !dateRange || !dateRange.begin || !dateRange.end) return true;
   
@@ -292,7 +294,6 @@ function isDateInRange(dateStr: string, dateRange: any): boolean {
   return date >= from && date <= to;
 }
 
-// Enhanced function to process orders and calculate GMV with date filtering
 function processDashboardData(batchResults: any[], dateRange: any) {
   try {
     // Initialize dashboard data structure

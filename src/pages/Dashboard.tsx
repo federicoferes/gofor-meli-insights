@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
-import { Loader2, DollarSign, ShoppingBag, CreditCard, Users, BarChart3, Percent, Truck } from "lucide-react";
+import { Loader2, DollarSign, ShoppingBag, CreditCard, Users, BarChart3, Percent, Truck, AlertTriangle } from "lucide-react";
 import MeliConnect from '@/components/MeliConnect';
 import { useToast } from "@/components/ui/use-toast";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -472,6 +472,40 @@ const Dashboard = () => {
             { name: 'Mendoza', value: Math.floor(gmv * 0.05) },
             { name: 'Otras', value: Math.floor(gmv * 0.07) }
           ]);
+        } else {
+          console.log("⚠️ No orders data found or empty results");
+          setSalesSummary({
+            gmv: 0,
+            units: 0,
+            avgTicket: 0,
+            commissions: 0,
+            taxes: 0,
+            shipping: 0,
+            discounts: 0,
+            refunds: 0,
+            iva: 0,
+            visits: 0,
+            conversion: 0
+          });
+          
+          setPrevSalesSummary({
+            gmv: 0,
+            units: 0,
+            avgTicket: 0,
+            commissions: 0,
+            taxes: 0,
+            shipping: 0,
+            discounts: 0,
+            refunds: 0,
+            iva: 0,
+            visits: 0,
+            conversion: 0
+          });
+          
+          setSalesData([]);
+          setCostData([]);
+          setTopProducts([]);
+          setProvinceData([]);
         }
       }
       
@@ -548,237 +582,250 @@ const Dashboard = () => {
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                  <SummaryCard 
-                    title="Balance Total"
-                    value={formatCurrency(calculateBalance(salesSummary.gmv, salesSummary.commissions, salesSummary.shipping))}
-                    percentChange={calculatePercentChange(
-                      calculateBalance(salesSummary.gmv, salesSummary.commissions, salesSummary.shipping),
-                      calculateBalance(prevSalesSummary.gmv, prevSalesSummary.commissions, prevSalesSummary.shipping)
-                    )}
-                    icon={<DollarSign className="h-5 w-5" />}
-                  />
-                  <SummaryCard 
-                    title="GMV (Ventas totales)"
-                    value={formatCurrency(salesSummary.gmv)}
-                    percentChange={calculatePercentChange(salesSummary.gmv, prevSalesSummary.gmv)}
-                    icon={<ShoppingBag className="h-5 w-5" />}
-                  />
-                  <SummaryCard 
-                    title="Unidades vendidas"
-                    value={formatNumber(salesSummary.units)}
-                    percentChange={calculatePercentChange(salesSummary.units, prevSalesSummary.units)}
-                    icon={<BarChart3 className="h-5 w-5" />}
-                  />
-                  <SummaryCard 
-                    title="Ticket promedio"
-                    value={formatCurrency(salesSummary.avgTicket)}
-                    percentChange={calculatePercentChange(salesSummary.avgTicket, prevSalesSummary.avgTicket)}
-                    icon={<CreditCard className="h-5 w-5" />}
-                  />
-                </div>
+                {salesSummary.gmv === 0 && !dataLoading ? (
+                  <div className="flex flex-col items-center justify-center py-20 text-center">
+                    <AlertTriangle className="h-16 w-16 text-amber-500 mb-4" />
+                    <h3 className="text-xl font-semibold mb-2">No hay datos disponibles</h3>
+                    <p className="text-gray-500 mb-6 max-w-md">
+                      No se encontraron ventas para el período seleccionado. Intenta seleccionar un rango de fechas diferente.
+                    </p>
+                    <DateRangePicker onDateRangeChange={handleDateRangeChange} />
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                      <SummaryCard 
+                        title="Balance Total"
+                        value={formatCurrency(calculateBalance(salesSummary.gmv, salesSummary.commissions, salesSummary.shipping))}
+                        percentChange={calculatePercentChange(
+                          calculateBalance(salesSummary.gmv, salesSummary.commissions, salesSummary.shipping),
+                          calculateBalance(prevSalesSummary.gmv, prevSalesSummary.commissions, prevSalesSummary.shipping)
+                        )}
+                        icon={<DollarSign className="h-5 w-5" />}
+                      />
+                      <SummaryCard 
+                        title="GMV (Ventas totales)"
+                        value={formatCurrency(salesSummary.gmv)}
+                        percentChange={calculatePercentChange(salesSummary.gmv, prevSalesSummary.gmv)}
+                        icon={<ShoppingBag className="h-5 w-5" />}
+                      />
+                      <SummaryCard 
+                        title="Unidades vendidas"
+                        value={formatNumber(salesSummary.units)}
+                        percentChange={calculatePercentChange(salesSummary.units, prevSalesSummary.units)}
+                        icon={<BarChart3 className="h-5 w-5" />}
+                      />
+                      <SummaryCard 
+                        title="Ticket promedio"
+                        value={formatCurrency(salesSummary.avgTicket)}
+                        percentChange={calculatePercentChange(salesSummary.avgTicket, prevSalesSummary.avgTicket)}
+                        icon={<CreditCard className="h-5 w-5" />}
+                      />
+                    </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                  <SummaryCard 
-                    title="Visitas"
-                    value={formatNumber(salesSummary.visits)}
-                    percentChange={calculatePercentChange(salesSummary.visits, prevSalesSummary.visits)}
-                    icon={<Users className="h-5 w-5" />}
-                  />
-                  <SummaryCard 
-                    title="Tasa de conversión"
-                    value={`${(Number(salesSummary.conversion) || 0).toFixed(1)}%`}
-                    percentChange={calculatePercentChange(salesSummary.conversion, prevSalesSummary.conversion)}
-                    icon={<Percent className="h-5 w-5" />}
-                  />
-                  <SummaryCard 
-                    title="Comisiones totales"
-                    value={formatCurrency(salesSummary.commissions)}
-                    percentChange={calculatePercentChange(salesSummary.commissions, prevSalesSummary.commissions)}
-                    icon={<DollarSign className="h-5 w-5" />}
-                  />
-                  <SummaryCard 
-                    title="Costos de envío"
-                    value={formatCurrency(salesSummary.shipping)}
-                    percentChange={calculatePercentChange(salesSummary.shipping, prevSalesSummary.shipping)}
-                    icon={<Truck className="h-5 w-5" />}
-                  />
-                </div>
-                
-                <Tabs defaultValue="ventas" className="mb-6">
-                  <TabsList className="mb-6 bg-white border">
-                    <TabsTrigger 
-                      value="ventas" 
-                      className="data-[state=active]:bg-gofor-purple data-[state=active]:text-white"
-                    >
-                      Ventas
-                    </TabsTrigger>
-                    <TabsTrigger 
-                      value="costos" 
-                      className="data-[state=active]:bg-gofor-purple data-[state=active]:text-white"
-                    >
-                      Costos
-                    </TabsTrigger>
-                    <TabsTrigger 
-                      value="productos" 
-                      className="data-[state=active]:bg-gofor-purple data-[state=active]:text-white"
-                    >
-                      Productos
-                    </TabsTrigger>
-                  </TabsList>
-                
-                  <TabsContent value="ventas">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>Ventas por mes</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="h-80">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <BarChart
-                                data={salesData}
-                                margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                              >
-                                <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis dataKey="name" />
-                                <YAxis />
-                                <RechartsTooltip 
-                                  formatter={(value) => [`$${value.toLocaleString('es-AR')}`, 'Ventas']}
-                                />
-                                <Legend />
-                                <Bar dataKey="value" name="Ventas ($)" fill="#663399" />
-                              </BarChart>
-                            </ResponsiveContainer>
-                          </div>
-                        </CardContent>
-                      </Card>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                      <SummaryCard 
+                        title="Visitas"
+                        value={formatNumber(salesSummary.visits)}
+                        percentChange={calculatePercentChange(salesSummary.visits, prevSalesSummary.visits)}
+                        icon={<Users className="h-5 w-5" />}
+                      />
+                      <SummaryCard 
+                        title="Tasa de conversión"
+                        value={`${(Number(salesSummary.conversion) || 0).toFixed(1)}%`}
+                        percentChange={calculatePercentChange(salesSummary.conversion, prevSalesSummary.conversion)}
+                        icon={<Percent className="h-5 w-5" />}
+                      />
+                      <SummaryCard 
+                        title="Comisiones totales"
+                        value={formatCurrency(salesSummary.commissions)}
+                        percentChange={calculatePercentChange(salesSummary.commissions, prevSalesSummary.commissions)}
+                        icon={<DollarSign className="h-5 w-5" />}
+                      />
+                      <SummaryCard 
+                        title="Costos de envío"
+                        value={formatCurrency(salesSummary.shipping)}
+                        percentChange={calculatePercentChange(salesSummary.shipping, prevSalesSummary.shipping)}
+                        icon={<Truck className="h-5 w-5" />}
+                      />
+                    </div>
+                    
+                    <Tabs defaultValue="ventas" className="mb-6">
+                      <TabsList className="mb-6 bg-white border">
+                        <TabsTrigger 
+                          value="ventas" 
+                          className="data-[state=active]:bg-gofor-purple data-[state=active]:text-white"
+                        >
+                          Ventas
+                        </TabsTrigger>
+                        <TabsTrigger 
+                          value="costos" 
+                          className="data-[state=active]:bg-gofor-purple data-[state=active]:text-white"
+                        >
+                          Costos
+                        </TabsTrigger>
+                        <TabsTrigger 
+                          value="productos" 
+                          className="data-[state=active]:bg-gofor-purple data-[state=active]:text-white"
+                        >
+                          Productos
+                        </TabsTrigger>
+                      </TabsList>
+                    
+                      <TabsContent value="ventas">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                          <Card>
+                            <CardHeader>
+                              <CardTitle>Ventas por mes</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="h-80">
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <BarChart
+                                    data={salesData}
+                                    margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                                  >
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <XAxis dataKey="name" />
+                                    <YAxis />
+                                    <RechartsTooltip 
+                                      formatter={(value) => [`$${value.toLocaleString('es-AR')}`, 'Ventas']}
+                                    />
+                                    <Legend />
+                                    <Bar dataKey="value" name="Ventas ($)" fill="#663399" />
+                                  </BarChart>
+                                </ResponsiveContainer>
+                              </div>
+                            </CardContent>
+                          </Card>
 
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>Ventas por provincia</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="h-80">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <PieChart>
-                                <Pie
-                                  data={provinceData}
-                                  cx="50%"
-                                  cy="50%"
-                                  labelLine={false}
-                                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                                  outerRadius={100}
-                                  fill="#8884d8"
-                                  dataKey="value"
-                                >
-                                  {provinceData.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          <Card>
+                            <CardHeader>
+                              <CardTitle>Ventas por provincia</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="h-80">
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <PieChart>
+                                    <Pie
+                                      data={provinceData}
+                                      cx="50%"
+                                      cy="50%"
+                                      labelLine={false}
+                                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                                      outerRadius={100}
+                                      fill="#8884d8"
+                                      dataKey="value"
+                                    >
+                                      {provinceData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                      ))}
+                                    </Pie>
+                                    <RechartsTooltip 
+                                      formatter={(value) => [`$${value.toLocaleString('es-AR')}`, 'Ventas']}
+                                    />
+                                  </PieChart>
+                                </ResponsiveContainer>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </div>
+                      </TabsContent>
+                      
+                      <TabsContent value="costos">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                          <Card>
+                            <CardContent className="p-6">
+                              <div className="text-sm text-gray-500 mb-1">Comisiones</div>
+                              <div className="text-2xl font-bold text-gofor-purple">{formatCurrency(salesSummary.commissions)}</div>
+                              <div className="text-sm font-medium text-red-500">{((Number(salesSummary.commissions) / Math.max(Number(salesSummary.gmv), 1)) * 100).toFixed(1)}% del GMV</div>
+                            </CardContent>
+                          </Card>
+                          <Card>
+                            <CardContent className="p-6">
+                              <div className="text-sm text-gray-500 mb-1">Impuestos</div>
+                              <div className="text-2xl font-bold text-gofor-purple">{formatCurrency(salesSummary.taxes)}</div>
+                              <div className="text-sm font-medium text-gray-500">{((Number(salesSummary.taxes) / Math.max(Number(salesSummary.gmv), 1)) * 100).toFixed(1)}% del GMV</div>
+                            </CardContent>
+                          </Card>
+                          <Card>
+                            <CardContent className="p-6">
+                              <div className="text-sm text-gray-500 mb-1">Costos de envío</div>
+                              <div className="text-2xl font-bold text-gofor-purple">{formatCurrency(salesSummary.shipping)}</div>
+                              <div className="text-sm font-medium text-amber-500">{((Number(salesSummary.shipping) / Math.max(Number(salesSummary.gmv), 1)) * 100).toFixed(1)}% del GMV</div>
+                            </CardContent>
+                          </Card>
+                        </div>
+
+                        <Card className="mb-8">
+                          <CardHeader>
+                            <CardTitle>Distribución de costos</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="h-80">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                  <Pie
+                                    data={costData}
+                                    cx="50%"
+                                    cy="50%"
+                                    labelLine={false}
+                                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                                    outerRadius={100}
+                                    fill="#8884d8"
+                                    dataKey="value"
+                                  >
+                                    {costData.map((entry, index) => (
+                                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                    ))}
+                                  </Pie>
+                                  <RechartsTooltip 
+                                    formatter={(value) => [`$${value.toLocaleString('es-AR')}`, 'Monto']}
+                                  />
+                                  <Legend />
+                                </PieChart>
+                              </ResponsiveContainer>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </TabsContent>
+                      
+                      <TabsContent value="productos">
+                        <Card>
+                          <CardHeader>
+                            <CardTitle>Productos más vendidos</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="overflow-x-auto">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead className="font-semibold">Producto</TableHead>
+                                    <TableHead className="text-right font-semibold">Unidades</TableHead>
+                                    <TableHead className="text-right font-semibold">Ingresos</TableHead>
+                                    <TableHead className="text-right font-semibold">% del Total</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {topProducts.map((product) => (
+                                    <TableRow key={product.id} className="hover:bg-gray-50">
+                                      <TableCell>{product.name}</TableCell>
+                                      <TableCell className="text-right">{formatNumber(product.units)}</TableCell>
+                                      <TableCell className="text-right">{formatCurrency(product.revenue)}</TableCell>
+                                      <TableCell className="text-right">
+                                        {((Number(product.revenue) / Math.max(topProducts.reduce((sum, p) => sum + Number(p.revenue), 0), 1)) * 100).toFixed(1)}%
+                                      </TableCell>
+                                    </TableRow>
                                   ))}
-                                </Pie>
-                                <RechartsTooltip 
-                                  formatter={(value) => [`$${value.toLocaleString('es-AR')}`, 'Ventas']}
-                                />
-                              </PieChart>
-                            </ResponsiveContainer>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </div>
-                  </TabsContent>
-                  
-                  <TabsContent value="costos">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                      <Card>
-                        <CardContent className="p-6">
-                          <div className="text-sm text-gray-500 mb-1">Comisiones</div>
-                          <div className="text-2xl font-bold text-gofor-purple">{formatCurrency(salesSummary.commissions)}</div>
-                          <div className="text-sm font-medium text-red-500">{((Number(salesSummary.commissions) / Math.max(Number(salesSummary.gmv), 1)) * 100).toFixed(1)}% del GMV</div>
-                        </CardContent>
-                      </Card>
-                      <Card>
-                        <CardContent className="p-6">
-                          <div className="text-sm text-gray-500 mb-1">Impuestos</div>
-                          <div className="text-2xl font-bold text-gofor-purple">{formatCurrency(salesSummary.taxes)}</div>
-                          <div className="text-sm font-medium text-gray-500">{((Number(salesSummary.taxes) / Math.max(Number(salesSummary.gmv), 1)) * 100).toFixed(1)}% del GMV</div>
-                        </CardContent>
-                      </Card>
-                      <Card>
-                        <CardContent className="p-6">
-                          <div className="text-sm text-gray-500 mb-1">Costos de envío</div>
-                          <div className="text-2xl font-bold text-gofor-purple">{formatCurrency(salesSummary.shipping)}</div>
-                          <div className="text-sm font-medium text-amber-500">{((Number(salesSummary.shipping) / Math.max(Number(salesSummary.gmv), 1)) * 100).toFixed(1)}% del GMV</div>
-                        </CardContent>
-                      </Card>
-                    </div>
-
-                    <Card className="mb-8">
-                      <CardHeader>
-                        <CardTitle>Distribución de costos</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="h-80">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                              <Pie
-                                data={costData}
-                                cx="50%"
-                                cy="50%"
-                                labelLine={false}
-                                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                                outerRadius={100}
-                                fill="#8884d8"
-                                dataKey="value"
-                              >
-                                {costData.map((entry, index) => (
-                                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                ))}
-                              </Pie>
-                              <RechartsTooltip 
-                                formatter={(value) => [`$${value.toLocaleString('es-AR')}`, 'Monto']}
-                              />
-                              <Legend />
-                            </PieChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </TabsContent>
-                  
-                  <TabsContent value="productos">
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>Productos más vendidos</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="overflow-x-auto">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead className="font-semibold">Producto</TableHead>
-                                <TableHead className="text-right font-semibold">Unidades</TableHead>
-                                <TableHead className="text-right font-semibold">Ingresos</TableHead>
-                                <TableHead className="text-right font-semibold">% del Total</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {topProducts.map((product) => (
-                                <TableRow key={product.id} className="hover:bg-gray-50">
-                                  <TableCell>{product.name}</TableCell>
-                                  <TableCell className="text-right">{formatNumber(product.units)}</TableCell>
-                                  <TableCell className="text-right">{formatCurrency(product.revenue)}</TableCell>
-                                  <TableCell className="text-right">
-                                    {((Number(product.revenue) / Math.max(topProducts.reduce((sum, p) => sum + Number(p.revenue), 0), 1)) * 100).toFixed(1)}%
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </TabsContent>
-                </Tabs>
+                                </TableBody>
+                              </Table>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </TabsContent>
+                    </Tabs>
+                  </>
+                )}
               </>
             )}
           </>
