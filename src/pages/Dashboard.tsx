@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -263,6 +262,7 @@ const Dashboard = () => {
       }
       
       console.log("🟣 Filtro aplicado:", dateFilter);
+      console.log("📅 Selected date range:", { dateFrom, dateTo });
       console.log("🔢 date_from:", dateFrom);
       console.log("🔢 date_to:", dateTo);
       
