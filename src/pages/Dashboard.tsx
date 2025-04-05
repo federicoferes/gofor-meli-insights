@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Navigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -62,6 +62,7 @@ const isDateInRange = (dateStr: string, fromDate: Date | string, toDate: Date | 
 const Dashboard = () => {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(false);
   const [meliConnected, setMeliConnected] = useState(false);
   const [meliUser, setMeliUser] = useState(null);
   const [dateFilter, setDateFilter] = useState('today');
@@ -88,9 +89,6 @@ const Dashboard = () => {
   const [topProducts, setTopProducts] = useState([]);
   const [costData, setCostData] = useState([]);
   const [provinceData, setProvinceData] = useState([]);
-  const [dataLoading, setDataLoading] = useState(false);
-  const { toast } = useToast();
-  
   const [prevSalesSummary, setPrevSalesSummary] = useState({
     gmv: 0,
     commissions: 0,
@@ -104,7 +102,9 @@ const Dashboard = () => {
     visits: 0,
     conversion: 0
   });
-
+  const { toast } = useToast();
+  const [dataFetchAttempted, setDataFetchAttempted] = useState(false);
+  
   useEffect(() => {
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -155,7 +155,7 @@ const Dashboard = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const handleDateRangeChange = (range: string, dates?: { 
+  const handleDateRangeChange = useCallback((range: string, dates?: { 
     from: Date | undefined; 
     to: Date | undefined;
     fromISO?: string;
@@ -171,46 +171,17 @@ const Dashboard = () => {
         toISO: dates.toISO
       });
     }
-  };
+    setDataFetchAttempted(false);
+  }, []);
 
-  useEffect(() => {
-    if (dateFilter === 'custom' && (!customDateRange.from || !customDateRange.to)) {
-      console.log("⚠️ Custom date range is incomplete. Skipping data fetch.");
+  const loadMeliData = useCallback(async () => {
+    if (!session || !meliConnected || !meliUser) {
+      console.log("Skipping data load - not connected or no user ID", { session, meliConnected, meliUser });
       return;
     }
     
-    if (meliConnected && session && meliUser) {
-      console.log(`🔄 Date filter or range changed. Resetting data and fetching new data for: ${dateFilter}`, customDateRange);
-      
-      // Reset states to avoid showing stale data
-      setSalesData([]);
-      setTopProducts([]);
-      setCostData([]);
-      setProvinceData([]);
-      setSalesSummary({
-        gmv: 0,
-        commissions: 0,
-        taxes: 0,
-        shipping: 0,
-        discounts: 0,
-        refunds: 0,
-        iva: 0,
-        units: 0,
-        avgTicket: 0,
-        visits: 0,
-        conversion: 0
-      });
-      
-      // Trigger data loading with a small delay to ensure state updates first
-      setTimeout(() => {
-        loadMeliData();
-      }, 100);
-    }
-  }, [dateFilter, customDateRange, meliConnected, session, meliUser]);
-
-  const loadMeliData = async () => {
-    if (!session || !meliConnected || !meliUser) {
-      console.log("Skipping data load - not connected or no user ID", { session, meliConnected, meliUser });
+    if (dataLoading) {
+      console.log("Already loading data, skipping duplicate fetch");
       return;
     }
     
@@ -277,15 +248,6 @@ const Dashboard = () => {
         }
       };
       
-      console.log("📦 Request config:", {
-        filter: dateFilter,
-        ordersParams: ordersRequest.params,
-        date_range: {
-          begin: dateFrom ? dateFrom.split('T')[0] : null,
-          end: dateTo ? dateTo.split('T')[0] : null
-        }
-      });
-      
       const batchRequests = [
         ordersRequest,
         {
@@ -309,7 +271,7 @@ const Dashboard = () => {
         prev_period: true
       };
       
-      console.log("🔶 Making request to supabase function with payload:", JSON.stringify(requestPayload));
+      console.log("🚀 Enviando a Supabase:", requestPayload);
       
       const { data: batchData, error: batchError } = await supabase.functions.invoke('meli-data', {
         body: requestPayload
@@ -464,7 +426,6 @@ const Dashboard = () => {
         }
       }
       
-      setDataLoading(false);
       toast({
         title: "Datos cargados",
         description: `Se han cargado los datos de Mercado Libre para el período: ${dateFilter}`,
@@ -477,9 +438,22 @@ const Dashboard = () => {
         title: "Error cargando datos",
         description: error.message || "No se pudieron cargar los datos de Mercado Libre."
       });
+    } finally {
       setDataLoading(false);
+      setDataFetchAttempted(true);
     }
-  };
+  }, [session, meliConnected, meliUser, dateFilter, customDateRange, toast]);
+
+  useEffect(() => {
+    if (!dataLoading && !dataFetchAttempted && meliConnected && session && meliUser) {
+      if (dateFilter !== 'custom' || (customDateRange.from && customDateRange.to)) {
+        console.log("🔄 Conditions met, triggering data load for:", dateFilter);
+        loadMeliData();
+      } else {
+        console.log("⚠️ Custom date range is incomplete. Skipping data fetch.");
+      }
+    }
+  }, [dateFilter, customDateRange, meliConnected, session, meliUser, dataLoading, dataFetchAttempted, loadMeliData]);
 
   const calculatePercentChange = (current: number, previous: number): number => {
     if (!previous) return 0;

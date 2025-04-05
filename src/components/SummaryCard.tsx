@@ -14,7 +14,7 @@ interface SummaryCardProps {
 const SummaryCard = ({ title, value, percentChange, icon, colorClass = "bg-white" }: SummaryCardProps) => {
   const isPositiveChange = percentChange !== undefined && percentChange >= 0;
   const hasPercentChange = percentChange !== undefined;
-  const hasValue = value !== undefined && value !== null && value !== 0;
+  const hasValue = value !== undefined && value !== null && value !== '' && value !== 0;
   
   return (
     <Card className={`shadow-md ${colorClass}`}>
