@@ -13,8 +13,11 @@ interface SummaryCardProps {
 
 const SummaryCard = ({ title, value, percentChange, icon, colorClass = "bg-white" }: SummaryCardProps) => {
   const isPositiveChange = percentChange !== undefined && percentChange >= 0;
-  const hasPercentChange = percentChange !== undefined;
+  const hasPercentChange = percentChange !== undefined && !isNaN(percentChange);
+  
+  // Improved validation for values
   const hasValue = value !== undefined && value !== null && value !== '' && value !== 0;
+  const displayValue = hasValue ? value : "Sin datos";
   
   return (
     <Card className={`shadow-md ${colorClass}`}>
@@ -23,7 +26,7 @@ const SummaryCard = ({ title, value, percentChange, icon, colorClass = "bg-white
           <div className="w-full">
             <p className="text-sm text-gray-600 font-medium">{title}</p>
             <p className="text-2xl font-bold font-poppins mt-1">
-              {hasValue ? value : "Sin datos"}
+              {displayValue}
             </p>
             
             {hasPercentChange ? (
@@ -33,7 +36,10 @@ const SummaryCard = ({ title, value, percentChange, icon, colorClass = "bg-white
                 ) : (
                   <TrendingDown className="h-4 w-4 mr-1" />
                 )}
-                <span>{isPositiveChange ? '+' : ''}{percentChange.toFixed(1)}% vs periodo anterior</span>
+                <span>
+                  {isPositiveChange ? '+' : ''}
+                  {Number(percentChange).toFixed(1)}% vs periodo anterior
+                </span>
               </div>
             ) : (
               <div className="flex items-center mt-2 text-sm font-medium text-gray-500">

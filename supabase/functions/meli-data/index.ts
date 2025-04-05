@@ -131,7 +131,7 @@ serve(async (req) => {
       );
     }
 
-    // Calculate date range for metrics
+    // Calculate date range for metrics - validate and use provided dates or defaults
     const { dateFrom, dateTo } = calculateDateRange(date_range);
     console.log(`Using calculated date range: from ${dateFrom} to ${dateTo}`);
 
@@ -158,6 +158,11 @@ serve(async (req) => {
           try {
             // Make the request to Mercado Libre API
             const apiUrl = new URL(`https://api.mercadolibre.com${batchEndpoint}`);
+            
+            // Always ensure order.status=paid for order searches
+            if (batchEndpoint.includes('/orders/search')) {
+              batchParams['order.status'] = 'paid';
+            }
             
             // Add query parameters for GET requests
             if (batchMethod === "GET" && batchParams) {
@@ -207,6 +212,11 @@ serve(async (req) => {
 
       // Make the request to Mercado Libre API
       const apiUrl = new URL(`https://api.mercadolibre.com${endpoint}`);
+      
+      // Always ensure order.status=paid for order searches
+      if (endpoint.includes('/orders/search')) {
+        params['order.status'] = 'paid';
+      }
       
       // Add query parameters
       if (method === "GET" && params) {
@@ -281,7 +291,7 @@ serve(async (req) => {
   }
 });
 
-// Calculate date range based on the selected filter
+// Calculate date range based on the selected filter - improved validation
 function calculateDateRange(dateRange: any) {
   if (!dateRange) {
     // Default to last 30 days if no range specified
@@ -295,30 +305,44 @@ function calculateDateRange(dateRange: any) {
     };
   }
   
-  // If ISO strings are provided directly, use them
+  // If ISO strings are provided directly, validate and use them
   if (dateRange.fromISO && dateRange.toISO) {
-    return {
-      dateFrom: dateRange.fromISO,
-      dateTo: dateRange.toISO
-    };
+    try {
+      // Validate ISO strings by attempting to create Date objects
+      new Date(dateRange.fromISO).toISOString();
+      new Date(dateRange.toISO).toISOString();
+      
+      return {
+        dateFrom: dateRange.fromISO,
+        dateTo: dateRange.toISO
+      };
+    } catch (e) {
+      console.error("Invalid ISO date strings provided:", e);
+      // Fall back to default if invalid
+    }
   }
   
   // If begin/end are provided (for batch requests)
   if (dateRange.begin && dateRange.end) {
-    // Make sure to set proper time (start of day for begin, end of day for end)
-    const beginDate = new Date(dateRange.begin);
-    beginDate.setUTCHours(0, 0, 0, 0);
-    
-    const endDate = new Date(dateRange.end);
-    endDate.setUTCHours(23, 59, 59, 999);
-    
-    return {
-      dateFrom: beginDate.toISOString(),
-      dateTo: endDate.toISOString()
-    };
+    try {
+      // Make sure to set proper time (start of day for begin, end of day for end)
+      const beginDate = new Date(dateRange.begin);
+      beginDate.setUTCHours(0, 0, 0, 0);
+      
+      const endDate = new Date(dateRange.end);
+      endDate.setUTCHours(23, 59, 59, 999);
+      
+      return {
+        dateFrom: beginDate.toISOString(),
+        dateTo: endDate.toISOString()
+      };
+    } catch (e) {
+      console.error("Invalid begin/end date format:", e);
+      // Fall back to default if invalid
+    }
   }
   
-  // Default to last 30 days if invalid range
+  // Default to last 30 days if invalid range or parsing failed
   const today = new Date();
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(today.getDate() - 30);
@@ -327,6 +351,29 @@ function calculateDateRange(dateRange: any) {
     dateFrom: thirtyDaysAgo.toISOString(),
     dateTo: today.toISOString()
   };
+}
+
+// Improved date check function
+function isDateInRange(dateStr: string, fromDate: string | Date, toDate: string | Date): boolean {
+  if (!dateStr) return false;
+  
+  try {
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return false;
+    
+    const from = fromDate instanceof Date ? fromDate : new Date(fromDate);
+    const to = toDate instanceof Date ? toDate : new Date(toDate);
+    
+    if (isNaN(from.getTime()) || isNaN(to.getTime())) return false;
+    
+    from.setHours(0, 0, 0, 0);
+    to.setHours(23, 59, 59, 999);
+    
+    return date >= from && date <= to;
+  } catch (e) {
+    console.error("Error in date comparison:", e);
+    return false;
+  }
 }
 
 // Generate empty dashboard data structure with zeros
@@ -371,7 +418,7 @@ function getEmptyDashboardData() {
   };
 }
 
-// Fetch metrics using official MeLi metrics endpoints and order search with pagination
+// Improved order filtering and metric calculation
 async function fetchDashboardMetricsWithOrders(accessToken: string, meliUserId: string, dateFrom: string, dateTo: string) {
   try {
     console.log(`Fetching metrics for user ${meliUserId} from ${dateFrom} to ${dateTo}`);
@@ -385,12 +432,16 @@ async function fetchDashboardMetricsWithOrders(accessToken: string, meliUserId: 
     const limit = 50;
     let hasMoreOrders = true;
     let allOrders: any[] = [];
+    let requestCount = 0;
+    const maxRequests = 200; // Safety limit to prevent excessive API calls
     
-    while (hasMoreOrders) {
+    while (hasMoreOrders && requestCount < maxRequests) {
+      requestCount++;
       const searchUrl = new URL(`https://api.mercadolibre.com/orders/search`);
       searchUrl.searchParams.append('seller', meliUserId);
       searchUrl.searchParams.append('order.status', 'paid');
       searchUrl.searchParams.append('sort', 'date_desc');
+      // Always include date parameters regardless of API limitations
       searchUrl.searchParams.append('date_from', dateFrom);
       searchUrl.searchParams.append('date_to', dateTo);
       searchUrl.searchParams.append('limit', limit.toString());
@@ -412,7 +463,15 @@ async function fetchDashboardMetricsWithOrders(accessToken: string, meliUserId: 
         console.log(`Received ${ordersData.results?.length || 0} orders from API (page ${offset / limit + 1})`);
         
         if (ordersData.results && Array.isArray(ordersData.results) && ordersData.results.length > 0) {
-          allOrders = allOrders.concat(ordersData.results);
+          // Filter orders by date here to ensure accuracy
+          const filteredOrders = ordersData.results.filter(order => 
+            isDateInRange(order.date_created || order.date_closed, dateFrom, dateTo)
+          );
+          
+          if (filteredOrders.length > 0) {
+            console.log(`Filtered to ${filteredOrders.length} orders within date range`);
+            allOrders = allOrders.concat(filteredOrders);
+          }
           
           // Check if we need to fetch more pages
           if (ordersData.results.length < limit) {
@@ -525,9 +584,9 @@ async function fetchDashboardMetricsWithOrders(accessToken: string, meliUserId: 
         .sort((a, b) => a.key.localeCompare(b.key))
         .slice(-6);
       
-      console.log("Top products calculated:", dashboardData.topProducts);
-      console.log("Sales by province calculated:", dashboardData.salesByProvince);
-      console.log("Sales by month calculated:", dashboardData.salesByMonth);
+      console.log("Top products calculated:", dashboardData.topProducts.length);
+      console.log("Sales by province calculated:", dashboardData.salesByProvince.length);
+      console.log("Sales by month calculated:", dashboardData.salesByMonth.length);
       
       // Calculate costs using fixed percentages
       const gmv = dashboardData.summary.gmv;
@@ -546,6 +605,8 @@ async function fetchDashboardMetricsWithOrders(accessToken: string, meliUserId: 
         { name: 'Descuentos', value: dashboardData.summary.discounts },
         { name: 'Anulaciones', value: dashboardData.summary.refunds }
       ];
+    } else {
+      console.log("No orders found in the date range, returning empty dashboard data");
     }
     
     // 2. Fetch visits
@@ -562,7 +623,7 @@ async function fetchDashboardMetricsWithOrders(accessToken: string, meliUserId: 
       
       if (visitsResponse.ok) {
         const visitsData = await visitsResponse.json();
-        console.log(`Visits data:`, visitsData);
+        console.log(`Visits data received`);
         
         // Calculate total visits
         if (visitsData.results && Array.isArray(visitsData.results)) {
@@ -615,7 +676,7 @@ async function fetchDashboardMetricsWithOrders(accessToken: string, meliUserId: 
       conversion: dashboardData.summary.conversion * 0.95
     };
     
-    console.log("Dashboard metrics calculated successfully:", dashboardData);
+    console.log("Dashboard metrics calculated successfully");
     return dashboardData;
   } catch (error) {
     console.error("Error calculating dashboard metrics:", error);

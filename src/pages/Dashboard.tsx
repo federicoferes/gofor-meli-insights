@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Navigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,49 +15,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import DebugButton from '@/components/DebugButton';
 
 const COLORS = ['#663399', '#FFD700', '#8944EB', '#FF8042', '#9B59B6', '#4ade80'];
-
-const getDateRange = (filter: string) => {
-  const today = new Date();
-  let startDate = new Date();
-  
-  switch(filter) {
-    case 'today':
-      startDate = new Date(today);
-      break;
-    case 'yesterday':
-      startDate = new Date(today);
-      startDate.setDate(today.getDate() - 1);
-      break;
-    case '7d':
-      startDate.setDate(today.getDate() - 7);
-      break;
-    case '30d':
-      startDate.setDate(today.getDate() - 30);
-      break;
-    case 'custom':
-      break;
-    default:
-      startDate.setDate(today.getDate() - 30);
-  }
-  
-  return {
-    begin: startDate.toISOString().split('T')[0],
-    end: today.toISOString().split('T')[0]
-  };
-};
-
-const isDateInRange = (dateStr: string, fromDate: Date | string, toDate: Date | string): boolean => {
-  if (!dateStr) return false;
-  
-  const date = new Date(dateStr);
-  const from = fromDate instanceof Date ? fromDate : new Date(fromDate);
-  const to = toDate instanceof Date ? toDate : new Date(toDate);
-  
-  from.setHours(0, 0, 0, 0);
-  to.setHours(23, 59, 59, 999);
-  
-  return date >= from && date <= to;
-};
 
 const Dashboard = () => {
   const [session, setSession] = useState(null);
@@ -103,11 +60,22 @@ const Dashboard = () => {
     conversion: 0
   });
   const { toast } = useToast();
+  
   const [dataFetchAttempted, setDataFetchAttempted] = useState(false);
+  const isMounted = useRef(true);
+  
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
   
   useEffect(() => {
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!isMounted.current) return;
+      
       setSession(session);
       
       if (session) {
@@ -115,6 +83,8 @@ const Dashboard = () => {
           const { data: connectionData, error } = await supabase.functions.invoke('meli-data', {
             body: { user_id: session.user.id }
           });
+          
+          if (!isMounted.current) return;
           
           if (!error && connectionData?.is_connected) {
             setMeliConnected(true);
@@ -134,12 +104,16 @@ const Dashboard = () => {
     checkSession();
     
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!isMounted.current) return;
+      
       setSession(session);
       
       if (session) {
         supabase.functions.invoke('meli-data', {
           body: { user_id: session.user.id }
         }).then(({ data, error }) => {
+          if (!isMounted.current) return;
+          
           if (!error && data?.is_connected) {
             setMeliConnected(true);
             setMeliUser(data.meli_user_id);
@@ -175,7 +149,7 @@ const Dashboard = () => {
   }, []);
 
   const loadMeliData = useCallback(async () => {
-    if (!session || !meliConnected || !meliUser) {
+    if (!session?.user?.id || !meliConnected || !meliUser) {
       console.log("Skipping data load - not connected or no user ID", { session, meliConnected, meliUser });
       return;
     }
@@ -185,57 +159,48 @@ const Dashboard = () => {
       return;
     }
     
+    if (dateFilter === 'custom' && (!customDateRange.fromISO || !customDateRange.toISO)) {
+      console.log("⚠️ Custom date range is incomplete. Skipping data fetch.");
+      return;
+    }
+    
     try {
       setDataLoading(true);
       console.log("🔁 Running loadMeliData with filter:", dateFilter);
-      console.log("Loading MeLi data for user:", meliUser);
       
       let dateFrom, dateTo;
-      let fromDate, toDate;
       
       if (dateFilter === 'custom' && customDateRange.fromISO && customDateRange.toISO) {
         dateFrom = customDateRange.fromISO;
         dateTo = customDateRange.toISO;
-        fromDate = customDateRange.from;
-        toDate = customDateRange.to;
-        console.log("📊 Using custom date range:", { dateFrom, dateTo });
       } else {
-        const dateRange = getDateRange(dateFilter);
-        dateFrom = `${dateRange.begin}T00:00:00.000Z`;
-        dateTo = `${dateRange.end}T23:59:59.999Z`;
+        const today = new Date();
+        const formattedToday = today.toISOString().split('T')[0];
         
-        fromDate = new Date(dateRange.begin);
-        toDate = new Date(dateRange.end);
-        
-        console.log(`📊 Using predefined date range for filter "${dateFilter}":`, { dateFrom, dateTo });
-        
-        if (dateFilter === 'today') {
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          fromDate = today;
-          toDate = today;
-        } else if (dateFilter === 'yesterday') {
-          const yesterday = new Date();
-          yesterday.setDate(yesterday.getDate() - 1);
-          yesterday.setHours(0, 0, 0, 0);
-          fromDate = yesterday;
-          toDate = yesterday;
+        let fromDate = new Date(today);
+        switch(dateFilter) {
+          case 'today':
+            break;
+          case 'yesterday':
+            fromDate.setDate(today.getDate() - 1);
+            break;
+          case '7d':
+            fromDate.setDate(today.getDate() - 7);
+            break;
+          case '30d':
+            fromDate.setDate(today.getDate() - 30);
+            break;
+          default:
+            fromDate.setDate(today.getDate() - 30);
         }
         
-        if (customDateRange.fromISO && dateFilter === 'custom') {
-          dateFrom = customDateRange.fromISO;
-          fromDate = customDateRange.from;
-        }
-        if (customDateRange.toISO && dateFilter === 'custom') {
-          dateTo = customDateRange.toISO;
-          toDate = customDateRange.to;
-        }
+        const formattedFrom = fromDate.toISOString().split('T')[0];
+        dateFrom = `${formattedFrom}T00:00:00.000Z`;
+        dateTo = `${formattedToday}T23:59:59.999Z`;
       }
       
       console.log("🟣 Filtro aplicado:", dateFilter);
       console.log("📅 Selected date range:", { dateFrom, dateTo });
-      console.log("🔢 date_from:", dateFrom);
-      console.log("🔢 date_to:", dateTo);
       
       const ordersRequest = {
         endpoint: '/orders/search',
@@ -277,6 +242,8 @@ const Dashboard = () => {
         body: requestPayload
       });
       
+      if (!isMounted.current) return;
+      
       if (batchError) {
         throw new Error(`Error fetching batch data: ${batchError.message}`);
       }
@@ -288,142 +255,31 @@ const Dashboard = () => {
       console.log("✅ Batch data received:", batchData);
       
       if (batchData.dashboard_data) {
-        console.log("🧮 Using pre-processed dashboard data for period:", requestPayload.date_range);
-        
         if (batchData.dashboard_data.salesByMonth?.length > 0) {
-          console.log("📊 Setting sales data:", batchData.dashboard_data.salesByMonth);
           setSalesData(batchData.dashboard_data.salesByMonth);
         }
         
         if (batchData.dashboard_data.summary) {
-          console.log("📊 Setting summary data:", batchData.dashboard_data.summary);
           setSalesSummary(batchData.dashboard_data.summary);
         }
         
         if (batchData.dashboard_data.prev_summary) {
-          console.log("📊 Setting previous period summary data");
           setPrevSalesSummary(batchData.dashboard_data.prev_summary);
         }
         
         if (batchData.dashboard_data.costDistribution?.length > 0) {
-          console.log("📊 Setting cost distribution data");
           setCostData(batchData.dashboard_data.costDistribution);
         }
         
         if (batchData.dashboard_data.topProducts?.length > 0) {
-          console.log("📊 Setting top products data");
           setTopProducts(batchData.dashboard_data.topProducts);
         }
         
         if (batchData.dashboard_data.salesByProvince?.length > 0) {
-          console.log("📊 Setting sales by province data");
           setProvinceData(batchData.dashboard_data.salesByProvince);
         }
       } else {
-        console.log("⚠️ No pre-processed dashboard data, manually calculating GMV from orders");
-        
-        const ordersResult = batchData.batch_results.find(result => 
-          result.endpoint.includes('/orders/search') && result.success
-        );
-        
-        if (ordersResult && ordersResult.data.results) {
-          const allOrders = ordersResult.data.results;
-          console.log(`Received ${allOrders.length} orders from API`);
-          
-          const filteredOrders = allOrders.filter(order => 
-            isDateInRange(order.date_created, fromDate, toDate)
-          );
-          
-          console.log(`Filtered to ${filteredOrders.length} orders within date range ${dateFilter}`);
-          
-          let gmv = 0;
-          let totalUnits = 0;
-          
-          filteredOrders.forEach(order => {
-            if (order.total_amount) {
-              gmv += Number(order.total_amount);
-            }
-            
-            if (order.order_items) {
-              order.order_items.forEach(item => {
-                totalUnits += item.quantity || 0;
-              });
-            }
-          });
-          
-          console.log(`Calculated GMV: ${gmv}, Units: ${totalUnits} for date range ${dateFilter}`);
-          
-          const avgTicket = totalUnits > 0 ? gmv / totalUnits : 0;
-          
-          const currentSummary = {
-            ...salesSummary,
-            gmv: gmv,
-            units: totalUnits,
-            avgTicket: avgTicket,
-            commissions: gmv * 0.07,
-            taxes: gmv * 0.17,
-            shipping: gmv * 0.03,
-            discounts: gmv * 0.05,
-            refunds: gmv * 0.02,
-            iva: gmv * 0.21,
-            visits: totalUnits * 25,
-            conversion: (totalUnits / Math.max(totalUnits * 25, 1)) * 100
-          };
-          setSalesSummary(currentSummary);
-          
-          setPrevSalesSummary({
-            gmv: currentSummary.gmv * 0.9,
-            units: currentSummary.units * 0.85,
-            avgTicket: currentSummary.avgTicket * 1.05,
-            commissions: currentSummary.commissions * 0.9,
-            taxes: currentSummary.taxes * 0.9,
-            shipping: currentSummary.shipping * 0.88,
-            discounts: currentSummary.discounts * 0.93,
-            refunds: currentSummary.refunds * 0.95,
-            iva: currentSummary.iva * 0.9,
-            visits: currentSummary.visits * 0.88,
-            conversion: currentSummary.conversion * 0.95
-          });
-          
-          const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-          const lastSixMonths = [];
-          const today = new Date();
-          
-          for (let i = 5; i >= 0; i--) {
-            const month = new Date(today.getFullYear(), today.getMonth() - i, 1);
-            lastSixMonths.push({
-              name: monthNames[month.getMonth()],
-              value: Math.floor(gmv / 6) + Math.floor(Math.random() * 1000)
-            });
-          }
-          
-          setSalesData(lastSixMonths);
-          
-          setCostData([
-            { name: 'Comisiones', value: gmv * 0.07 },
-            { name: 'Impuestos', value: gmv * 0.17 },
-            { name: 'Envíos', value: gmv * 0.03 },
-            { name: 'Descuentos', value: gmv * 0.05 },
-            { name: 'Anulaciones', value: gmv * 0.02 }
-          ]);
-          
-          setTopProducts([
-            { id: 1, name: 'Producto 1', units: Math.floor(totalUnits * 0.3), revenue: Math.floor(gmv * 0.3) },
-            { id: 2, name: 'Producto 2', units: Math.floor(totalUnits * 0.25), revenue: Math.floor(gmv * 0.25) },
-            { id: 3, name: 'Producto 3', units: Math.floor(totalUnits * 0.2), revenue: Math.floor(gmv * 0.2) },
-            { id: 4, name: 'Producto 4', units: Math.floor(totalUnits * 0.15), revenue: Math.floor(gmv * 0.15) },
-            { id: 5, name: 'Producto 5', units: Math.floor(totalUnits * 0.1), revenue: Math.floor(gmv * 0.1) }
-          ]);
-          
-          setProvinceData([
-            { name: 'Buenos Aires', value: Math.floor(gmv * 0.45) },
-            { name: 'CABA', value: Math.floor(gmv * 0.25) },
-            { name: 'Córdoba', value: Math.floor(gmv * 0.1) },
-            { name: 'Santa Fe', value: Math.floor(gmv * 0.08) },
-            { name: 'Mendoza', value: Math.floor(gmv * 0.05) },
-            { name: 'Otras', value: Math.floor(gmv * 0.07) }
-          ]);
-        }
+        console.warn("⚠️ Dashboard data is missing in the API response");
       }
       
       toast({
@@ -439,21 +295,32 @@ const Dashboard = () => {
         description: error.message || "No se pudieron cargar los datos de Mercado Libre."
       });
     } finally {
-      setDataLoading(false);
-      setDataFetchAttempted(true);
+      if (isMounted.current) {
+        setDataLoading(false);
+        setDataFetchAttempted(true);
+      }
     }
   }, [session, meliConnected, meliUser, dateFilter, customDateRange, toast]);
 
   useEffect(() => {
-    if (!dataLoading && !dataFetchAttempted && meliConnected && session && meliUser) {
-      if (dateFilter !== 'custom' || (customDateRange.from && customDateRange.to)) {
+    if (!dataLoading && 
+        !dataFetchAttempted && 
+        meliConnected && 
+        session?.user?.id && 
+        meliUser) {
+          
+      const validDateRange = dateFilter !== 'custom' || 
+                           (customDateRange.fromISO && customDateRange.toISO);
+      
+      if (validDateRange) {
         console.log("🔄 Conditions met, triggering data load for:", dateFilter);
         loadMeliData();
       } else {
         console.log("⚠️ Custom date range is incomplete. Skipping data fetch.");
       }
     }
-  }, [dateFilter, customDateRange, meliConnected, session, meliUser, dataLoading, dataFetchAttempted, loadMeliData]);
+  }, [dateFilter, customDateRange.fromISO, customDateRange.toISO, 
+      meliConnected, session, meliUser, dataLoading, dataFetchAttempted, loadMeliData]);
 
   const calculatePercentChange = (current: number, previous: number): number => {
     if (!previous) return 0;
