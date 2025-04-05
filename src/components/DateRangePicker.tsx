@@ -36,11 +36,18 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
   });
 
   // Function to format dates to ISO 8601 string
-  const formatDateToISO = (date: Date, endOfDayFlag = false): string => {
-    if (endOfDayFlag) {
-      return endOfDay(date).toISOString();
+  const formatDateToISO = (date: Date | undefined, endOfDayFlag = false): string | undefined => {
+    if (!date) return undefined;
+    
+    try {
+      if (endOfDayFlag) {
+        return endOfDay(date).toISOString();
+      }
+      return startOfDay(date).toISOString();
+    } catch (error) {
+      console.error("Error formatting date to ISO:", error, date);
+      return undefined;
     }
-    return startOfDay(date).toISOString();
   };
 
   // Function to get the date range based on the selected option
@@ -48,24 +55,29 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
     const today = new Date();
     let fromDate: Date | undefined;
     
-    switch (rangeType) {
-      case "today":
-        fromDate = startOfDay(new Date(today));
-        return { from: fromDate, to: today };
-      case "yesterday":
-        fromDate = startOfDay(subDays(today, 1));
-        return { from: fromDate, to: subDays(today, 1) };
-      case "7d":
-        fromDate = startOfDay(subDays(today, 7));
-        return { from: fromDate, to: today };
-      case "30d":
-        fromDate = startOfDay(subDays(today, 30));
-        return { from: fromDate, to: today };
-      case "custom":
-        return date;
-      default:
-        fromDate = startOfDay(subDays(today, 30));
-        return { from: fromDate, to: today };
+    try {
+      switch (rangeType) {
+        case "today":
+          fromDate = startOfDay(new Date(today));
+          return { from: fromDate, to: today };
+        case "yesterday":
+          fromDate = startOfDay(subDays(today, 1));
+          return { from: fromDate, to: subDays(today, 1) };
+        case "7d":
+          fromDate = startOfDay(subDays(today, 7));
+          return { from: fromDate, to: today };
+        case "30d":
+          fromDate = startOfDay(subDays(today, 30));
+          return { from: fromDate, to: today };
+        case "custom":
+          return date || { from: undefined, to: undefined };
+        default:
+          fromDate = startOfDay(subDays(today, 30));
+          return { from: fromDate, to: today };
+      }
+    } catch (error) {
+      console.error("Error calculating date range:", error, rangeType);
+      return { from: undefined, to: undefined };
     }
   };
 
@@ -73,49 +85,58 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
     console.log(`🔄 DateRangePicker: Range changing to ${value}`);
     setSelectedRange(value);
     
-    // Generate date range based on selected option
-    const dateRange = getDateRange(value);
-    
-    // Only pass ISO strings if we have valid dates
-    if (value !== "custom") {
-      setDate(dateRange);
+    try {
+      // Generate date range based on selected option
+      const dateRange = getDateRange(value);
       
-      // Add ISO formatted dates to the callback
-      let fromISO, toISO;
-      if (dateRange.from) {
-        fromISO = formatDateToISO(dateRange.from);
-      }
-      if (dateRange.to) {
-        toISO = formatDateToISO(dateRange.to, true); // End of day for the to-date
+      if (!dateRange) {
+        console.error("⚠️ DateRangePicker: dateRange is undefined for value:", value);
+        return;
       }
       
-      console.log("📅 DateRangePicker changed:", value, { 
-        from: dateRange.from?.toISOString(), 
-        to: dateRange.to?.toISOString(),
-        fromISO, 
-        toISO 
-      });
-      
-      onDateRangeChange(value, { ...dateRange, fromISO, toISO });
-    } else {
-      // For custom, we'll rely on the custom date picker
-      // Add ISO formatted dates if they exist
-      let fromISO, toISO;
-      if (date.from) {
-        fromISO = formatDateToISO(date.from);
+      // Only pass ISO strings if we have valid dates
+      if (value !== "custom") {
+        setDate(dateRange);
+        
+        // Add ISO formatted dates to the callback
+        const fromISO = dateRange.from ? formatDateToISO(dateRange.from) : undefined;
+        const toISO = dateRange.to ? formatDateToISO(dateRange.to, true) : undefined; // End of day for the to-date
+        
+        console.log("📅 DateRangePicker changed:", value, { 
+          from: dateRange.from?.toISOString(), 
+          to: dateRange.to?.toISOString(),
+          fromISO, 
+          toISO 
+        });
+        
+        onDateRangeChange(value, { 
+          from: dateRange.from, 
+          to: dateRange.to,
+          fromISO, 
+          toISO 
+        });
+      } else {
+        // For custom, we'll rely on the custom date picker
+        // Add ISO formatted dates if they exist
+        const fromISO = date?.from ? formatDateToISO(date.from) : undefined;
+        const toISO = date?.to ? formatDateToISO(date.to, true) : undefined; // End of day for the to-date
+        
+        console.log("📅 DateRangePicker custom:", { 
+          from: date?.from?.toISOString(), 
+          to: date?.to?.toISOString(),
+          fromISO, 
+          toISO 
+        });
+        
+        onDateRangeChange(value, { 
+          from: date?.from, 
+          to: date?.to,
+          fromISO, 
+          toISO 
+        });
       }
-      if (date.to) {
-        toISO = formatDateToISO(date.to, true); // End of day for the to-date
-      }
-      
-      console.log("📅 DateRangePicker custom:", { 
-        from: date.from?.toISOString(), 
-        to: date.to?.toISOString(),
-        fromISO, 
-        toISO 
-      });
-      
-      onDateRangeChange(value, { ...date, fromISO, toISO });
+    } catch (error) {
+      console.error("Error in handleRangeChange:", error, value);
     }
   };
 
@@ -126,40 +147,48 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
       return;
     }
 
-    console.log("📅 Custom date selection changed:", value);
-    setDate({
-      from: value.from || undefined,
-      to: value.to || undefined
-    });
+    try {
+      console.log("📅 Custom date selection changed:", value);
+      setDate({
+        from: value.from || undefined,
+        to: value.to || undefined
+      });
 
-    // Only trigger the callback if we have both from and to dates
-    if (value.from && value.to) {
-      setSelectedRange("custom");
-      
-      // Add ISO formatted dates
-      const fromISO = value.from ? formatDateToISO(value.from) : undefined;
-      const toISO = value.to ? formatDateToISO(value.to, true) : undefined; // End of day for the to-date
-      
-      console.log("📅 DateRangePicker custom selected:", { 
-        from: value.from?.toISOString(), 
-        to: value.to?.toISOString(),
-        fromISO, 
-        toISO 
-      });
-      
-      onDateRangeChange("custom", { 
-        from: value.from, 
-        to: value.to,
-        fromISO, 
-        toISO 
-      });
+      // Only trigger the callback if we have both from and to dates
+      if (value.from && value.to) {
+        setSelectedRange("custom");
+        
+        // Add ISO formatted dates
+        const fromISO = formatDateToISO(value.from);
+        const toISO = formatDateToISO(value.to, true); // End of day for the to-date
+        
+        console.log("📅 DateRangePicker custom selected:", { 
+          from: value.from?.toISOString(), 
+          to: value.to?.toISOString(),
+          fromISO, 
+          toISO 
+        });
+        
+        onDateRangeChange("custom", { 
+          from: value.from, 
+          to: value.to,
+          fromISO, 
+          toISO 
+        });
+      }
+    } catch (error) {
+      console.error("Error in handleCustomDateChange:", error, value);
     }
   };
 
   // Initialize with the default date range on mount
   useEffect(() => {
-    console.log("📅 DateRangePicker initialized with default range:", selectedRange);
-    handleRangeChange(selectedRange);
+    try {
+      console.log("📅 DateRangePicker initialized with default range:", selectedRange);
+      handleRangeChange(selectedRange);
+    } catch (error) {
+      console.error("Error initializing DateRangePicker:", error);
+    }
   }, []);
 
   return (
@@ -177,7 +206,7 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
         </SelectContent>
       </Select>
 
-      {selectedRange === "custom" && (
+      {selectedRange === "custom" && date && (
         <Popover>
           <PopoverTrigger asChild>
             <Button
