@@ -1,21 +1,34 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Navigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
-import { Loader2, DollarSign, ShoppingBag, CreditCard, Users, BarChart3, Percent, Truck } from "lucide-react";
+import { Loader2, DollarSign, ShoppingBag, CreditCard, Users, BarChart3, Percent, Truck, Calculator } from "lucide-react";
 import MeliConnect from '@/components/MeliConnect';
 import { useToast } from "@/components/ui/use-toast";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import DateRangePicker from '@/components/DateRangePicker';
 import SummaryCard from '@/components/SummaryCard';
-import { formatCurrency, formatNumber, formatPercent, calculateBalance } from '@/lib/formatters';
+import { formatCurrency, formatNumber, formatPercent } from '@/lib/formatters';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import DebugButton from '@/components/DebugButton';
 import { useMeliData } from '@/hooks/useMeliData';
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 const COLORS = ['#663399', '#FFD700', '#8944EB', '#FF8042', '#9B59B6', '#4ade80'];
+
+// Function to calculate the complete balance considering all factors
+const calculateBalance = (gmv: number, commissions: number, shipping: number, taxes: number, ivaRate: number) => {
+  // Calculate IVA based on the provided rate (as a percentage)
+  const iva = (gmv * ivaRate) / 100;
+  
+  // Calculate total balance: GMV - commissions - shipping - taxes - IVA
+  return gmv - commissions - shipping - taxes - iva;
+};
 
 const Dashboard = () => {
   const [session, setSession] = useState(null);
@@ -29,6 +42,7 @@ const Dashboard = () => {
     fromISO?: string,
     toISO?: string
   }>({});
+  const [ivaRate, setIvaRate] = useState(21); // Default IVA rate: 21%
   
   const { toast } = useToast();
   const isMounted = useRef(true);
@@ -138,6 +152,13 @@ const Dashboard = () => {
     return ((current - previous) / previous) * 100;
   };
 
+  const handleIvaRateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const newRate = parseFloat(event.target.value);
+    if (!isNaN(newRate) && newRate >= 0 && newRate <= 100) {
+      setIvaRate(newRate);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gofor-warmWhite">
@@ -149,6 +170,24 @@ const Dashboard = () => {
   if (!session) {
     return <Navigate to="/login" replace />;
   }
+
+  // Calculate current balance with the specified IVA rate
+  const currentBalance = calculateBalance(
+    salesSummary.gmv, 
+    salesSummary.commissions, 
+    salesSummary.shipping, 
+    salesSummary.taxes, 
+    ivaRate
+  );
+
+  // Calculate previous period balance for percent change
+  const previousBalance = calculateBalance(
+    prevSalesSummary.gmv, 
+    prevSalesSummary.commissions, 
+    prevSalesSummary.shipping, 
+    prevSalesSummary.taxes, 
+    ivaRate
+  );
 
   return (
     <div className="min-h-screen bg-gofor-warmWhite font-poppins p-6">
@@ -190,16 +229,48 @@ const Dashboard = () => {
             ) : (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                  <SummaryCard 
-                    title="Balance Total"
-                    value={formatCurrency(calculateBalance(salesSummary.gmv, salesSummary.commissions, salesSummary.shipping))}
-                    percentChange={calculatePercentChange(
-                      calculateBalance(salesSummary.gmv, salesSummary.commissions, salesSummary.shipping),
-                      calculateBalance(prevSalesSummary.gmv, prevSalesSummary.commissions, prevSalesSummary.shipping)
-                    )}
-                    icon={<DollarSign className="h-5 w-5" />}
-                    isLoading={dataLoading}
-                  />
+                  <div className="lg:col-span-2">
+                    <SummaryCard 
+                      title={
+                        <div className="flex items-center justify-between">
+                          <span>Balance Total</span>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button variant="ghost" className="h-8 w-8 p-0">
+                                <Calculator className="h-4 w-4 text-gray-500" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-80">
+                              <div className="space-y-2">
+                                <h4 className="font-medium mb-2">Configuración de tasa IVA</h4>
+                                <div className="flex items-center space-x-2">
+                                  <Input
+                                    type="number"
+                                    value={ivaRate}
+                                    onChange={handleIvaRateChange}
+                                    className="w-20"
+                                    min="0"
+                                    max="100"
+                                    step="0.5"
+                                  />
+                                  <span>%</span>
+                                </div>
+                                <p className="text-sm text-gray-500">
+                                  La tasa de IVA se usa para calcular el balance total:
+                                  GMV - comisiones - envíos - impuestos - IVA({ivaRate}% del GMV)
+                                </p>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                      }
+                      value={formatCurrency(currentBalance)}
+                      percentChange={calculatePercentChange(currentBalance, previousBalance)}
+                      icon={<DollarSign className="h-5 w-5" />}
+                      isLoading={dataLoading}
+                      colorClass="bg-gradient-to-r from-gofor-purple/10 to-gofor-purple/5"
+                    />
+                  </div>
                   <SummaryCard 
                     title="GMV (Ventas totales)"
                     value={formatCurrency(salesSummary.gmv)}
@@ -214,6 +285,9 @@ const Dashboard = () => {
                     icon={<BarChart3 className="h-5 w-5" />}
                     isLoading={dataLoading}
                   />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                   <SummaryCard 
                     title="Ticket promedio"
                     value={formatCurrency(salesSummary.avgTicket)}
@@ -221,9 +295,6 @@ const Dashboard = () => {
                     icon={<CreditCard className="h-5 w-5" />}
                     isLoading={dataLoading}
                   />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                   <SummaryCard 
                     title="Visitas"
                     value={formatNumber(salesSummary.visits)}
@@ -240,6 +311,19 @@ const Dashboard = () => {
                     isLoading={dataLoading}
                   />
                   <SummaryCard 
+                    title="IVA (aplicado)"
+                    value={formatCurrency((salesSummary.gmv * ivaRate) / 100)}
+                    percentChange={calculatePercentChange(
+                      (salesSummary.gmv * ivaRate) / 100,
+                      (prevSalesSummary.gmv * ivaRate) / 100
+                    )}
+                    icon={<DollarSign className="h-5 w-5" />}
+                    isLoading={dataLoading}
+                  />
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                  <SummaryCard 
                     title="Comisiones totales"
                     value={formatCurrency(salesSummary.commissions)}
                     percentChange={calculatePercentChange(salesSummary.commissions, prevSalesSummary.commissions)}
@@ -251,6 +335,13 @@ const Dashboard = () => {
                     value={formatCurrency(salesSummary.shipping)}
                     percentChange={calculatePercentChange(salesSummary.shipping, prevSalesSummary.shipping)}
                     icon={<Truck className="h-5 w-5" />}
+                    isLoading={dataLoading}
+                  />
+                  <SummaryCard 
+                    title="Impuestos"
+                    value={formatCurrency(salesSummary.taxes)}
+                    percentChange={calculatePercentChange(salesSummary.taxes, prevSalesSummary.taxes)}
+                    icon={<DollarSign className="h-5 w-5" />}
                     isLoading={dataLoading}
                   />
                 </div>
@@ -355,9 +446,9 @@ const Dashboard = () => {
                       </Card>
                       <Card>
                         <CardContent className="p-6">
-                          <div className="text-sm text-gray-500 mb-1">Costos de envío</div>
-                          <div className="text-2xl font-bold text-gofor-purple">{formatCurrency(salesSummary.shipping)}</div>
-                          <div className="text-sm font-medium text-amber-500">{((Number(salesSummary.shipping) / Math.max(Number(salesSummary.gmv), 1)) * 100).toFixed(1)}% del GMV</div>
+                          <div className="text-sm text-gray-500 mb-1">IVA ({ivaRate}%)</div>
+                          <div className="text-2xl font-bold text-gofor-purple">{formatCurrency((salesSummary.gmv * ivaRate) / 100)}</div>
+                          <div className="text-sm font-medium text-amber-500">{ivaRate}% del GMV</div>
                         </CardContent>
                       </Card>
                     </div>
@@ -371,7 +462,10 @@ const Dashboard = () => {
                           <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
                               <Pie
-                                data={costData}
+                                data={[
+                                  ...costData,
+                                  { name: 'IVA', value: (salesSummary.gmv * ivaRate) / 100 }
+                                ]}
                                 cx="50%"
                                 cy="50%"
                                 labelLine={false}
@@ -380,7 +474,7 @@ const Dashboard = () => {
                                 fill="#8884d8"
                                 dataKey="value"
                               >
-                                {costData.map((entry, index) => (
+                                {[...costData, { name: 'IVA', value: (salesSummary.gmv * ivaRate) / 100 }].map((entry, index) => (
                                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                 ))}
                               </Pie>
