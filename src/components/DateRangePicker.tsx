@@ -29,7 +29,7 @@ type DateRangePickerProps = {
 };
 
 const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
-  const [selectedRange, setSelectedRange] = useState<string>("30d");
+  const [selectedRange, setSelectedRange] = useState<string>("today"); // Changed default from "30d" to "today"
   const [date, setDate] = useState<{ from: Date | undefined; to: Date | undefined }>({
     from: undefined,
     to: undefined,

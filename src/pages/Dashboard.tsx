@@ -64,7 +64,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [meliConnected, setMeliConnected] = useState(false);
   const [meliUser, setMeliUser] = useState(null);
-  const [dateFilter, setDateFilter] = useState('30d');
+  const [dateFilter, setDateFilter] = useState('today');
   const [customDateRange, setCustomDateRange] = useState<{
     from?: Date, 
     to?: Date,
