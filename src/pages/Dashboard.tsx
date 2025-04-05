@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Navigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,13 +13,13 @@ import SummaryCard from '@/components/SummaryCard';
 import { formatCurrency, formatNumber, formatPercent, calculateBalance } from '@/lib/formatters';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import DebugButton from '@/components/DebugButton';
+import { useMeliData } from '@/hooks/useMeliData';
 
 const COLORS = ['#663399', '#FFD700', '#8944EB', '#FF8042', '#9B59B6', '#4ade80'];
 
 const Dashboard = () => {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [dataLoading, setDataLoading] = useState(false);
   const [meliConnected, setMeliConnected] = useState(false);
   const [meliUser, setMeliUser] = useState(null);
   const [dateFilter, setDateFilter] = useState('today');
@@ -29,40 +29,26 @@ const Dashboard = () => {
     fromISO?: string,
     toISO?: string
   }>({});
-  const [salesData, setSalesData] = useState([]);
-  const [salesSummary, setSalesSummary] = useState({
-    gmv: 0,
-    commissions: 0,
-    taxes: 0,
-    shipping: 0,
-    discounts: 0,
-    refunds: 0,
-    iva: 0,
-    units: 0,
-    avgTicket: 0,
-    visits: 0,
-    conversion: 0
-  });
-  const [topProducts, setTopProducts] = useState([]);
-  const [costData, setCostData] = useState([]);
-  const [provinceData, setProvinceData] = useState([]);
-  const [prevSalesSummary, setPrevSalesSummary] = useState({
-    gmv: 0,
-    commissions: 0,
-    taxes: 0,
-    shipping: 0,
-    discounts: 0,
-    refunds: 0,
-    iva: 0,
-    units: 0,
-    avgTicket: 0,
-    visits: 0,
-    conversion: 0
-  });
-  const { toast } = useToast();
   
-  const [dataFetchAttempted, setDataFetchAttempted] = useState(false);
+  const { toast } = useToast();
   const isMounted = useRef(true);
+  
+  const {
+    isLoading: dataLoading,
+    salesData,
+    salesSummary,
+    topProducts,
+    costData,
+    provinceData,
+    prevSalesSummary,
+    refresh: refreshData
+  } = useMeliData({
+    userId: session?.user?.id,
+    meliUserId: meliUser,
+    dateFilter,
+    dateRange: customDateRange,
+    isConnected: meliConnected
+  });
   
   useEffect(() => {
     return () => {
@@ -129,7 +115,7 @@ const Dashboard = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const handleDateRangeChange = useCallback((range: string, dates?: { 
+  const handleDateRangeChange = (range: string, dates?: { 
     from: Date | undefined; 
     to: Date | undefined;
     fromISO?: string;
@@ -145,182 +131,7 @@ const Dashboard = () => {
         toISO: dates.toISO
       });
     }
-    setDataFetchAttempted(false);
-  }, []);
-
-  const loadMeliData = useCallback(async () => {
-    if (!session?.user?.id || !meliConnected || !meliUser) {
-      console.log("Skipping data load - not connected or no user ID", { session, meliConnected, meliUser });
-      return;
-    }
-    
-    if (dataLoading) {
-      console.log("Already loading data, skipping duplicate fetch");
-      return;
-    }
-    
-    if (dateFilter === 'custom' && (!customDateRange.fromISO || !customDateRange.toISO)) {
-      console.log("⚠️ Custom date range is incomplete. Skipping data fetch.");
-      return;
-    }
-    
-    try {
-      setDataLoading(true);
-      console.log("🔁 Running loadMeliData with filter:", dateFilter);
-      
-      let dateFrom, dateTo;
-      
-      if (dateFilter === 'custom' && customDateRange.fromISO && customDateRange.toISO) {
-        dateFrom = customDateRange.fromISO;
-        dateTo = customDateRange.toISO;
-      } else {
-        const today = new Date();
-        const formattedToday = today.toISOString().split('T')[0];
-        
-        let fromDate = new Date(today);
-        switch(dateFilter) {
-          case 'today':
-            break;
-          case 'yesterday':
-            fromDate.setDate(today.getDate() - 1);
-            break;
-          case '7d':
-            fromDate.setDate(today.getDate() - 7);
-            break;
-          case '30d':
-            fromDate.setDate(today.getDate() - 30);
-            break;
-          default:
-            fromDate.setDate(today.getDate() - 30);
-        }
-        
-        const formattedFrom = fromDate.toISOString().split('T')[0];
-        dateFrom = `${formattedFrom}T00:00:00.000Z`;
-        dateTo = `${formattedToday}T23:59:59.999Z`;
-      }
-      
-      console.log("🟣 Filtro aplicado:", dateFilter);
-      console.log("📅 Selected date range:", { dateFrom, dateTo });
-      
-      const ordersRequest = {
-        endpoint: '/orders/search',
-        params: {
-          seller: meliUser,
-          'order.status': 'paid',
-          sort: 'date_desc',
-          date_from: dateFrom,
-          date_to: dateTo
-        }
-      };
-      
-      const batchRequests = [
-        ordersRequest,
-        {
-          endpoint: `/users/${meliUser}/items/search`
-        },
-        {
-          endpoint: `/visits/search`,
-          params: {
-            user_id: meliUser
-          }
-        }
-      ];
-      
-      const requestPayload = {
-        user_id: session.user.id,
-        batch_requests: batchRequests,
-        date_range: {
-          begin: dateFrom ? dateFrom.split('T')[0] : null,
-          end: dateTo ? dateTo.split('T')[0] : null
-        },
-        prev_period: true
-      };
-      
-      console.log("🚀 Enviando a Supabase:", requestPayload);
-      
-      const { data: batchData, error: batchError } = await supabase.functions.invoke('meli-data', {
-        body: requestPayload
-      });
-      
-      if (!isMounted.current) return;
-      
-      if (batchError) {
-        throw new Error(`Error fetching batch data: ${batchError.message}`);
-      }
-      
-      if (!batchData || !batchData.success) {
-        throw new Error(batchData?.message || 'Error fetching batch data');
-      }
-      
-      console.log("✅ Batch data received:", batchData);
-      
-      if (batchData.dashboard_data) {
-        if (batchData.dashboard_data.salesByMonth?.length > 0) {
-          setSalesData(batchData.dashboard_data.salesByMonth);
-        }
-        
-        if (batchData.dashboard_data.summary) {
-          setSalesSummary(batchData.dashboard_data.summary);
-        }
-        
-        if (batchData.dashboard_data.prev_summary) {
-          setPrevSalesSummary(batchData.dashboard_data.prev_summary);
-        }
-        
-        if (batchData.dashboard_data.costDistribution?.length > 0) {
-          setCostData(batchData.dashboard_data.costDistribution);
-        }
-        
-        if (batchData.dashboard_data.topProducts?.length > 0) {
-          setTopProducts(batchData.dashboard_data.topProducts);
-        }
-        
-        if (batchData.dashboard_data.salesByProvince?.length > 0) {
-          setProvinceData(batchData.dashboard_data.salesByProvince);
-        }
-      } else {
-        console.warn("⚠️ Dashboard data is missing in the API response");
-      }
-      
-      toast({
-        title: "Datos cargados",
-        description: `Se han cargado los datos de Mercado Libre para el período: ${dateFilter}`,
-        duration: 3000,
-      });
-    } catch (error) {
-      console.error("Error loading Mercado Libre data:", error);
-      toast({
-        variant: "destructive",
-        title: "Error cargando datos",
-        description: error.message || "No se pudieron cargar los datos de Mercado Libre."
-      });
-    } finally {
-      if (isMounted.current) {
-        setDataLoading(false);
-        setDataFetchAttempted(true);
-      }
-    }
-  }, [session, meliConnected, meliUser, dateFilter, customDateRange, toast]);
-
-  useEffect(() => {
-    if (!dataLoading && 
-        !dataFetchAttempted && 
-        meliConnected && 
-        session?.user?.id && 
-        meliUser) {
-          
-      const validDateRange = dateFilter !== 'custom' || 
-                           (customDateRange.fromISO && customDateRange.toISO);
-      
-      if (validDateRange) {
-        console.log("🔄 Conditions met, triggering data load for:", dateFilter);
-        loadMeliData();
-      } else {
-        console.log("⚠️ Custom date range is incomplete. Skipping data fetch.");
-      }
-    }
-  }, [dateFilter, customDateRange.fromISO, customDateRange.toISO, 
-      meliConnected, session, meliUser, dataLoading, dataFetchAttempted, loadMeliData]);
+  };
 
   const calculatePercentChange = (current: number, previous: number): number => {
     if (!previous) return 0;
@@ -387,24 +198,28 @@ const Dashboard = () => {
                       calculateBalance(prevSalesSummary.gmv, prevSalesSummary.commissions, prevSalesSummary.shipping)
                     )}
                     icon={<DollarSign className="h-5 w-5" />}
+                    isLoading={dataLoading}
                   />
                   <SummaryCard 
                     title="GMV (Ventas totales)"
                     value={formatCurrency(salesSummary.gmv)}
                     percentChange={calculatePercentChange(salesSummary.gmv, prevSalesSummary.gmv)}
                     icon={<ShoppingBag className="h-5 w-5" />}
+                    isLoading={dataLoading}
                   />
                   <SummaryCard 
                     title="Unidades vendidas"
                     value={formatNumber(salesSummary.units)}
                     percentChange={calculatePercentChange(salesSummary.units, prevSalesSummary.units)}
                     icon={<BarChart3 className="h-5 w-5" />}
+                    isLoading={dataLoading}
                   />
                   <SummaryCard 
                     title="Ticket promedio"
                     value={formatCurrency(salesSummary.avgTicket)}
                     percentChange={calculatePercentChange(salesSummary.avgTicket, prevSalesSummary.avgTicket)}
                     icon={<CreditCard className="h-5 w-5" />}
+                    isLoading={dataLoading}
                   />
                 </div>
 
@@ -414,24 +229,28 @@ const Dashboard = () => {
                     value={formatNumber(salesSummary.visits)}
                     percentChange={calculatePercentChange(salesSummary.visits, prevSalesSummary.visits)}
                     icon={<Users className="h-5 w-5" />}
+                    isLoading={dataLoading}
                   />
                   <SummaryCard 
                     title="Tasa de conversión"
                     value={`${(Number(salesSummary.conversion) || 0).toFixed(1)}%`}
                     percentChange={calculatePercentChange(salesSummary.conversion, prevSalesSummary.conversion)}
                     icon={<Percent className="h-5 w-5" />}
+                    isLoading={dataLoading}
                   />
                   <SummaryCard 
                     title="Comisiones totales"
                     value={formatCurrency(salesSummary.commissions)}
                     percentChange={calculatePercentChange(salesSummary.commissions, prevSalesSummary.commissions)}
                     icon={<DollarSign className="h-5 w-5" />}
+                    isLoading={dataLoading}
                   />
                   <SummaryCard 
                     title="Costos de envío"
                     value={formatCurrency(salesSummary.shipping)}
                     percentChange={calculatePercentChange(salesSummary.shipping, prevSalesSummary.shipping)}
                     icon={<Truck className="h-5 w-5" />}
+                    isLoading={dataLoading}
                   />
                 </div>
                 
@@ -620,6 +439,7 @@ const Dashboard = () => {
         dateRange={customDateRange}
         salesSummary={salesSummary}
         userId={session?.user?.id}
+        onRefresh={refreshData}
       />
     </div>
   );

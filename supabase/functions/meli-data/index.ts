@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
@@ -10,6 +9,58 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Cache para respuestas recientes (en memoria)
+const responseCache = new Map();
+const CACHE_DURATION = 10 * 60 * 1000; // 10 minutos en ms
+
+// Función para generar una clave de caché
+function generateCacheKey(user_id, endpoint, date_range) {
+  const dateKey = date_range?.begin && date_range?.end 
+    ? `${date_range.begin}-${date_range.end}` 
+    : 'no-date';
+  
+  return `${user_id}-${endpoint || 'default'}-${dateKey}`;
+}
+
+// Función para hacer peticiones con reintentos
+async function fetchWithRetry(url, options, maxRetries = 3) {
+  let lastError;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const response = await fetch(url, options);
+      
+      if (response.status === 429) {
+        // Rate limiting - exponential backoff
+        const delay = Math.pow(2, attempt) * 1000;
+        console.log(`Rate limit hit, retry ${attempt + 1}/${maxRetries} after ${delay}ms`);
+        await new Promise(res => setTimeout(res, delay));
+        continue;
+      }
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.message || response.statusText);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      lastError = error;
+      if (attempt === maxRetries - 1) {
+        // Era el último intento, propagar el error
+        throw error;
+      }
+      
+      // Esperar antes de reintentar
+      const delay = Math.pow(2, attempt) * 1000;
+      console.log(`Error in API call, retry ${attempt + 1}/${maxRetries} after ${delay}ms:`, error.message);
+      await new Promise(res => setTimeout(res, delay));
+    }
+  }
+  
+  throw lastError;
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
@@ -17,11 +68,19 @@ serve(async (req) => {
   }
 
   try {
-    // Create a Supabase client with the service role key
+    // Crear un cliente Supabase con el role key
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     
     const body = await req.json();
-    const { user_id, endpoint, method = "GET", params = {}, batch_requests = [], date_range } = body;
+    const { 
+      user_id, 
+      endpoint, 
+      method = "GET", 
+      params = {}, 
+      batch_requests = [], 
+      date_range,
+      use_cache = true  // Nuevo parámetro para habilitar/deshabilitar caché
+    } = body;
 
     if (!user_id) {
       throw new Error("Missing user_id parameter");
@@ -30,6 +89,29 @@ serve(async (req) => {
     console.log(`Getting data for user: ${user_id}, endpoint: ${endpoint || 'none'}, batch_requests: ${batch_requests.length}`);
     if (date_range) {
       console.log(`Date range: ${JSON.stringify(date_range)}`);
+    }
+    
+    // Verificar caché si está habilitada
+    if (use_cache) {
+      const cacheKey = generateCacheKey(user_id, endpoint || 'batch', date_range);
+      const cachedResponse = responseCache.get(cacheKey);
+      
+      if (cachedResponse) {
+        const now = Date.now();
+        if (now - cachedResponse.timestamp < CACHE_DURATION) {
+          console.log(`Using cached response for key: ${cacheKey}, age: ${(now - cachedResponse.timestamp)/1000}s`);
+          return new Response(
+            JSON.stringify(cachedResponse.data),
+            {
+              headers: { ...corsHeaders, "Content-Type": "application/json", "X-From-Cache": "true" },
+              status: 200,
+            }
+          );
+        } else {
+          console.log(`Cache expired for key: ${cacheKey}`);
+          responseCache.delete(cacheKey);
+        }
+      }
     }
 
     // Fetch the user's Mercado Libre tokens
@@ -46,14 +128,16 @@ serve(async (req) => {
 
     if (!tokenData) {
       console.log("User not connected to Mercado Libre");
+      const response = {
+        success: false,
+        message: "User not connected to Mercado Libre",
+        is_connected: false,
+        batch_results: [],
+        dashboard_data: getEmptyDashboardData()
+      };
+      
       return new Response(
-        JSON.stringify({
-          success: false,
-          message: "User not connected to Mercado Libre",
-          is_connected: false,
-          batch_results: [],
-          dashboard_data: getEmptyDashboardData()
-        }),
+        JSON.stringify(response),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 200,
@@ -115,15 +199,17 @@ serve(async (req) => {
     // If no endpoint was specified and no batch requests, just return connection status
     if (!endpoint && batch_requests.length === 0) {
       console.log("Returning connection status only");
+      const response = {
+        success: true,
+        message: "User is connected to Mercado Libre",
+        is_connected: true,
+        meli_user_id: tokenData.meli_user_id,
+        batch_results: [],
+        dashboard_data: getEmptyDashboardData()
+      };
+      
       return new Response(
-        JSON.stringify({
-          success: true,
-          message: "User is connected to Mercado Libre",
-          is_connected: true,
-          meli_user_id: tokenData.meli_user_id,
-          batch_results: [],
-          dashboard_data: getEmptyDashboardData()
-        }),
+        JSON.stringify(response),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 200,
@@ -131,82 +217,99 @@ serve(async (req) => {
       );
     }
 
-    // Calculate date range for metrics - validate and use provided dates or defaults
+    // Calculate date range for metrics
     const { dateFrom, dateTo } = calculateDateRange(date_range);
     console.log(`Using calculated date range: from ${dateFrom} to ${dateTo}`);
 
-    // Fetch dashboard metrics using official MeLi metrics endpoints and order search
-    const dashboardData = await fetchDashboardMetricsWithOrders(accessToken, meliUserId, dateFrom, dateTo);
+    // Fetch dashboard metrics using the optimized function
+    const dashboardData = await fetchDashboardMetricsOptimized(accessToken, meliUserId, dateFrom, dateTo);
     
-    // Process batch requests if present
+    // Process batch requests with improved error handling and limits
     let batchResults = [];
     if (batch_requests.length > 0) {
       console.log(`Processing ${batch_requests.length} batch requests`);
       
-      batchResults = await Promise.all(
-        batch_requests.map(async (request) => {
-          const { endpoint: batchEndpoint, method: batchMethod = "GET", params: batchParams = {} } = request;
-          
-          if (!batchEndpoint) {
-            return { 
-              error: "Missing endpoint in batch request",
-              request,
-              success: false
-            };
-          }
-          
-          try {
-            // Make the request to Mercado Libre API
-            const apiUrl = new URL(`https://api.mercadolibre.com${batchEndpoint}`);
+      // Limitar el número de requests paralelos para evitar sobrecargar la API
+      const maxConcurrentRequests = 3;
+      const requestGroups = [];
+      
+      // Dividir las solicitudes en grupos más pequeños
+      for (let i = 0; i < batch_requests.length; i += maxConcurrentRequests) {
+        requestGroups.push(batch_requests.slice(i, i + maxConcurrentRequests));
+      }
+      
+      // Procesar cada grupo secuencialmente
+      for (const group of requestGroups) {
+        const groupResults = await Promise.all(
+          group.map(async (request) => {
+            const { endpoint: batchEndpoint, method: batchMethod = "GET", params: batchParams = {} } = request;
             
-            // Always ensure order.status=paid for order searches
-            if (batchEndpoint.includes('/orders/search')) {
-              batchParams['order.status'] = 'paid';
+            if (!batchEndpoint) {
+              return { 
+                error: "Missing endpoint in batch request",
+                request,
+                success: false
+              };
             }
             
-            // Add query parameters for GET requests
-            if (batchMethod === "GET" && batchParams) {
-              Object.entries(batchParams).forEach(([key, value]) => {
-                apiUrl.searchParams.append(key, String(value));
-              });
+            try {
+              // Definir URL con parámetros
+              const apiUrl = new URL(`https://api.mercadolibre.com${batchEndpoint}`);
+              
+              // Asegurar orden.status=paid para búsquedas de órdenes
+              const actualParams = {...batchParams};
+              if (batchEndpoint.includes('/orders/search')) {
+                actualParams['order.status'] = 'paid';
+              }
+              
+              // Añadir parámetros para GET requests
+              if (batchMethod === "GET" && actualParams) {
+                Object.entries(actualParams).forEach(([key, value]) => {
+                  apiUrl.searchParams.append(key, String(value));
+                });
+              }
+              
+              console.log(`Batch request to: ${apiUrl.toString()}`);
+              
+              const apiData = await fetchWithRetry(
+                apiUrl, 
+                {
+                  method: batchMethod,
+                  headers: {
+                    "Authorization": `Bearer ${accessToken}`,
+                    "Content-Type": "application/json",
+                  },
+                  ...(batchMethod !== "GET" && actualParams ? { body: JSON.stringify(actualParams) } : {}),
+                },
+                3 // Máximo de reintentos
+              );
+              
+              return {
+                endpoint: batchEndpoint,
+                data: apiData,
+                success: true
+              };
+            } catch (error) {
+              console.error(`Error in batch request to ${batchEndpoint}:`, error);
+              return {
+                endpoint: batchEndpoint,
+                error: error.message,
+                success: false
+              };
             }
-            
-            console.log(`Batch request to: ${apiUrl.toString()}`);
-            
-            const apiResponse = await fetch(apiUrl, {
-              method: batchMethod,
-              headers: {
-                "Authorization": `Bearer ${accessToken}`,
-                "Content-Type": "application/json",
-              },
-              ...(batchMethod !== "GET" && batchParams ? { body: JSON.stringify(batchParams) } : {}),
-            });
-            
-            if (!apiResponse.ok) {
-              const apiError = await apiResponse.json();
-              throw new Error(apiError.message || apiResponse.statusText);
-            }
-            
-            const apiData = await apiResponse.json();
-            
-            return {
-              endpoint: batchEndpoint,
-              data: apiData,
-              success: true
-            };
-          } catch (error) {
-            console.error(`Error in batch request to ${batchEndpoint}:`, error);
-            return {
-              endpoint: batchEndpoint,
-              error: error.message,
-              success: false
-            };
-          }
-        })
-      );
+          })
+        );
+        
+        batchResults.push(...groupResults);
+        
+        // Pequeña pausa entre grupos para evitar rate limits
+        if (requestGroups.length > 1) {
+          await new Promise(res => setTimeout(res, 500));
+        }
+      }
     }
 
-    // Process single request if no batch
+    // Process single endpoint request if specified
     if (endpoint) {
       console.log(`Making request to Mercado Libre API: ${endpoint}`);
 
@@ -260,13 +363,26 @@ serve(async (req) => {
       );
     }
     
+    // Construir respuesta
+    const response = {
+      success: true,
+      is_connected: true,
+      batch_results: batchResults,
+      dashboard_data: dashboardData
+    };
+    
+    // Guardar en caché si está habilitado
+    if (use_cache) {
+      const cacheKey = generateCacheKey(user_id, endpoint || 'batch', date_range);
+      responseCache.set(cacheKey, {
+        timestamp: Date.now(),
+        data: response
+      });
+      console.log(`Response cached with key: ${cacheKey}`);
+    }
+    
     return new Response(
-      JSON.stringify({
-        success: true,
-        is_connected: true,
-        batch_results: batchResults,
-        dashboard_data: dashboardData
-      }),
+      JSON.stringify(response),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
@@ -418,52 +534,55 @@ function getEmptyDashboardData() {
   };
 }
 
-// Improved order filtering and metric calculation
-async function fetchDashboardMetricsWithOrders(accessToken: string, meliUserId: string, dateFrom: string, dateTo: string) {
+// Versión optimizada de fetchDashboardMetricsWithOrders
+async function fetchDashboardMetricsOptimized(accessToken: string, meliUserId: string, dateFrom: string, dateTo: string) {
   try {
-    console.log(`Fetching metrics for user ${meliUserId} from ${dateFrom} to ${dateTo}`);
+    console.log(`Fetching optimized metrics for user ${meliUserId} from ${dateFrom} to ${dateTo}`);
     
     // Start with an empty dashboard structure
     const dashboardData = getEmptyDashboardData();
     
-    // 1. Fetch orders with pagination to calculate GMV and units
-    console.log("Fetching orders with pagination...");
+    // 1. Fetch orders with better pagination control
+    console.log("Fetching orders with optimized pagination...");
     let offset = 0;
     const limit = 50;
     let hasMoreOrders = true;
     let allOrders: any[] = [];
     let requestCount = 0;
-    const maxRequests = 200; // Safety limit to prevent excessive API calls
+    const maxRequests = 20; // Reducido de 200 a 20 para evitar excesivas llamadas API
+    
+    // Usar el mismo formato de fecha para ambos parámetros
+    const dateFromFormatted = new Date(dateFrom).toISOString();
+    const dateToFormatted = new Date(dateTo).toISOString();
     
     while (hasMoreOrders && requestCount < maxRequests) {
       requestCount++;
+      
+      // Crear URL con todos los parámetros necesarios
       const searchUrl = new URL(`https://api.mercadolibre.com/orders/search`);
       searchUrl.searchParams.append('seller', meliUserId);
       searchUrl.searchParams.append('order.status', 'paid');
       searchUrl.searchParams.append('sort', 'date_desc');
-      // Always include date parameters regardless of API limitations
-      searchUrl.searchParams.append('date_from', dateFrom);
-      searchUrl.searchParams.append('date_to', dateTo);
+      searchUrl.searchParams.append('date_from', dateFromFormatted);
+      searchUrl.searchParams.append('date_to', dateToFormatted);
       searchUrl.searchParams.append('limit', limit.toString());
       searchUrl.searchParams.append('offset', offset.toString());
       
-      console.log(`Fetching orders page with offset ${offset}: ${searchUrl.toString()}`);
+      console.log(`Fetching orders page with offset ${offset}`);
       
       try {
-        const ordersResponse = await fetch(searchUrl.toString(), {
-          headers: { "Authorization": `Bearer ${accessToken}` }
-        });
+        // Usar fetch con reintentos
+        const ordersData = await fetchWithRetry(
+          searchUrl.toString(),
+          { headers: { "Authorization": `Bearer ${accessToken}` } },
+          3
+        );
         
-        if (!ordersResponse.ok) {
-          console.error(`Failed to fetch orders page: ${await ordersResponse.text()}`);
-          break;
-        }
-        
-        const ordersData = await ordersResponse.json();
-        console.log(`Received ${ordersData.results?.length || 0} orders from API (page ${offset / limit + 1})`);
-        
-        if (ordersData.results && Array.isArray(ordersData.results) && ordersData.results.length > 0) {
-          // Filter orders by date here to ensure accuracy
+        if (ordersData.results && Array.isArray(ordersData.results)) {
+          const resultsCount = ordersData.results.length;
+          console.log(`Received ${resultsCount} orders from API (page ${offset / limit + 1})`);
+          
+          // Filtrar órdenes por fecha para asegurar precisión
           const filteredOrders = ordersData.results.filter(order => 
             isDateInRange(order.date_created || order.date_closed, dateFrom, dateTo)
           );
@@ -473,24 +592,44 @@ async function fetchDashboardMetricsWithOrders(accessToken: string, meliUserId: 
             allOrders = allOrders.concat(filteredOrders);
           }
           
-          // Check if we need to fetch more pages
-          if (ordersData.results.length < limit) {
+          // Comprobar si debemos continuar con la paginación
+          if (resultsCount < limit || ordersData.paging?.total <= offset + resultsCount) {
+            console.log("Reached end of results or last page");
             hasMoreOrders = false;
           } else {
             offset += limit;
+            
+            // Pequeña pausa entre solicitudes para evitar rate limits
+            if (requestCount > 1) {
+              await new Promise(res => setTimeout(res, 300));
+            }
           }
         } else {
+          console.log("No results returned or invalid response format");
           hasMoreOrders = false;
         }
       } catch (error) {
         console.error(`Error fetching orders page with offset ${offset}:`, error);
+        
+        // Si ya tenemos algunas órdenes, continuamos con el procesamiento
+        if (allOrders.length > 0) {
+          console.log(`Proceeding with ${allOrders.length} orders collected so far`);
+          hasMoreOrders = false;
+        } else {
+          throw error; // Propagar el error si no tenemos datos
+        }
+      }
+      
+      // Salir temprano si ya tenemos suficientes órdenes para una buena muestra
+      if (allOrders.length > 500) {
+        console.log(`Collected ${allOrders.length} orders, stopping pagination to avoid excessive requests`);
         hasMoreOrders = false;
       }
     }
     
     console.log(`Total orders fetched across all pages: ${allOrders.length}`);
     
-    // Process orders to calculate GMV and units
+    // Procesar órdenes para calcular métricas
     if (allOrders.length > 0) {
       let totalGMV = 0;
       let totalUnits = 0;

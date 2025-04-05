@@ -9,15 +9,23 @@ interface SummaryCardProps {
   percentChange?: number;
   icon?: React.ReactNode;
   colorClass?: string;
+  isLoading?: boolean;
 }
 
-const SummaryCard = ({ title, value, percentChange, icon, colorClass = "bg-white" }: SummaryCardProps) => {
+const SummaryCard = ({ 
+  title, 
+  value, 
+  percentChange, 
+  icon, 
+  colorClass = "bg-white",
+  isLoading = false
+}: SummaryCardProps) => {
   const isPositiveChange = percentChange !== undefined && percentChange >= 0;
   const hasPercentChange = percentChange !== undefined && !isNaN(percentChange);
   
   // Improved validation for values
   const hasValue = value !== undefined && value !== null && value !== '' && value !== 0;
-  const displayValue = hasValue ? value : "Sin datos";
+  const displayValue = isLoading ? "Cargando..." : (hasValue ? value : "Sin datos");
   
   return (
     <Card className={`shadow-md ${colorClass}`}>
@@ -25,11 +33,15 @@ const SummaryCard = ({ title, value, percentChange, icon, colorClass = "bg-white
         <div className="flex justify-between items-start">
           <div className="w-full">
             <p className="text-sm text-gray-600 font-medium">{title}</p>
-            <p className="text-2xl font-bold font-poppins mt-1">
+            <p className={`text-2xl font-bold font-poppins mt-1 ${isLoading ? 'opacity-50' : ''}`}>
               {displayValue}
             </p>
             
-            {hasPercentChange ? (
+            {isLoading ? (
+              <div className="flex items-center mt-2 text-sm font-medium text-gray-400">
+                <span>Cargando datos comparativos...</span>
+              </div>
+            ) : hasPercentChange ? (
               <div className={`flex items-center mt-2 text-sm font-medium ${isPositiveChange ? 'text-green-600' : 'text-red-600'}`}>
                 {isPositiveChange ? (
                   <TrendingUp className="h-4 w-4 mr-1" />
