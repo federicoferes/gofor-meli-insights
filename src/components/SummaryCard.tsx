@@ -20,10 +20,13 @@ const SummaryCard = ({
   colorClass = "bg-white",
   isLoading = false
 }: SummaryCardProps) => {
+  // Determinar si el cambio porcentual es positivo
   const isPositiveChange = percentChange !== undefined && percentChange >= 0;
+  
+  // Verificar si tenemos un valor de cambio porcentual válido
   const hasPercentChange = percentChange !== undefined && !isNaN(percentChange);
   
-  // Improved validation for values
+  // Mejorar la validación para valores
   const hasValue = value !== undefined && value !== null && value !== '' && value !== 0;
   const displayValue = isLoading ? "Cargando..." : (hasValue ? value : "Sin datos");
   

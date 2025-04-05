@@ -62,6 +62,7 @@ export function useMeliData({
 
   const isMounted = useRef(true);
   const requestInProgress = useRef<string | null>(null);
+  const lastRequestPayload = useRef<string | null>(null);
   const { toast } = useToast();
   
   // Limpiar el efecto al desmontar
@@ -183,6 +184,17 @@ export function useMeliData({
         use_cache: true // Indicar al backend que puede usar caché interna
       };
       
+      // Verificar si el payload es idéntico a la última solicitud
+      const payloadString = JSON.stringify(requestPayload);
+      if (payloadString === lastRequestPayload.current) {
+        console.log("🔄 Ignorando solicitud duplicada con el mismo payload");
+        if (isMounted.current) setIsLoading(false);
+        requestInProgress.current = null;
+        return;
+      }
+      
+      lastRequestPayload.current = payloadString;
+      
       const { data: batchData, error: batchError } = await supabase.functions.invoke('meli-data', {
         body: requestPayload
       });
@@ -260,12 +272,17 @@ export function useMeliData({
     }
   }, [userId, meliUserId, dateFilter, dateRange, isConnected, getCacheKey, toast]);
 
-  // Cargar datos cuando cambia la fecha o el usuario
+  // Cargar datos cuando cambia la fecha o el usuario, usando un efecto más controlado
   useEffect(() => {
+    // Validar que tenemos los datos necesarios y un rango de fechas válido
     const validDateRange = dateFilter !== 'custom' || 
                           (dateRange.fromISO && dateRange.toISO);
     
     if (validDateRange && userId && isConnected && meliUserId) {
+      // Creamos una clave única para este conjunto de parámetros
+      const requestKey = `${userId}-${meliUserId}-${dateFilter}-${dateRange.fromISO || ''}-${dateRange.toISO || ''}`;
+      
+      console.log(`🔍 Verificando carga de datos para: ${requestKey}`);
       loadData();
     }
   }, [userId, meliUserId, dateFilter, dateRange.fromISO, dateRange.toISO, isConnected, loadData]);
