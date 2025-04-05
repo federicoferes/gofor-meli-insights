@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
@@ -50,7 +51,7 @@ serve(async (req) => {
           success: false,
           message: "User not connected to Mercado Libre",
           is_connected: false,
-          batch_results: []
+          batch_results: [] // Always include batch_results, even if empty
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -117,7 +118,7 @@ serve(async (req) => {
           message: "User is connected to Mercado Libre",
           is_connected: true,
           meli_user_id: tokenData.meli_user_id,
-          batch_results: []
+          batch_results: [] // Always include batch_results, even if empty
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -130,122 +131,159 @@ serve(async (req) => {
     if (batch_requests.length > 0) {
       console.log(`Processing ${batch_requests.length} batch requests`);
       
-      const batchResults = await Promise.all(
-        batch_requests.map(async (request) => {
-          const { endpoint: batchEndpoint, method: batchMethod = "GET", params: batchParams = {} } = request;
-          
-          if (!batchEndpoint) {
-            return { 
-              error: "Missing endpoint in batch request",
-              request
-            };
-          }
-          
-          try {
-            // Make the request to Mercado Libre API
-            const apiUrl = new URL(`https://api.mercadolibre.com${batchEndpoint}`);
+      try {
+        const batchResults = await Promise.all(
+          batch_requests.map(async (request) => {
+            const { endpoint: batchEndpoint, method: batchMethod = "GET", params: batchParams = {} } = request;
             
-            // Add query parameters for GET requests
-            if (batchMethod === "GET" && batchParams) {
-              Object.entries(batchParams).forEach(([key, value]) => {
-                apiUrl.searchParams.append(key, String(value));
+            if (!batchEndpoint) {
+              return { 
+                error: "Missing endpoint in batch request",
+                request,
+                success: false
+              };
+            }
+            
+            try {
+              // Make the request to Mercado Libre API
+              const apiUrl = new URL(`https://api.mercadolibre.com${batchEndpoint}`);
+              
+              // Add query parameters for GET requests
+              if (batchMethod === "GET" && batchParams) {
+                Object.entries(batchParams).forEach(([key, value]) => {
+                  apiUrl.searchParams.append(key, String(value));
+                });
+              }
+              
+              console.log(`Batch request to: ${apiUrl.toString()}`);
+              
+              const apiResponse = await fetch(apiUrl, {
+                method: batchMethod,
+                headers: {
+                  "Authorization": `Bearer ${accessToken}`,
+                  "Content-Type": "application/json",
+                },
+                ...(batchMethod !== "GET" && batchParams ? { body: JSON.stringify(batchParams) } : {}),
               });
+              
+              if (!apiResponse.ok) {
+                const apiError = await apiResponse.json();
+                throw new Error(apiError.message || apiResponse.statusText);
+              }
+              
+              const apiData = await apiResponse.json();
+              
+              return {
+                endpoint: batchEndpoint,
+                data: apiData,
+                success: true
+              };
+            } catch (error) {
+              console.error(`Error in batch request to ${batchEndpoint}:`, error);
+              return {
+                endpoint: batchEndpoint,
+                error: error.message,
+                success: false
+              };
             }
-            
-            console.log(`Batch request to: ${apiUrl.toString()}`);
-            
-            const apiResponse = await fetch(apiUrl, {
-              method: batchMethod,
-              headers: {
-                "Authorization": `Bearer ${accessToken}`,
-                "Content-Type": "application/json",
-              },
-              ...(batchMethod !== "GET" && batchParams ? { body: JSON.stringify(batchParams) } : {}),
-            });
-            
-            if (!apiResponse.ok) {
-              const apiError = await apiResponse.json();
-              throw new Error(apiError.message || apiResponse.statusText);
-            }
-            
-            const apiData = await apiResponse.json();
-            
-            return {
-              endpoint: batchEndpoint,
-              data: apiData,
-              success: true
-            };
-          } catch (error) {
-            console.error(`Error in batch request to ${batchEndpoint}:`, error);
-            return {
-              endpoint: batchEndpoint,
-              error: error.message,
-              success: false
-            };
+          })
+        );
+        
+        // Process and calculate metrics if we have the dashboard data
+        const dashboardData = processDashboardData(batchResults, date_range);
+        
+        return new Response(
+          JSON.stringify({
+            success: true,
+            batch_results: batchResults,
+            dashboard_data: dashboardData
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 200,
           }
-        })
-      );
-      
-      // Process and calculate metrics if we have the dashboard data
-      const dashboardData = processDashboardData(batchResults, date_range);
-      
-      return new Response(
-        JSON.stringify({
-          success: true,
-          batch_results: batchResults,
-          dashboard_data: dashboardData
-        }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 200,
-        }
-      );
+        );
+      } catch (error) {
+        console.error("Error processing batch requests:", error);
+        
+        // Return a consistent response even in case of error
+        return new Response(
+          JSON.stringify({
+            success: false,
+            message: error.message || "Error processing batch requests",
+            batch_results: [] // Always include batch_results, even if empty
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 500,
+          }
+        );
+      }
     }
 
     // Process single request if no batch
     console.log(`Making request to Mercado Libre API: ${endpoint}`);
 
     // Make the request to Mercado Libre API
-    const apiUrl = new URL(`https://api.mercadolibre.com${endpoint}`);
-    
-    // Add query parameters
-    if (method === "GET" && params) {
-      Object.entries(params).forEach(([key, value]) => {
-        apiUrl.searchParams.append(key, String(value));
-      });
-    }
-
-    console.log(`API URL: ${apiUrl.toString()}`);
-
-    const apiResponse = await fetch(apiUrl, {
-      method,
-      headers: {
-        "Authorization": `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      ...(method !== "GET" && params ? { body: JSON.stringify(params) } : {}),
-    });
-
-    if (!apiResponse.ok) {
-      const apiError = await apiResponse.json();
-      console.error("Error from Mercado Libre API:", apiError);
-      throw new Error(`Error from Mercado Libre API: ${apiError.message || apiResponse.statusText}`);
-    }
-
-    const apiData = await apiResponse.json();
-    console.log("Successfully fetched data from Mercado Libre API");
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        data: apiData,
-        batch_results: []
-      }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
+    try {
+      const apiUrl = new URL(`https://api.mercadolibre.com${endpoint}`);
+      
+      // Add query parameters
+      if (method === "GET" && params) {
+        Object.entries(params).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            apiUrl.searchParams.append(key, String(value));
+          }
+        });
       }
-    );
+  
+      console.log(`API URL: ${apiUrl.toString()}`);
+  
+      const apiResponse = await fetch(apiUrl, {
+        method,
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        ...(method !== "GET" && params ? { body: JSON.stringify(params) } : {}),
+      });
+  
+      if (!apiResponse.ok) {
+        const apiError = await apiResponse.json();
+        console.error("Error from Mercado Libre API:", apiError);
+        throw new Error(`Error from Mercado Libre API: ${apiError.message || apiResponse.statusText}`);
+      }
+  
+      const apiData = await apiResponse.json();
+      console.log("Successfully fetched data from Mercado Libre API");
+  
+      return new Response(
+        JSON.stringify({
+          success: true,
+          data: apiData,
+          batch_results: [] // Always include batch_results, even if empty
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        }
+      );
+    } catch (error) {
+      console.error("Error in single request:", error);
+      
+      // Return a consistent response even in case of error
+      return new Response(
+        JSON.stringify({
+          success: false,
+          message: error.message || "Error making single request",
+          batch_results: [] // Always include batch_results, even if empty
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 500,
+        }
+      );
+    }
   } catch (error) {
     console.error("Error in meli-data function:", error);
     
@@ -253,7 +291,7 @@ serve(async (req) => {
       JSON.stringify({
         success: false,
         message: error.message || "An unexpected error occurred",
-        batch_results: []
+        batch_results: [] // Always include batch_results, even if empty
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -266,32 +304,37 @@ serve(async (req) => {
 function isDateInRange(dateStr: string, dateRange: any): boolean {
   if (!dateStr || !dateRange || !dateRange.begin || !dateRange.end) return true;
   
-  // Parse the input date
-  const date = new Date(dateStr);
-  
-  // Parse the range dates
-  let from, to;
-  
-  // Handle both ISO string and date object formats
-  if (typeof dateRange.begin === 'string') {
-    from = new Date(dateRange.begin);
-  } else {
-    from = dateRange.begin;
+  try {
+    // Parse the input date
+    const date = new Date(dateStr);
+    
+    // Parse the range dates
+    let from, to;
+    
+    // Handle both ISO string and date object formats
+    if (typeof dateRange.begin === 'string') {
+      from = new Date(dateRange.begin);
+    } else {
+      from = dateRange.begin;
+    }
+    
+    if (typeof dateRange.end === 'string') {
+      to = new Date(dateRange.end);
+    } else {
+      to = dateRange.end;
+    }
+    
+    // Adjust the hours for correct comparison
+    from.setHours(0, 0, 0, 0);
+    to.setHours(23, 59, 59, 999);
+    
+    console.log(`Checking if ${date.toISOString()} is between ${from.toISOString()} and ${to.toISOString()}: ${date >= from && date <= to}`);
+    
+    return date >= from && date <= to;
+  } catch (error) {
+    console.error("Error in isDateInRange:", error);
+    return false;
   }
-  
-  if (typeof dateRange.end === 'string') {
-    to = new Date(dateRange.end);
-  } else {
-    to = dateRange.end;
-  }
-  
-  // Adjust the hours for correct comparison
-  from.setHours(0, 0, 0, 0);
-  to.setHours(23, 59, 59, 999);
-  
-  console.log(`Checking if ${date.toISOString()} is between ${from.toISOString()} and ${to.toISOString()}: ${date >= from && date <= to}`);
-  
-  return date >= from && date <= to;
 }
 
 function processDashboardData(batchResults: any[], dateRange: any) {
@@ -318,8 +361,13 @@ function processDashboardData(batchResults: any[], dateRange: any) {
     };
     
     // Find orders data in batch results
+    if (!batchResults || !Array.isArray(batchResults)) {
+      console.log("No valid batch results found");
+      return dashboardData;
+    }
+    
     const ordersResult = batchResults.find(result => 
-      result.endpoint?.includes('/orders/search') && result.success
+      result && result.endpoint && result.endpoint.includes('/orders/search') && result.success
     );
     
     if (!ordersResult || !ordersResult.data || !ordersResult.data.results) {
@@ -484,6 +532,25 @@ function processDashboardData(batchResults: any[], dateRange: any) {
     return dashboardData;
   } catch (error) {
     console.error("Error processing dashboard data:", error);
-    return null;
+    // Return empty dashboard data structure on error
+    return {
+      summary: {
+        gmv: 0,
+        units: 0,
+        avgTicket: 0,
+        commissions: 0,
+        taxes: 0,
+        shipping: 0,
+        discounts: 0,
+        refunds: 0,
+        iva: 0,
+        visits: 0,
+        conversion: 0
+      },
+      salesByMonth: [],
+      costDistribution: [],
+      topProducts: [],
+      salesByProvince: []
+    };
   }
 }

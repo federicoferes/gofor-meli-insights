@@ -17,46 +17,60 @@ import DebugButton from '@/components/DebugButton';
 const COLORS = ['#663399', '#FFD700', '#8944EB', '#FF8042', '#9B59B6', '#4ade80'];
 
 const getDateRange = (filter: string) => {
-  const today = new Date();
-  let startDate = new Date();
-  
-  switch(filter) {
-    case 'today':
-      startDate = new Date(today);
-      break;
-    case 'yesterday':
-      startDate = new Date(today);
-      startDate.setDate(today.getDate() - 1);
-      break;
-    case '7d':
-      startDate.setDate(today.getDate() - 7);
-      break;
-    case '30d':
-      startDate.setDate(today.getDate() - 30);
-      break;
-    case 'custom':
-      break;
-    default:
-      startDate.setDate(today.getDate() - 30);
+  try {
+    const today = new Date();
+    let startDate = new Date();
+    
+    switch(filter) {
+      case 'today':
+        startDate = new Date(today);
+        break;
+      case 'yesterday':
+        startDate = new Date(today);
+        startDate.setDate(today.getDate() - 1);
+        break;
+      case '7d':
+        startDate.setDate(today.getDate() - 7);
+        break;
+      case '30d':
+        startDate.setDate(today.getDate() - 30);
+        break;
+      case 'custom':
+        break;
+      default:
+        startDate.setDate(today.getDate() - 30);
+    }
+    
+    return {
+      begin: startDate.toISOString().split('T')[0],
+      end: today.toISOString().split('T')[0]
+    };
+  } catch (error) {
+    console.error("Error in getDateRange:", error);
+    const today = new Date();
+    return {
+      begin: today.toISOString().split('T')[0],
+      end: today.toISOString().split('T')[0]
+    };
   }
-  
-  return {
-    begin: startDate.toISOString().split('T')[0],
-    end: today.toISOString().split('T')[0]
-  };
 };
 
 const isDateInRange = (dateStr: string, fromDate: Date | string, toDate: Date | string): boolean => {
   if (!dateStr) return false;
   
-  const date = new Date(dateStr);
-  const from = fromDate instanceof Date ? fromDate : new Date(fromDate);
-  const to = toDate instanceof Date ? toDate : new Date(toDate);
-  
-  from.setHours(0, 0, 0, 0);
-  to.setHours(23, 59, 59, 999);
-  
-  return date >= from && date <= to;
+  try {
+    const date = new Date(dateStr);
+    const from = fromDate instanceof Date ? fromDate : new Date(fromDate);
+    const to = toDate instanceof Date ? toDate : new Date(toDate);
+    
+    from.setHours(0, 0, 0, 0);
+    to.setHours(23, 59, 59, 999);
+    
+    return date >= from && date <= to;
+  } catch (error) {
+    console.error("Error in isDateInRange:", error);
+    return false;
+  }
 };
 
 const Dashboard = () => {
@@ -107,28 +121,32 @@ const Dashboard = () => {
 
   useEffect(() => {
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setSession(session);
-      
-      if (session) {
-        try {
-          const { data: connectionData, error } = await supabase.functions.invoke('meli-data', {
-            body: { user_id: session.user.id }
-          });
-          
-          if (!error && connectionData?.is_connected) {
-            setMeliConnected(true);
-            setMeliUser(connectionData.meli_user_id);
-            console.log("MeLi connection verified:", connectionData);
-          } else {
-            console.log("Not connected to MeLi yet:", connectionData, error);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        setSession(session);
+        
+        if (session) {
+          try {
+            const { data: connectionData, error } = await supabase.functions.invoke('meli-data', {
+              body: { user_id: session.user.id }
+            });
+            
+            if (!error && connectionData?.is_connected) {
+              setMeliConnected(true);
+              setMeliUser(connectionData.meli_user_id);
+              console.log("MeLi connection verified:", connectionData);
+            } else {
+              console.log("Not connected to MeLi yet:", connectionData, error);
+            }
+          } catch (error) {
+            console.error("Error checking MeLi connection:", error);
           }
-        } catch (error) {
-          console.error("Error checking MeLi connection:", error);
         }
+      } catch (error) {
+        console.error("Error checking session:", error);
+      } finally {
+        setLoading(false);
       }
-      
-      setLoading(false);
     };
     
     checkSession();
@@ -163,6 +181,7 @@ const Dashboard = () => {
   }) => {
     console.log(`📅 Date range changed to: ${range}`, dates);
     setDateFilter(range);
+    
     if (dates) {
       setCustomDateRange({
         from: dates.from,
@@ -170,42 +189,46 @@ const Dashboard = () => {
         fromISO: dates.fromISO,
         toISO: dates.toISO
       });
+    } else {
+      console.warn("⚠️ handleDateRangeChange received undefined dates");
+      setCustomDateRange({});
     }
   };
 
   useEffect(() => {
-    if (dateFilter === 'custom' && (!customDateRange.from || !customDateRange.to)) {
-      console.log("⚠️ Custom date range is incomplete. Skipping data fetch.");
+    if (!meliConnected || !session || !meliUser) {
+      console.log("Skipping data load - prerequisites not met", { meliConnected, session: !!session, meliUser });
       return;
     }
     
-    if (meliConnected && session && meliUser) {
-      console.log(`🔄 Date filter or range changed. Resetting data and fetching new data for: ${dateFilter}`, customDateRange);
-      
-      // Reset states to avoid showing stale data
-      setSalesData([]);
-      setTopProducts([]);
-      setCostData([]);
-      setProvinceData([]);
-      setSalesSummary({
-        gmv: 0,
-        commissions: 0,
-        taxes: 0,
-        shipping: 0,
-        discounts: 0,
-        refunds: 0,
-        iva: 0,
-        units: 0,
-        avgTicket: 0,
-        visits: 0,
-        conversion: 0
-      });
-      
-      // Trigger data loading with a small delay to ensure state updates first
-      setTimeout(() => {
-        loadMeliData();
-      }, 100);
+    if (dateFilter === 'custom' && (!customDateRange?.from || !customDateRange?.to)) {
+      console.warn("⚠️ Custom date range is incomplete. Skipping data fetch.", customDateRange);
+      return;
     }
+    
+    console.log(`🔄 Date filter or range changed. Resetting data and fetching new data for: ${dateFilter}`, customDateRange);
+    
+    setSalesData([]);
+    setTopProducts([]);
+    setCostData([]);
+    setProvinceData([]);
+    setSalesSummary({
+      gmv: 0,
+      commissions: 0,
+      taxes: 0,
+      shipping: 0,
+      discounts: 0,
+      refunds: 0,
+      iva: 0,
+      units: 0,
+      avgTicket: 0,
+      visits: 0,
+      conversion: 0
+    });
+    
+    setTimeout(() => {
+      loadMeliData();
+    }, 100);
   }, [dateFilter, customDateRange, meliConnected, session, meliUser]);
 
   const loadMeliData = async () => {
@@ -222,11 +245,29 @@ const Dashboard = () => {
       let dateFrom, dateTo;
       let fromDate, toDate;
       
-      if (dateFilter === 'custom' && customDateRange.fromISO && customDateRange.toISO) {
-        dateFrom = customDateRange.fromISO;
-        dateTo = customDateRange.toISO;
-        fromDate = customDateRange.from;
-        toDate = customDateRange.to;
+      if (dateFilter === 'custom') {
+        if (!customDateRange.fromISO || !customDateRange.toISO) {
+          console.warn("⚠️ Custom date range is missing ISO values:", customDateRange);
+          
+          if (customDateRange.from && customDateRange.to) {
+            dateFrom = customDateRange.from.toISOString();
+            dateTo = customDateRange.to.toISOString();
+            fromDate = customDateRange.from;
+            toDate = customDateRange.to;
+          } else {
+            console.error("❌ Invalid custom date range. Using fallback dates.");
+            const fallbackRange = getDateRange('30d');
+            dateFrom = `${fallbackRange.begin}T00:00:00.000Z`;
+            dateTo = `${fallbackRange.end}T23:59:59.999Z`;
+            fromDate = new Date(fallbackRange.begin);
+            toDate = new Date(fallbackRange.end);
+          }
+        } else {
+          dateFrom = customDateRange.fromISO;
+          dateTo = customDateRange.toISO;
+          fromDate = customDateRange.from;
+          toDate = customDateRange.to;
+        }
         console.log("📊 Using custom date range:", { dateFrom, dateTo });
       } else {
         const dateRange = getDateRange(dateFilter);
@@ -250,21 +291,16 @@ const Dashboard = () => {
           fromDate = yesterday;
           toDate = yesterday;
         }
-        
-        if (customDateRange.fromISO && dateFilter === 'custom') {
-          dateFrom = customDateRange.fromISO;
-          fromDate = customDateRange.from;
-        }
-        if (customDateRange.toISO && dateFilter === 'custom') {
-          dateTo = customDateRange.toISO;
-          toDate = customDateRange.to;
-        }
       }
       
       console.log("🟣 Filtro aplicado:", dateFilter);
       console.log("📅 Selected date range:", { dateFrom, dateTo });
       console.log("🔢 date_from:", dateFrom);
       console.log("🔢 date_to:", dateTo);
+      
+      if (!dateFrom || !dateTo) {
+        throw new Error("Invalid date range: dateFrom or dateTo is undefined");
+      }
       
       const ordersRequest = {
         endpoint: '/orders/search',
@@ -371,11 +407,11 @@ const Dashboard = () => {
           throw new Error("No batch results returned from Supabase function");
         }
         
-        const ordersResult = batchData?.batch_results?.find(result => 
+        const ordersResult = batchData.batch_results.find(result => 
           result.endpoint?.includes('/orders/search') && result.success
         );
         
-        if (ordersResult && ordersResult.data.results) {
+        if (ordersResult && ordersResult.data && ordersResult.data.results) {
           const allOrders = ordersResult.data.results;
           console.log(`Received ${allOrders.length} orders from API`);
           
@@ -523,6 +559,24 @@ const Dashboard = () => {
         description: error.message || "No se pudieron cargar los datos de Mercado Libre."
       });
       setDataLoading(false);
+      
+      setSalesSummary({
+        gmv: 0,
+        commissions: 0,
+        taxes: 0,
+        shipping: 0,
+        discounts: 0,
+        refunds: 0,
+        iva: 0,
+        units: 0,
+        avgTicket: 0,
+        visits: 0,
+        conversion: 0
+      });
+      setSalesData([]);
+      setCostData([]);
+      setTopProducts([]);
+      setProvinceData([]);
     }
   };
 
