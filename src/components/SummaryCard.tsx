@@ -11,6 +11,7 @@ interface SummaryCardProps {
   colorClass?: string;
   isLoading?: boolean;
   suffix?: string;
+  additionalInfo?: string; // Added for showing additional info like "3.5% of GMV"
 }
 
 const SummaryCard = ({ 
@@ -20,7 +21,8 @@ const SummaryCard = ({
   icon, 
   colorClass = "bg-white",
   isLoading = false,
-  suffix = ""
+  suffix = "",
+  additionalInfo
 }: SummaryCardProps) => {
   // Determinar si el cambio porcentual es positivo
   const isPositiveChange = percentChange !== undefined && percentChange >= 0;
@@ -44,6 +46,12 @@ const SummaryCard = ({
             <p className={`text-2xl font-bold font-poppins mt-1 ${isLoading ? 'opacity-50' : ''}`}>
               {displayValue}
             </p>
+            
+            {additionalInfo && !isLoading && (
+              <div className="text-sm text-gray-500 mt-1">
+                {additionalInfo}
+              </div>
+            )}
             
             {isLoading ? (
               <div className="flex items-center mt-2 text-sm font-medium text-gray-400">

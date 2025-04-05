@@ -1,9 +1,7 @@
-
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
 
-// Definir tipos para los datos
 interface DateRange {
   from?: Date;
   to?: Date;
@@ -30,10 +28,8 @@ interface UseMeliDataReturn {
   refresh: () => Promise<void>;
 }
 
-// Tiempo de caché en milisegundos (10 minutos)
 const CACHE_TIME = 10 * 60 * 1000;
 
-// Cache para almacenar respuestas por fecha
 const responseCache = new Map<string, { 
   timestamp: number, 
   data: any 
@@ -51,7 +47,7 @@ export function useMeliData({
   const [salesSummary, setSalesSummary] = useState({
     gmv: 0, commissions: 0, taxes: 0, shipping: 0, discounts: 0,
     refunds: 0, iva: 0, units: 0, avgTicket: 0, visits: 0, conversion: 0,
-    advertising: 0 // Agregamos campo para gastos de publicidad
+    advertising: 0
   });
   const [topProducts, setTopProducts] = useState([]);
   const [costData, setCostData] = useState([]);
@@ -59,22 +55,20 @@ export function useMeliData({
   const [prevSalesSummary, setPrevSalesSummary] = useState({
     gmv: 0, commissions: 0, taxes: 0, shipping: 0, discounts: 0,
     refunds: 0, iva: 0, units: 0, avgTicket: 0, visits: 0, conversion: 0,
-    advertising: 0 // Agregamos campo para gastos de publicidad
+    advertising: 0
   });
 
   const isMounted = useRef(true);
   const requestInProgress = useRef<string | null>(null);
   const lastRequestPayload = useRef<string | null>(null);
   const { toast } = useToast();
-  
-  // Limpiar el efecto al desmontar
+
   useEffect(() => {
     return () => {
       isMounted.current = false;
     };
   }, []);
 
-  // Función para generar una clave de caché basada en los parámetros de filtrado
   const getCacheKey = useCallback(() => {
     let key = `${userId}-${dateFilter}`;
     if (dateFilter === 'custom' && dateRange.fromISO && dateRange.toISO) {
@@ -83,7 +77,6 @@ export function useMeliData({
     return key;
   }, [userId, dateFilter, dateRange]);
 
-  // Función para cargar datos con manejo de caché y reintentos
   const loadData = useCallback(async (retryCount = 0) => {
     if (!userId || !isConnected || !meliUserId) {
       console.log("Requisitos de carga no cumplidos", { userId, isConnected, meliUserId });
@@ -92,13 +85,11 @@ export function useMeliData({
     
     const cacheKey = getCacheKey();
     
-    // Evitar solicitudes duplicadas para la misma clave
     if (requestInProgress.current === cacheKey) {
       console.log("🔒 Request already in progress for:", cacheKey);
       return;
     }
 
-    // Verificar caché
     const cachedResponse = responseCache.get(cacheKey);
     const now = Date.now();
     if (cachedResponse && now - cachedResponse.timestamp < CACHE_TIME) {
@@ -122,7 +113,6 @@ export function useMeliData({
       if (isMounted.current) setIsLoading(true);
       requestInProgress.current = cacheKey;
       
-      // Calculamos rango de fechas
       let dateFrom, dateTo;
       
       if (dateFilter === 'custom' && dateRange.fromISO && dateRange.toISO) {
@@ -155,9 +145,7 @@ export function useMeliData({
       console.log("🟣 Cargando datos para filtro:", dateFilter);
       console.log("📅 Rango de fechas:", { dateFrom, dateTo });
 
-      // Crear un array con todos los requests necesarios
       const batchRequests = [
-        // Solicitud para órdenes (usando search para filtrar por fechas)
         {
           endpoint: '/orders/search',
           params: {
@@ -166,11 +154,10 @@ export function useMeliData({
             sort: 'date_desc',
             date_from: dateFrom,
             date_to: dateTo,
-            limit: 50 // Limitar el tamaño de página para evitar timeouts
+            limit: 50
           }
         },
         
-        // Solicitud para obtener los productos del usuario
         {
           endpoint: `/users/${meliUserId}/items/search`,
           params: {
@@ -178,7 +165,6 @@ export function useMeliData({
           }
         },
         
-        // Solicitud para obtener métricas de visitas
         {
           endpoint: `/users/${meliUserId}/items_visits/time_window`,
           params: {
@@ -188,14 +174,12 @@ export function useMeliData({
           }
         },
         
-        // Solicitud para datos de publicidad
         {
           endpoint: `/users/${meliUserId}/ads/campaigns`,
           params: {}
         }
       ];
-      
-      // Estructura completa del payload con ambos rangos de fechas
+
       const requestPayload = {
         user_id: userId,
         batch_requests: batchRequests,
@@ -203,11 +187,10 @@ export function useMeliData({
           begin: dateFrom ? dateFrom.split('T')[0] : null,
           end: dateTo ? dateTo.split('T')[0] : null
         },
-        prev_period: true, // Solicitar datos del período anterior para comparación
-        use_cache: true // Indicar al backend que puede usar caché interna
+        prev_period: true,
+        use_cache: true
       };
-      
-      // Verificar si el payload es idéntico a la última solicitud
+
       const payloadString = JSON.stringify(requestPayload);
       if (payloadString === lastRequestPayload.current) {
         console.log("🔄 Ignorando solicitud duplicada con el mismo payload");
@@ -215,7 +198,7 @@ export function useMeliData({
         requestInProgress.current = null;
         return;
       }
-      
+
       lastRequestPayload.current = payloadString;
       
       console.log("📦 Enviando batch requests:", batchRequests.map(r => r.endpoint));
@@ -229,16 +212,13 @@ export function useMeliData({
       }
       
       if (!batchData || !batchData.success) {
-        // Si es error por límite de tasa, reintentamos con backoff exponencial
         if (batchData?.error?.includes('429') || batchData?.message?.includes('rate limit')) {
           if (retryCount < 3) {
             const delay = Math.pow(2, retryCount) * 1000;
             console.log(`⏱️ API rate limit alcanzado, reintentando en ${delay}ms`);
             
-            // Esperar con backoff exponencial
             await new Promise(resolve => setTimeout(resolve, delay));
             
-            // Reintentar la solicitud
             return loadData(retryCount + 1);
           }
         }
@@ -251,7 +231,6 @@ export function useMeliData({
         dashboardData: batchData.dashboard_data ? "presente" : "ausente"
       });
       
-      // Guardar en caché
       responseCache.set(cacheKey, {
         timestamp: Date.now(),
         data: batchData
@@ -260,25 +239,20 @@ export function useMeliData({
       if (isMounted.current) {
         console.log("✅ Datos recibidos correctamente");
         
-        // Procesar los datos si existen
         if (batchData.dashboard_data) {
           if (batchData.dashboard_data.salesByMonth?.length > 0) {
             setSalesData(batchData.dashboard_data.salesByMonth);
           }
           
           if (batchData.dashboard_data.summary) {
-            // Asegurarnos de que la tasa de conversión se calcule correctamente
             const summary = batchData.dashboard_data.summary;
             
-            // Si tenemos visitas y unidades vendidas, calculamos la conversión
             if (summary.visits && summary.units) {
-              // La conversión es (unidades vendidas / visitas) * 100
               summary.conversion = (summary.units / summary.visits) * 100;
             } else {
               summary.conversion = 0;
             }
             
-            // Asegurar que el ticket promedio es GMV dividido por el número de órdenes, no de ítems
             if (summary.gmv > 0 && summary.orders > 0) {
               summary.avgTicket = summary.gmv / summary.orders;
             }
@@ -287,7 +261,6 @@ export function useMeliData({
           }
           
           if (batchData.dashboard_data.prev_summary) {
-            // También actualizamos la conversión del período anterior
             const prevSummary = batchData.dashboard_data.prev_summary;
             
             if (prevSummary.visits && prevSummary.units) {
@@ -296,7 +269,6 @@ export function useMeliData({
               prevSummary.conversion = 0;
             }
             
-            // Ajustar ticket promedio para período anterior también
             if (prevSummary.gmv > 0 && prevSummary.orders > 0) {
               prevSummary.avgTicket = prevSummary.gmv / prevSummary.orders;
             }
@@ -333,14 +305,11 @@ export function useMeliData({
     }
   }, [userId, meliUserId, dateFilter, dateRange, isConnected, getCacheKey, toast]);
 
-  // Cargar datos cuando cambia la fecha o el usuario, usando un efecto más controlado
   useEffect(() => {
-    // Validar que tenemos los datos necesarios y un rango de fechas válido
     const validDateRange = dateFilter !== 'custom' || 
                           (dateRange.fromISO && dateRange.toISO);
     
     if (validDateRange && userId && isConnected && meliUserId) {
-      // Creamos una clave única para este conjunto de parámetros
       const requestKey = `${userId}-${meliUserId}-${dateFilter}-${dateRange.fromISO || ''}-${dateRange.toISO || ''}`;
       
       console.log(`🔍 Verificando carga de datos para: ${requestKey}`);

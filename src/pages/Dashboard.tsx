@@ -1,11 +1,10 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Navigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
-import { Loader2, DollarSign, ShoppingBag, CreditCard, Users, BarChart3, Percent, Truck, Calculator, PieChart as PieChartIcon } from "lucide-react";
+import { Loader2, DollarSign, ShoppingBag, CreditCard, Users, BarChart3, Percent, Truck, Calculator, PieChart as PieChartIcon, Megaphone } from "lucide-react";
 import MeliConnect from '@/components/MeliConnect';
 import { useToast } from "@/components/ui/use-toast";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -21,12 +20,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 
 const COLORS = ['#663399', '#FFD700', '#8944EB', '#FF8042', '#9B59B6', '#4ade80'];
 
-// Function to calculate the complete balance considering all factors
 const calculateBalance = (gmv: number, commissions: number, shipping: number, taxes: number, ivaRate: number, advertising: number = 0) => {
-  // Calculate IVA based on the provided rate (as a percentage)
   const iva = (gmv * ivaRate) / 100;
-  
-  // Calculate total balance: GMV - commissions - shipping - taxes - IVA - advertising
   return gmv - commissions - shipping - taxes - iva - advertising;
 };
 
@@ -42,11 +37,11 @@ const Dashboard = () => {
     fromISO?: string,
     toISO?: string
   }>({});
-  const [ivaRate, setIvaRate] = useState(21); // Default IVA rate: 21%
-  
+  const [ivaRate, setIvaRate] = useState(21);
+
   const { toast } = useToast();
   const isMounted = useRef(true);
-  
+
   const {
     isLoading: dataLoading,
     salesData,
@@ -63,13 +58,13 @@ const Dashboard = () => {
     dateRange: customDateRange,
     isConnected: meliConnected
   });
-  
+
   useEffect(() => {
     return () => {
       isMounted.current = false;
     };
   }, []);
-  
+
   useEffect(() => {
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -135,7 +130,6 @@ const Dashboard = () => {
     fromISO?: string;
     toISO?: string;
   }) => {
-    // Evitar actualización si el rango ya es el seleccionado
     if (range === dateFilter && 
         ((range !== 'custom') || 
          (customDateRange.fromISO === dates?.fromISO && 
@@ -180,7 +174,6 @@ const Dashboard = () => {
     return <Navigate to="/login" replace />;
   }
 
-  // Calcular el balance utilizando todos los factores
   const currentBalance = calculateBalance(
     salesSummary.gmv, 
     salesSummary.commissions, 
@@ -190,7 +183,6 @@ const Dashboard = () => {
     salesSummary.advertising || 0
   );
 
-  // Calcular el balance del período anterior
   const previousBalance = calculateBalance(
     prevSalesSummary.gmv, 
     prevSalesSummary.commissions, 
@@ -200,11 +192,13 @@ const Dashboard = () => {
     prevSalesSummary.advertising || 0
   );
 
-  // Calcular el monto del IVA
   const currentIva = (salesSummary.gmv * ivaRate) / 100;
   const previousIva = (prevSalesSummary.gmv * ivaRate) / 100;
 
-  // Preparar datos para el gráfico de distribución de costos
+  const advertisingGmvPercent = salesSummary.gmv > 0 && salesSummary.advertising > 0
+    ? ((salesSummary.advertising / salesSummary.gmv) * 100).toFixed(1)
+    : null;
+
   const costDistributionData = [
     { name: 'Comisiones', value: salesSummary.commissions },
     { name: 'Impuestos', value: salesSummary.taxes },
@@ -367,17 +361,19 @@ const Dashboard = () => {
                   />
                 </div>
 
-                {salesSummary.advertising > 0 && (
-                  <div className="mb-8">
-                    <SummaryCard 
-                      title="Gastos de Publicidad"
-                      value={formatCurrency(salesSummary.advertising)}
-                      percentChange={calculatePercentChange(salesSummary.advertising, prevSalesSummary.advertising)}
-                      icon={<PieChartIcon className="h-5 w-5" />}
-                      isLoading={dataLoading}
-                    />
-                  </div>
-                )}
+                <div className="mb-8">
+                  <SummaryCard 
+                    title="Gastos de Publicidad"
+                    value={formatCurrency(salesSummary.advertising || 0)}
+                    percentChange={calculatePercentChange(
+                      salesSummary.advertising || 0, 
+                      prevSalesSummary.advertising || 0
+                    )}
+                    icon={<Megaphone className="h-5 w-5" />}
+                    isLoading={dataLoading}
+                    additionalInfo={advertisingGmvPercent ? `${advertisingGmvPercent}% del GMV` : null}
+                  />
+                </div>
                 
                 <Tabs defaultValue="ventas" className="mb-6">
                   <TabsList className="mb-6 bg-white border">
