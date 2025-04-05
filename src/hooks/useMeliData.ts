@@ -63,6 +63,7 @@ export function useMeliData({
   const isMounted = useRef(true);
   const requestInProgress = useRef<string | null>(null);
   const lastRequestPayload = useRef<string | null>(null);
+  const pendingRequests = useRef<Set<string>>(new Set());
   const { toast } = useToast();
   
   // Limpiar el efecto al desmontar
@@ -96,6 +97,13 @@ export function useMeliData({
       return;
     }
 
+    // Verificar si esta solicitud está pendiente
+    if (pendingRequests.current.has(cacheKey)) {
+      console.log("🔄 Solicitud ya pendiente para:", cacheKey);
+      return;
+    }
+    pendingRequests.current.add(cacheKey);
+
     // Verificar caché
     const cachedResponse = responseCache.get(cacheKey);
     const now = Date.now();
@@ -113,6 +121,7 @@ export function useMeliData({
           if (dashData.salesByProvince?.length > 0) setProvinceData(dashData.salesByProvince);
         }
       }
+      pendingRequests.current.delete(cacheKey);
       return;
     }
 
@@ -153,6 +162,7 @@ export function useMeliData({
       console.log("🟣 Cargando datos para filtro:", dateFilter);
       console.log("📅 Rango de fechas:", { dateFrom, dateTo });
       
+      // Verificar si no hay reemplazo de tokens ni productos se hace con listas
       const ordersRequest = {
         endpoint: '/orders/search',
         params: {
@@ -165,12 +175,29 @@ export function useMeliData({
         }
       };
       
-      // Reducimos el número de solicitudes en batch
+      // Solicitud para obtener los productos del usuario
+      const itemsRequest = {
+        endpoint: `/users/${meliUserId}/items/search`,
+        params: {
+          limit: 100
+        }
+      };
+      
+      // Solicitud para obtener métricas de visitas por item
+      const visitsMetricsRequest = {
+        endpoint: `/users/${meliUserId}/items_visits/time_window`,
+        params: {
+          date_from: dateFrom?.split('T')[0],
+          date_to: dateTo?.split('T')[0],
+          time_window: 'day'
+        }
+      };
+
+      // Agregamos las solicitudes en lotes más pequeños
       const batchRequests = [
         ordersRequest,
-        {
-          endpoint: `/users/${meliUserId}/items/search`
-        }
+        itemsRequest,
+        visitsMetricsRequest
       ];
       
       const requestPayload = {
@@ -190,10 +217,13 @@ export function useMeliData({
         console.log("🔄 Ignorando solicitud duplicada con el mismo payload");
         if (isMounted.current) setIsLoading(false);
         requestInProgress.current = null;
+        pendingRequests.current.delete(cacheKey);
         return;
       }
       
       lastRequestPayload.current = payloadString;
+      
+      console.log("📦 Enviando batch requests:", batchRequests.map(r => r.endpoint));
       
       const { data: batchData, error: batchError } = await supabase.functions.invoke('meli-data', {
         body: requestPayload
@@ -214,11 +244,18 @@ export function useMeliData({
             await new Promise(resolve => setTimeout(resolve, delay));
             
             // Reintentar la solicitud
+            pendingRequests.current.delete(cacheKey);
             return loadData(retryCount + 1);
           }
         }
         throw new Error(batchData?.message || 'Error al obtener datos');
       }
+      
+      console.log("✅ Respuesta de batch recibida:", {
+        success: batchData.success,
+        batchResults: batchData.batch_results?.length || 0,
+        dashboardData: batchData.dashboard_data ? "presente" : "ausente"
+      });
       
       // Guardar en caché
       responseCache.set(cacheKey, {
@@ -269,6 +306,7 @@ export function useMeliData({
     } finally {
       if (isMounted.current) setIsLoading(false);
       requestInProgress.current = null;
+      pendingRequests.current.delete(cacheKey);
     }
   }, [userId, meliUserId, dateFilter, dateRange, isConnected, getCacheKey, toast]);
 

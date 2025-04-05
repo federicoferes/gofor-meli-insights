@@ -30,8 +30,11 @@ const SummaryCard = ({
   const hasValue = value !== undefined && value !== null && value !== '' && value !== 0;
   const displayValue = isLoading ? "Cargando..." : (hasValue ? value : "Sin datos");
   
+  // Color dinámico por porcentaje
+  const percentColor = isPositiveChange ? 'text-green-600' : 'text-red-600';
+  
   return (
-    <Card className={`shadow-md ${colorClass}`}>
+    <Card className={`shadow-md ${colorClass} transition-all duration-200 hover:shadow-lg`}>
       <CardContent className="p-4">
         <div className="flex justify-between items-start">
           <div className="w-full">
@@ -45,7 +48,7 @@ const SummaryCard = ({
                 <span>Cargando datos comparativos...</span>
               </div>
             ) : hasPercentChange ? (
-              <div className={`flex items-center mt-2 text-sm font-medium ${isPositiveChange ? 'text-green-600' : 'text-red-600'}`}>
+              <div className={`flex items-center mt-2 text-sm font-medium ${percentColor}`}>
                 {isPositiveChange ? (
                   <TrendingUp className="h-4 w-4 mr-1" />
                 ) : (

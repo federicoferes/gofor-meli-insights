@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
@@ -79,7 +80,8 @@ serve(async (req) => {
       params = {}, 
       batch_requests = [], 
       date_range,
-      use_cache = true  // Nuevo parámetro para habilitar/deshabilitar caché
+      use_cache = true,
+      prev_period = false
     } = body;
 
     if (!user_id) {
@@ -218,13 +220,23 @@ serve(async (req) => {
     }
 
     // Calculate date range for metrics
-    const { dateFrom, dateTo } = calculateDateRange(date_range);
+    const { dateFrom, dateTo, prevDateFrom, prevDateTo } = calculateDateRange(date_range, prev_period);
     console.log(`Using calculated date range: from ${dateFrom} to ${dateTo}`);
+    if (prev_period) {
+      console.log(`Using previous period range: from ${prevDateFrom} to ${prevDateTo}`);
+    }
 
     // Fetch dashboard metrics using the optimized function
-    const dashboardData = await fetchDashboardMetricsOptimized(accessToken, meliUserId, dateFrom, dateTo);
+    const dashboardData = await fetchDashboardMetricsOptimized(
+      accessToken, 
+      meliUserId, 
+      dateFrom, 
+      dateTo, 
+      prevDateFrom, 
+      prevDateTo,
+      batch_requests
+    );
     
-    // Process batch requests with improved error handling and limits
     let batchResults = [];
     if (batch_requests.length > 0) {
       console.log(`Processing ${batch_requests.length} batch requests`);
@@ -242,7 +254,11 @@ serve(async (req) => {
       for (const group of requestGroups) {
         const groupResults = await Promise.all(
           group.map(async (request) => {
-            const { endpoint: batchEndpoint, method: batchMethod = "GET", params: batchParams = {} } = request;
+            const { 
+              endpoint: batchEndpoint, 
+              method: batchMethod = "GET", 
+              params: batchParams = {} 
+            } = request;
             
             if (!batchEndpoint) {
               return { 
@@ -265,7 +281,9 @@ serve(async (req) => {
               // Añadir parámetros para GET requests
               if (batchMethod === "GET" && actualParams) {
                 Object.entries(actualParams).forEach(([key, value]) => {
-                  apiUrl.searchParams.append(key, String(value));
+                  if (value !== undefined && value !== null) {
+                    apiUrl.searchParams.append(key, String(value));
+                  }
                 });
               }
               
@@ -324,7 +342,9 @@ serve(async (req) => {
       // Add query parameters
       if (method === "GET" && params) {
         Object.entries(params).forEach(([key, value]) => {
-          apiUrl.searchParams.append(key, String(value));
+          if (value !== undefined && value !== null) {
+            apiUrl.searchParams.append(key, String(value));
+          }
         });
       }
 
@@ -340,7 +360,7 @@ serve(async (req) => {
       });
 
       if (!apiResponse.ok) {
-        const apiError = await apiResponse.json();
+        const apiError = await apiResponse.json().catch(() => ({ message: apiResponse.statusText }));
         console.error("Error from Mercado Libre API:", apiError);
         throw new Error(`Error from Mercado Libre API: ${apiError.message || apiResponse.statusText}`);
       }
@@ -407,54 +427,97 @@ serve(async (req) => {
   }
 });
 
-// Calculate date range based on the selected filter - improved validation
-function calculateDateRange(dateRange: any) {
+// Calculate date range based on the selected filter with ranges para periodos comparativos
+function calculateDateRange(dateRange: any, includePrevPeriod = false) {
   if (!dateRange) {
     // Default to last 30 days if no range specified
     const today = new Date();
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(today.getDate() - 30);
     
-    return {
+    const result: any = {
       dateFrom: thirtyDaysAgo.toISOString(),
       dateTo: today.toISOString()
     };
+    
+    if (includePrevPeriod) {
+      const sixtyDaysAgo = new Date();
+      sixtyDaysAgo.setDate(today.getDate() - 60);
+      
+      result.prevDateFrom = sixtyDaysAgo.toISOString();
+      result.prevDateTo = thirtyDaysAgo.toISOString();
+    }
+    
+    return result;
   }
   
-  // If ISO strings are provided directly, validate and use them
+  // Si ISO strings son proporcionados directamente
   if (dateRange.fromISO && dateRange.toISO) {
     try {
-      // Validate ISO strings by attempting to create Date objects
-      new Date(dateRange.fromISO).toISOString();
-      new Date(dateRange.toISO).toISOString();
+      const fromDate = new Date(dateRange.fromISO);
+      const toDate = new Date(dateRange.toISO);
       
-      return {
-        dateFrom: dateRange.fromISO,
-        dateTo: dateRange.toISO
+      // Validar fechas ISO
+      const fromISO = fromDate.toISOString();
+      const toISO = toDate.toISOString();
+      
+      const result: any = {
+        dateFrom: fromISO,
+        dateTo: toISO
       };
+      
+      if (includePrevPeriod) {
+        // Calcular periodo anterior con la misma duración
+        const duration = toDate.getTime() - fromDate.getTime();
+        
+        const prevToDate = new Date(fromDate);
+        prevToDate.setMilliseconds(prevToDate.getMilliseconds() - 1); // Justo antes del inicio del periodo actual
+        
+        const prevFromDate = new Date(prevToDate);
+        prevFromDate.setTime(prevToDate.getTime() - duration);
+        
+        result.prevDateFrom = prevFromDate.toISOString();
+        result.prevDateTo = prevToDate.toISOString();
+      }
+      
+      return result;
     } catch (e) {
       console.error("Invalid ISO date strings provided:", e);
-      // Fall back to default if invalid
     }
   }
   
-  // If begin/end are provided (for batch requests)
+  // Si begin/end son proporcionados (para batch requests)
   if (dateRange.begin && dateRange.end) {
     try {
-      // Make sure to set proper time (start of day for begin, end of day for end)
+      // Establecer horas correctas (inicio del día para begin, fin del día para end)
       const beginDate = new Date(dateRange.begin);
       beginDate.setUTCHours(0, 0, 0, 0);
       
       const endDate = new Date(dateRange.end);
       endDate.setUTCHours(23, 59, 59, 999);
       
-      return {
+      const result: any = {
         dateFrom: beginDate.toISOString(),
         dateTo: endDate.toISOString()
       };
+      
+      if (includePrevPeriod) {
+        // Calcular periodo anterior con la misma duración
+        const duration = endDate.getTime() - beginDate.getTime();
+        
+        const prevEndDate = new Date(beginDate);
+        prevEndDate.setUTCMilliseconds(prevEndDate.getUTCMilliseconds() - 1);
+        
+        const prevBeginDate = new Date(prevEndDate);
+        prevBeginDate.setTime(prevEndDate.getTime() - duration);
+        
+        result.prevDateFrom = prevBeginDate.toISOString();
+        result.prevDateTo = prevEndDate.toISOString();
+      }
+      
+      return result;
     } catch (e) {
       console.error("Invalid begin/end date format:", e);
-      // Fall back to default if invalid
     }
   }
   
@@ -463,10 +526,20 @@ function calculateDateRange(dateRange: any) {
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(today.getDate() - 30);
   
-  return {
+  const result: any = {
     dateFrom: thirtyDaysAgo.toISOString(),
     dateTo: today.toISOString()
   };
+  
+  if (includePrevPeriod) {
+    const sixtyDaysAgo = new Date();
+    sixtyDaysAgo.setDate(today.getDate() - 60);
+    
+    result.prevDateFrom = sixtyDaysAgo.toISOString();
+    result.prevDateTo = thirtyDaysAgo.toISOString();
+  }
+  
+  return result;
 }
 
 // Improved date check function
@@ -482,10 +555,17 @@ function isDateInRange(dateStr: string, fromDate: string | Date, toDate: string 
     
     if (isNaN(from.getTime()) || isNaN(to.getTime())) return false;
     
-    from.setHours(0, 0, 0, 0);
-    to.setHours(23, 59, 59, 999);
+    // Asegurar que la comparación sea solo por fecha (sin horas)
+    const dateOnly = new Date(date);
+    dateOnly.setHours(0, 0, 0, 0);
     
-    return date >= from && date <= to;
+    const fromOnly = new Date(from);
+    fromOnly.setHours(0, 0, 0, 0);
+    
+    const toOnly = new Date(to);
+    toOnly.setHours(23, 59, 59, 999);
+    
+    return dateOnly >= fromOnly && dateOnly <= toOnly;
   } catch (e) {
     console.error("Error in date comparison:", e);
     return false;
@@ -534,121 +614,81 @@ function getEmptyDashboardData() {
   };
 }
 
-// Versión optimizada de fetchDashboardMetricsWithOrders
-async function fetchDashboardMetricsOptimized(accessToken: string, meliUserId: string, dateFrom: string, dateTo: string) {
+// Versión optimizada de fetchDashboardMetrics con soporte para todas las métricas requeridas
+async function fetchDashboardMetricsOptimized(
+  accessToken: string, 
+  meliUserId: string, 
+  dateFrom: string, 
+  dateTo: string,
+  prevDateFrom?: string,
+  prevDateTo?: string,
+  batchRequests: any[] = []
+) {
   try {
     console.log(`Fetching optimized metrics for user ${meliUserId} from ${dateFrom} to ${dateTo}`);
     
-    // Start with an empty dashboard structure
+    // Inicializar con estructura vacía
     const dashboardData = getEmptyDashboardData();
     
-    // 1. Fetch orders with better pagination control
+    // 1. Obtener órdenes con mejor control de paginación
     console.log("Fetching orders with optimized pagination...");
-    let offset = 0;
-    const limit = 50;
-    let hasMoreOrders = true;
-    let allOrders: any[] = [];
-    let requestCount = 0;
-    const maxRequests = 20; // Reducido de 200 a 20 para evitar excesivas llamadas API
+    let ordersData: any = { results: [] };
+    let prevOrdersData: any = { results: [] };
+    let visitsData: any = { results: [] };
     
-    // Usar el mismo formato de fecha para ambos parámetros
-    const dateFromFormatted = new Date(dateFrom).toISOString();
-    const dateToFormatted = new Date(dateTo).toISOString();
+    // Buscar los resultados de batch que contienen órdenes
+    const ordersResult = batchRequests.length > 0 ? 
+      await extractBatchResults(batchRequests, accessToken, meliUserId, dateFrom, dateTo) : 
+      null;
     
-    while (hasMoreOrders && requestCount < maxRequests) {
-      requestCount++;
-      
-      // Crear URL con todos los parámetros necesarios
-      const searchUrl = new URL(`https://api.mercadolibre.com/orders/search`);
-      searchUrl.searchParams.append('seller', meliUserId);
-      searchUrl.searchParams.append('order.status', 'paid');
-      searchUrl.searchParams.append('sort', 'date_desc');
-      searchUrl.searchParams.append('date_from', dateFromFormatted);
-      searchUrl.searchParams.append('date_to', dateToFormatted);
-      searchUrl.searchParams.append('limit', limit.toString());
-      searchUrl.searchParams.append('offset', offset.toString());
-      
-      console.log(`Fetching orders page with offset ${offset}`);
-      
-      try {
-        // Usar fetch con reintentos
-        const ordersData = await fetchWithRetry(
-          searchUrl.toString(),
-          { headers: { "Authorization": `Bearer ${accessToken}` } },
-          3
-        );
-        
-        if (ordersData.results && Array.isArray(ordersData.results)) {
-          const resultsCount = ordersData.results.length;
-          console.log(`Received ${resultsCount} orders from API (page ${offset / limit + 1})`);
-          
-          // Filtrar órdenes por fecha para asegurar precisión
-          const filteredOrders = ordersData.results.filter(order => 
-            isDateInRange(order.date_created || order.date_closed, dateFrom, dateTo)
-          );
-          
-          if (filteredOrders.length > 0) {
-            console.log(`Filtered to ${filteredOrders.length} orders within date range`);
-            allOrders = allOrders.concat(filteredOrders);
-          }
-          
-          // Comprobar si debemos continuar con la paginación
-          if (resultsCount < limit || ordersData.paging?.total <= offset + resultsCount) {
-            console.log("Reached end of results or last page");
-            hasMoreOrders = false;
-          } else {
-            offset += limit;
-            
-            // Pequeña pausa entre solicitudes para evitar rate limits
-            if (requestCount > 1) {
-              await new Promise(res => setTimeout(res, 300));
-            }
-          }
-        } else {
-          console.log("No results returned or invalid response format");
-          hasMoreOrders = false;
-        }
-      } catch (error) {
-        console.error(`Error fetching orders page with offset ${offset}:`, error);
-        
-        // Si ya tenemos algunas órdenes, continuamos con el procesamiento
-        if (allOrders.length > 0) {
-          console.log(`Proceeding with ${allOrders.length} orders collected so far`);
-          hasMoreOrders = false;
-        } else {
-          throw error; // Propagar el error si no tenemos datos
-        }
-      }
-      
-      // Salir temprano si ya tenemos suficientes órdenes para una buena muestra
-      if (allOrders.length > 500) {
-        console.log(`Collected ${allOrders.length} orders, stopping pagination to avoid excessive requests`);
-        hasMoreOrders = false;
-      }
+    if (ordersResult) {
+      ordersData = ordersResult.ordersData || { results: [] };
+      visitsData = ordersResult.visitsData || { results: [] };
+      console.log(`Got ${ordersData.results?.length || 0} orders from batch results`);
+      console.log(`Got visits data with ${visitsData.results?.length || 0} results`);
+    } else {
+      // Obtener órdenes directamente
+      ordersData = await fetchOrders(accessToken, meliUserId, dateFrom, dateTo);
     }
     
-    console.log(`Total orders fetched across all pages: ${allOrders.length}`);
+    // Obtener órdenes del período anterior para comparativa si es necesario
+    if (prevDateFrom && prevDateTo) {
+      console.log(`Fetching previous period orders for comparison`);
+      prevOrdersData = await fetchOrders(accessToken, meliUserId, prevDateFrom, prevDateTo);
+    }
+    
+    // Filtrar órdenes por fecha para asegurar precisión
+    const currentOrders = ordersData.results?.filter(order => 
+      isDateInRange(order.date_created || order.date_closed, dateFrom, dateTo)
+    ) || [];
+    
+    const prevOrders = prevOrdersData.results?.filter(order => 
+      isDateInRange(order.date_created || order.date_closed, prevDateFrom || "", prevDateTo || "")
+    ) || [];
+    
+    console.log(`Filtered to ${currentOrders.length} orders within current date range`);
+    console.log(`Filtered to ${prevOrders.length} orders within previous date range`);
     
     // Procesar órdenes para calcular métricas
-    if (allOrders.length > 0) {
+    if (currentOrders.length > 0) {
       let totalGMV = 0;
       let totalUnits = 0;
       const productMap = new Map();
       const provinceMap = new Map();
       const salesByMonth = new Map();
       
-      allOrders.forEach(order => {
-        // Calculate GMV from total_amount
+      currentOrders.forEach(order => {
+        // Calcular GMV desde total_amount
         const orderAmount = Number(order.total_amount) || 0;
         totalGMV += orderAmount;
         
-        // Calculate units from order items
+        // Calcular unidades desde order items
         if (order.order_items && Array.isArray(order.order_items)) {
           order.order_items.forEach(item => {
             const quantity = Number(item.quantity) || 0;
             totalUnits += quantity;
             
-            // Track product data for top products
+            // Seguir productos para top products
             const productId = item.item?.id || 'unknown';
             const productName = item.item?.title || 'Producto sin nombre';
             const unitPrice = Number(item.unit_price) || 0;
@@ -672,7 +712,7 @@ async function fetchDashboardMetricsOptimized(accessToken: string, meliUserId: s
           });
         }
         
-        // Track sales by province if shipping data exists
+        // Seguir ventas por provincia si hay datos de envío
         if (order.shipping?.receiver_address?.state?.name) {
           const provinceName = order.shipping.receiver_address.state.name;
           if (provinceMap.has(provinceName)) {
@@ -682,7 +722,7 @@ async function fetchDashboardMetricsOptimized(accessToken: string, meliUserId: s
           }
         }
         
-        // Track sales by month
+        // Seguir ventas por mes
         const orderDate = new Date(order.date_closed || order.date_created);
         const monthKey = `${orderDate.getFullYear()}-${orderDate.getMonth() + 1}`;
         const monthName = new Intl.DateTimeFormat('es', { month: 'short' }).format(orderDate);
@@ -701,24 +741,45 @@ async function fetchDashboardMetricsOptimized(accessToken: string, meliUserId: s
         }
       });
       
-      console.log(`Calculated GMV: ${totalGMV}, Units: ${totalUnits} from ${allOrders.length} orders`);
+      console.log(`Calculated GMV: ${totalGMV}, Units: ${totalUnits} from ${currentOrders.length} orders`);
       
-      // Update summary data
+      // Procesar órdenes del período anterior para comparativa
+      let prevGMV = 0;
+      let prevUnits = 0;
+      
+      if (prevOrders.length > 0) {
+        prevOrders.forEach(order => {
+          prevGMV += Number(order.total_amount) || 0;
+          
+          if (order.order_items && Array.isArray(order.order_items)) {
+            order.order_items.forEach(item => {
+              prevUnits += Number(item.quantity) || 0;
+            });
+          }
+        });
+      }
+      
+      // Actualizar datos del resumen
       dashboardData.summary.gmv = totalGMV;
       dashboardData.summary.units = totalUnits;
       dashboardData.summary.avgTicket = totalUnits > 0 ? totalGMV / totalUnits : 0;
       
-      // Update top products
+      // Actualizar datos del período anterior
+      dashboardData.prev_summary.gmv = prevGMV;
+      dashboardData.prev_summary.units = prevUnits;
+      dashboardData.prev_summary.avgTicket = prevUnits > 0 ? prevGMV / prevUnits : 0;
+      
+      // Actualizar mejores productos
       dashboardData.topProducts = Array.from(productMap.values())
         .sort((a, b) => b.revenue - a.revenue)
-        .slice(0, 5);
+        .slice(0, 10);
       
-      // Update sales by province
+      // Actualizar ventas por provincia
       dashboardData.salesByProvince = Array.from(provinceMap.entries())
         .map(([name, value]) => ({ name, value }))
         .sort((a, b) => b.value - a.value);
       
-      // Update sales by month
+      // Actualizar ventas por mes
       dashboardData.salesByMonth = Array.from(salesByMonth.values())
         .sort((a, b) => a.key.localeCompare(b.key))
         .slice(-6);
@@ -727,16 +788,16 @@ async function fetchDashboardMetricsOptimized(accessToken: string, meliUserId: s
       console.log("Sales by province calculated:", dashboardData.salesByProvince.length);
       console.log("Sales by month calculated:", dashboardData.salesByMonth.length);
       
-      // Calculate costs using fixed percentages
+      // Calcular costos usando porcentajes fijos
       const gmv = dashboardData.summary.gmv;
-      dashboardData.summary.commissions = gmv * 0.07; // 7% commissions
-      dashboardData.summary.taxes = gmv * 0.17;       // 17% taxes
-      dashboardData.summary.shipping = gmv * 0.03;    // 3% shipping
-      dashboardData.summary.discounts = gmv * 0.05;   // 5% discounts
-      dashboardData.summary.refunds = gmv * 0.02;     // 2% refunds
+      dashboardData.summary.commissions = gmv * 0.07; // 7% comisiones
+      dashboardData.summary.taxes = gmv * 0.17;       // 17% impuestos
+      dashboardData.summary.shipping = gmv * 0.03;    // 3% envíos
+      dashboardData.summary.discounts = gmv * 0.05;   // 5% descuentos
+      dashboardData.summary.refunds = gmv * 0.02;     // 2% reembolsos
       dashboardData.summary.iva = gmv * 0.21;         // 21% IVA
       
-      // Update cost distribution
+      // Actualizar distribución de costos
       dashboardData.costDistribution = [
         { name: 'Comisiones', value: dashboardData.summary.commissions },
         { name: 'Impuestos', value: dashboardData.summary.taxes },
@@ -744,81 +805,282 @@ async function fetchDashboardMetricsOptimized(accessToken: string, meliUserId: s
         { name: 'Descuentos', value: dashboardData.summary.discounts },
         { name: 'Anulaciones', value: dashboardData.summary.refunds }
       ];
+      
+      // Calcular los mismos valores para el período anterior
+      const prevGmv = dashboardData.prev_summary.gmv;
+      dashboardData.prev_summary.commissions = prevGmv * 0.07;
+      dashboardData.prev_summary.taxes = prevGmv * 0.17;
+      dashboardData.prev_summary.shipping = prevGmv * 0.03;
+      dashboardData.prev_summary.discounts = prevGmv * 0.05;
+      dashboardData.prev_summary.refunds = prevGmv * 0.02;
+      dashboardData.prev_summary.iva = prevGmv * 0.21;
     } else {
-      console.log("No orders found in the date range, returning empty dashboard data");
+      console.log("No orders found in the date range, returning minimal dashboard data");
     }
     
-    // 2. Fetch visits
+    // 2. Procesar datos de visitas si está disponible
     try {
-      const visitsUrl = new URL(`https://api.mercadolibre.com/users/${meliUserId}/items_visits`);
-      visitsUrl.searchParams.append('date_from', dateFrom);
-      visitsUrl.searchParams.append('date_to', dateTo);
+      // Conteo total de visitas
+      let totalVisits = 0;
+      let prevTotalVisits = 0;
       
-      console.log(`Fetching visits: ${visitsUrl.toString()}`);
-      
-      const visitsResponse = await fetch(visitsUrl.toString(), {
-        headers: { "Authorization": `Bearer ${accessToken}` }
-      });
-      
-      if (visitsResponse.ok) {
-        const visitsData = await visitsResponse.json();
-        console.log(`Visits data received`);
+      // Intentar extraer visitas de los datos del batch
+      if (visitsData && visitsData.results && Array.isArray(visitsData.results)) {
+        console.log(`Processing ${visitsData.results.length} visits data records`);
         
-        // Calculate total visits
-        if (visitsData.results && Array.isArray(visitsData.results)) {
-          const totalVisits = visitsData.results.reduce((sum, item) => {
-            return sum + (Number(item.visits) || 0);
-          }, 0);
-          
-          console.log(`Total visits: ${totalVisits}`);
-          dashboardData.summary.visits = totalVisits;
-          
-          // Calculate conversion rate
-          if (dashboardData.summary.units > 0 && totalVisits > 0) {
-            dashboardData.summary.conversion = (dashboardData.summary.units / totalVisits) * 100;
+        visitsData.results.forEach(item => {
+          // Filtrar visitas por el período actual
+          if (item.date && isDateInRange(item.date, dateFrom, dateTo)) {
+            totalVisits += Number(item.visits) || 0;
+          } else if (item.date && prevDateFrom && prevDateTo && 
+                    isDateInRange(item.date, prevDateFrom, prevDateTo)) {
+            prevTotalVisits += Number(item.visits) || 0;
           }
+        });
+        
+        console.log(`Total visits calculated: current=${totalVisits}, previous=${prevTotalVisits}`);
+      } else {
+        // Si no hay datos de visitas, intentar obtenerlos directamente
+        try {
+          const visitsUrl = new URL(`https://api.mercadolibre.com/users/${meliUserId}/items_visits/time_window`);
+          visitsUrl.searchParams.append('date_from', new Date(dateFrom).toISOString().split('T')[0]);
+          visitsUrl.searchParams.append('date_to', new Date(dateTo).toISOString().split('T')[0]);
+          visitsUrl.searchParams.append('time_window', 'day');
+          
+          console.log(`Fetching visits: ${visitsUrl.toString()}`);
+          
+          const visitsResponse = await fetch(visitsUrl.toString(), {
+            headers: { "Authorization": `Bearer ${accessToken}` }
+          });
+          
+          if (visitsResponse.ok) {
+            const visitsData = await visitsResponse.json();
+            console.log(`Visits data received: ${JSON.stringify(visitsData).substring(0, 100)}...`);
+            
+            // Calcular total de visitas
+            if (visitsData.results && Array.isArray(visitsData.results)) {
+              totalVisits = visitsData.results.reduce((sum, item) => {
+                return sum + (Number(item.visits) || 0);
+              }, 0);
+            }
+            
+            // Si necesitamos datos del período anterior
+            if (prevDateFrom && prevDateTo) {
+              const prevVisitsUrl = new URL(`https://api.mercadolibre.com/users/${meliUserId}/items_visits/time_window`);
+              prevVisitsUrl.searchParams.append('date_from', new Date(prevDateFrom).toISOString().split('T')[0]);
+              prevVisitsUrl.searchParams.append('date_to', new Date(prevDateTo).toISOString().split('T')[0]);
+              prevVisitsUrl.searchParams.append('time_window', 'day');
+              
+              const prevVisitsResponse = await fetch(prevVisitsUrl.toString(), {
+                headers: { "Authorization": `Bearer ${accessToken}` }
+              });
+              
+              if (prevVisitsResponse.ok) {
+                const prevVisitsData = await prevVisitsResponse.json();
+                
+                if (prevVisitsData.results && Array.isArray(prevVisitsData.results)) {
+                  prevTotalVisits = prevVisitsData.results.reduce((sum, item) => {
+                    return sum + (Number(item.visits) || 0);
+                  }, 0);
+                }
+              }
+            }
+          } else {
+            console.error("Failed to fetch visits:", await visitsResponse.text());
+            // Usar estimación si falla la API
+            useEstimatedVisitsAndConversion(dashboardData);
+          }
+        } catch (error) {
+          console.error("Error fetching visits:", error);
+          // Usar estimación si falla la API
+          useEstimatedVisitsAndConversion(dashboardData);
+        }
+      }
+      
+      // Actualizar visitas y conversión en el dashboard
+      if (totalVisits > 0) {
+        dashboardData.summary.visits = totalVisits;
+        
+        // Calcular tasa de conversión
+        if (dashboardData.summary.units > 0) {
+          dashboardData.summary.conversion = (dashboardData.summary.units / totalVisits) * 100;
         }
       } else {
-        console.error("Failed to fetch visits:", await visitsResponse.text());
+        // Si no pudimos obtener visitas reales, usar estimación
+        useEstimatedVisitsAndConversion(dashboardData);
+      }
+      
+      // Actualizar métricas del período anterior
+      if (prevTotalVisits > 0) {
+        dashboardData.prev_summary.visits = prevTotalVisits;
         
-        // Fallback visit calculation if API fails
-        if (dashboardData.summary.units > 0) {
-          // Assume average of 25 visits per unit sold as fallback
-          dashboardData.summary.visits = dashboardData.summary.units * 25;
-          dashboardData.summary.conversion = 4; // Assume 4% conversion rate
+        // Calcular tasa de conversión anterior
+        if (dashboardData.prev_summary.units > 0) {
+          dashboardData.prev_summary.conversion = (dashboardData.prev_summary.units / prevTotalVisits) * 100;
         }
+      } else {
+        // Estimar métricas del período anterior
+        dashboardData.prev_summary.visits = dashboardData.summary.visits * 0.85; // 15% menos
+        dashboardData.prev_summary.conversion = dashboardData.summary.conversion * 0.95; // 5% menos
       }
     } catch (error) {
-      console.error("Error fetching visits:", error);
-      
-      // Fallback visit calculation if API fails
-      if (dashboardData.summary.units > 0) {
-        // Assume average of 25 visits per unit sold as fallback
-        dashboardData.summary.visits = dashboardData.summary.units * 25;
-        dashboardData.summary.conversion = 4; // Assume 4% conversion rate
-      }
+      console.error("Error processing visits data:", error);
+      // Usar estimación si algo falla
+      useEstimatedVisitsAndConversion(dashboardData);
     }
-    
-    // 5. Calculate previous period metrics for comparison
-    // For simplicity, we'll use a percentage of current values as mock previous period data
-    dashboardData.prev_summary = {
-      gmv: dashboardData.summary.gmv * 0.9,           // 10% less
-      units: dashboardData.summary.units * 0.85,       // 15% less
-      avgTicket: dashboardData.summary.avgTicket * 1.05, // 5% more
-      commissions: dashboardData.summary.commissions * 0.9,
-      taxes: dashboardData.summary.taxes * 0.9,
-      shipping: dashboardData.summary.shipping * 0.88,
-      discounts: dashboardData.summary.discounts * 0.93,
-      refunds: dashboardData.summary.refunds * 0.95,
-      iva: dashboardData.summary.iva * 0.9,
-      visits: dashboardData.summary.visits * 0.88,
-      conversion: dashboardData.summary.conversion * 0.95
-    };
     
     console.log("Dashboard metrics calculated successfully");
     return dashboardData;
   } catch (error) {
     console.error("Error calculating dashboard metrics:", error);
     return getEmptyDashboardData();
+  }
+}
+
+// Función para extraer datos ya obtenidos en batch_requests
+async function extractBatchResults(batchRequests, accessToken, meliUserId, dateFrom, dateTo) {
+  const result = {
+    ordersData: null,
+    visitsData: null
+  };
+  
+  // Encontrar la solicitud de órdenes y de visitas en los requests
+  const ordersEndpoint = batchRequests.find(req => 
+    req.endpoint === '/orders/search' && 
+    req.params && req.params.seller === meliUserId
+  );
+  
+  const visitsEndpoint = batchRequests.find(req =>
+    req.endpoint === `/users/${meliUserId}/items_visits/time_window` ||
+    req.endpoint === `/users/${meliUserId}/items_visits`
+  );
+  
+  // Si encontramos la solicitud de órdenes, ejecutarla
+  if (ordersEndpoint) {
+    try {
+      result.ordersData = await fetchOrders(accessToken, meliUserId, dateFrom, dateTo);
+    } catch (error) {
+      console.error("Error fetching orders from batch request:", error);
+    }
+  }
+  
+  // Si encontramos la solicitud de visitas, ejecutarla
+  if (visitsEndpoint) {
+    try {
+      const visitsUrl = new URL(`https://api.mercadolibre.com${visitsEndpoint.endpoint}`);
+      
+      // Añadir los parámetros disponibles
+      if (visitsEndpoint.params) {
+        Object.entries(visitsEndpoint.params).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            visitsUrl.searchParams.append(key, String(value));
+          }
+        });
+      }
+      
+      // Añadir parámetros si no están presentes
+      if (!visitsUrl.searchParams.has('date_from')) {
+        visitsUrl.searchParams.append('date_from', new Date(dateFrom).toISOString().split('T')[0]);
+      }
+      
+      if (!visitsUrl.searchParams.has('date_to')) {
+        visitsUrl.searchParams.append('date_to', new Date(dateTo).toISOString().split('T')[0]);
+      }
+      
+      console.log(`Fetching visits data: ${visitsUrl.toString()}`);
+      
+      const response = await fetch(visitsUrl.toString(), {
+        headers: { "Authorization": `Bearer ${accessToken}` }
+      });
+      
+      if (response.ok) {
+        result.visitsData = await response.json();
+      } else {
+        console.error("Error fetching visits data:", await response.text());
+      }
+    } catch (error) {
+      console.error("Error processing visits endpoint:", error);
+    }
+  }
+  
+  return result;
+}
+
+// Función específica para obtener órdenes con paginación optimizada
+async function fetchOrders(accessToken, meliUserId, dateFrom, dateTo, maxResults = 100) {
+  let allOrders = [];
+  let offset = 0;
+  const limit = 50;
+  let hasMore = true;
+  let requestCount = 0;
+  const maxRequests = 5; // Limitar a 5 páginas (250 órdenes) para evitar timeouts
+  
+  while (hasMore && requestCount < maxRequests && allOrders.length < maxResults) {
+    requestCount++;
+    
+    const searchUrl = new URL(`https://api.mercadolibre.com/orders/search`);
+    searchUrl.searchParams.append('seller', meliUserId);
+    searchUrl.searchParams.append('order.status', 'paid');
+    searchUrl.searchParams.append('sort', 'date_desc');
+    searchUrl.searchParams.append('date_from', dateFrom);
+    searchUrl.searchParams.append('date_to', dateTo);
+    searchUrl.searchParams.append('limit', limit.toString());
+    searchUrl.searchParams.append('offset', offset.toString());
+    
+    console.log(`Fetching orders page ${requestCount} with offset ${offset}`);
+    
+    try {
+      const response = await fetch(searchUrl.toString(), {
+        headers: { "Authorization": `Bearer ${accessToken}` }
+      });
+      
+      if (!response.ok) {
+        console.error(`Error fetching orders page ${requestCount}:`, await response.text());
+        break;
+      }
+      
+      const ordersData = await response.json();
+      
+      if (ordersData.results && Array.isArray(ordersData.results)) {
+        const newOrders = ordersData.results;
+        console.log(`Received ${newOrders.length} orders from API (page ${requestCount})`);
+        
+        allOrders = allOrders.concat(newOrders);
+        
+        // Comprobar si hay más resultados
+        if (newOrders.length < limit || !ordersData.paging || 
+            ordersData.paging.total <= offset + newOrders.length) {
+          hasMore = false;
+        } else {
+          offset += limit;
+          
+          // Pequeña pausa entre solicitudes
+          if (requestCount < maxRequests) {
+            await new Promise(res => setTimeout(res, 300));
+          }
+        }
+      } else {
+        console.log("No results returned or invalid response format");
+        hasMore = false;
+      }
+    } catch (error) {
+      console.error(`Error fetching orders page ${requestCount}:`, error);
+      break;
+    }
+  }
+  
+  console.log(`Total orders fetched: ${allOrders.length}`);
+  return { results: allOrders };
+}
+
+// Función para usar estimaciones de visitas y conversión cuando no hay datos reales
+function useEstimatedVisitsAndConversion(dashboardData) {
+  // Solo estimar si hay ventas
+  if (dashboardData.summary.units > 0) {
+    // Asumir un promedio de 25 visitas por unidad vendida
+    dashboardData.summary.visits = Math.max(dashboardData.summary.units * 25, 1);
+    dashboardData.summary.conversion = 4; // Asumir 4% de tasa de conversión
+    
+    console.log(`Using estimated visits (${dashboardData.summary.visits}) and conversion rate (${dashboardData.summary.conversion}%)`);
   }
 }
