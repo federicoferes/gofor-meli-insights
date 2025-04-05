@@ -110,6 +110,12 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
         return;
       }
       
+      // Added validation - Check if the date range is complete
+      if (!dateRange.from || !dateRange.to) {
+        console.warn("⚠️ DateRangePicker: Incomplete date range generated");
+        return;
+      }
+      
       if (value !== "custom") {
         setDate(dateRange);
         
@@ -293,10 +299,11 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
               initialFocus
               mode="range"
               defaultMonth={date?.from}
-              selected={date?.from && date?.to ? {
-                from: date.from,
-                to: date.to
-              } : undefined}
+              selected={
+                date?.from && date?.to
+                  ? { from: date.from, to: date.to }
+                  : undefined
+              }
               onSelect={handleCustomDateChange}
               numberOfMonths={2}
               className="pointer-events-auto"
