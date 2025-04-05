@@ -194,13 +194,25 @@ serve(async (req) => {
         );
         
         // Process and calculate metrics if we have the dashboard data
-        const dashboardData = processDashboardData(batchResults, date_range);
+        let dashboardData = null;
+        try {
+          // Ensure we only process dashboard data if we have valid batch results
+          if (batchResults && batchResults.length > 0) {
+            dashboardData = processDashboardData(batchResults, date_range);
+          } else {
+            console.log("No valid batch results to process for dashboard data");
+            dashboardData = getEmptyDashboardData();
+          }
+        } catch (error) {
+          console.error("Error processing dashboard data:", error);
+          dashboardData = getEmptyDashboardData();
+        }
         
         return new Response(
           JSON.stringify({
             success: true,
-            batch_results: batchResults,
-            dashboard_data: dashboardData
+            batch_results: batchResults || [],
+            dashboard_data: dashboardData || getEmptyDashboardData()
           }),
           {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -215,7 +227,8 @@ serve(async (req) => {
           JSON.stringify({
             success: false,
             message: error.message || "Error processing batch requests",
-            batch_results: [] // Always include batch_results, even if empty
+            batch_results: [], // Always include batch_results, even if empty
+            dashboard_data: getEmptyDashboardData()
           }),
           {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -295,7 +308,8 @@ serve(async (req) => {
       JSON.stringify({
         success: false,
         message: error.message || "An unexpected error occurred",
-        batch_results: [] // Always include batch_results, even if empty
+        batch_results: [], // Always include batch_results, even if empty
+        dashboard_data: getEmptyDashboardData()
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -304,6 +318,28 @@ serve(async (req) => {
     );
   }
 });
+
+function getEmptyDashboardData() {
+  return {
+    summary: {
+      gmv: 0,
+      units: 0,
+      avgTicket: 0,
+      commissions: 0,
+      taxes: 0,
+      shipping: 0,
+      discounts: 0,
+      refunds: 0,
+      iva: 0,
+      visits: 0,
+      conversion: 0
+    },
+    salesByMonth: [],
+    costDistribution: [],
+    topProducts: [],
+    salesByProvince: []
+  };
+}
 
 function isDateInRange(dateStr: string, dateRange: any): boolean {
   if (!dateStr || !dateRange) return false;
@@ -354,25 +390,7 @@ function isDateInRange(dateStr: string, dateRange: any): boolean {
 function processDashboardData(batchResults: any[], dateRange: any) {
   try {
     // Initialize dashboard data structure
-    const dashboardData = {
-      summary: {
-        gmv: 0,
-        units: 0,
-        avgTicket: 0,
-        commissions: 0,
-        taxes: 0,
-        shipping: 0,
-        discounts: 0,
-        refunds: 0,
-        iva: 0,
-        visits: 0,
-        conversion: 0
-      },
-      salesByMonth: [],
-      costDistribution: [],
-      topProducts: [],
-      salesByProvince: []
-    };
+    const dashboardData = getEmptyDashboardData();
     
     // Find orders data in batch results
     if (!batchResults || !Array.isArray(batchResults)) {
@@ -547,24 +565,6 @@ function processDashboardData(batchResults: any[], dateRange: any) {
   } catch (error) {
     console.error("Error processing dashboard data:", error);
     // Return empty dashboard data structure on error
-    return {
-      summary: {
-        gmv: 0,
-        units: 0,
-        avgTicket: 0,
-        commissions: 0,
-        taxes: 0,
-        shipping: 0,
-        discounts: 0,
-        refunds: 0,
-        iva: 0,
-        visits: 0,
-        conversion: 0
-      },
-      salesByMonth: [],
-      costDistribution: [],
-      topProducts: [],
-      salesByProvince: []
-    };
+    return getEmptyDashboardData();
   }
 }
