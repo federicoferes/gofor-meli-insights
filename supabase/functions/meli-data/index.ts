@@ -135,8 +135,8 @@ serve(async (req) => {
     const { dateFrom, dateTo } = calculateDateRange(date_range);
     console.log(`Using calculated date range: from ${dateFrom} to ${dateTo}`);
 
-    // Fetch dashboard metrics using official MeLi metrics endpoints
-    const dashboardData = await fetchDashboardMetrics(accessToken, meliUserId, dateFrom, dateTo);
+    // Fetch dashboard metrics using official MeLi metrics endpoints and order search
+    const dashboardData = await fetchDashboardMetricsWithOrders(accessToken, meliUserId, dateFrom, dateTo);
     
     // Process batch requests if present
     let batchResults = [];
@@ -371,63 +371,88 @@ function getEmptyDashboardData() {
   };
 }
 
-// Fetch metrics using official MeLi metrics endpoints
-async function fetchDashboardMetrics(accessToken: string, meliUserId: string, dateFrom: string, dateTo: string) {
+// Fetch metrics using official MeLi metrics endpoints and order search with pagination
+async function fetchDashboardMetricsWithOrders(accessToken: string, meliUserId: string, dateFrom: string, dateTo: string) {
   try {
     console.log(`Fetching metrics for user ${meliUserId} from ${dateFrom} to ${dateTo}`);
     
     // Start with an empty dashboard structure
     const dashboardData = getEmptyDashboardData();
     
-    // 1. Fetch items sold (units and GMV)
-    try {
-      const itemsSoldUrl = new URL(`https://api.mercadolibre.com/users/${meliUserId}/items_sold`);
-      itemsSoldUrl.searchParams.append('date_from', dateFrom);
-      itemsSoldUrl.searchParams.append('date_to', dateTo);
+    // 1. Fetch orders with pagination to calculate GMV and units
+    console.log("Fetching orders with pagination...");
+    let offset = 0;
+    const limit = 50;
+    let hasMoreOrders = true;
+    let allOrders: any[] = [];
+    
+    while (hasMoreOrders) {
+      const searchUrl = new URL(`https://api.mercadolibre.com/orders/search`);
+      searchUrl.searchParams.append('seller', meliUserId);
+      searchUrl.searchParams.append('order.status', 'paid');
+      searchUrl.searchParams.append('sort', 'date_desc');
+      searchUrl.searchParams.append('date_from', dateFrom);
+      searchUrl.searchParams.append('date_to', dateTo);
+      searchUrl.searchParams.append('limit', limit.toString());
+      searchUrl.searchParams.append('offset', offset.toString());
       
-      console.log(`Fetching items sold: ${itemsSoldUrl.toString()}`);
+      console.log(`Fetching orders page with offset ${offset}: ${searchUrl.toString()}`);
       
-      const itemsSoldResponse = await fetch(itemsSoldUrl.toString(), {
-        headers: { "Authorization": `Bearer ${accessToken}` }
-      });
-      
-      if (itemsSoldResponse.ok) {
-        const itemsSoldData = await itemsSoldResponse.json();
-        console.log(`Items sold data:`, itemsSoldData);
+      try {
+        const ordersResponse = await fetch(searchUrl.toString(), {
+          headers: { "Authorization": `Bearer ${accessToken}` }
+        });
         
-        // Extract total units and calculate GMV
-        let totalUnits = 0;
-        let totalGMV = 0;
-        let totalOrders = 0;
+        if (!ordersResponse.ok) {
+          console.error(`Failed to fetch orders page: ${await ordersResponse.text()}`);
+          break;
+        }
         
-        if (itemsSoldData.results && Array.isArray(itemsSoldData.results)) {
-          // Process each sold item to calculate units and GMV
-          totalUnits = itemsSoldData.results.reduce((sum, item) => {
-            return sum + (Number(item.quantity) || 0);
-          }, 0);
+        const ordersData = await ordersResponse.json();
+        console.log(`Received ${ordersData.results?.length || 0} orders from API (page ${offset / limit + 1})`);
+        
+        if (ordersData.results && Array.isArray(ordersData.results) && ordersData.results.length > 0) {
+          allOrders = allOrders.concat(ordersData.results);
           
-          // For GMV, we use the total_amount or price * quantity 
-          totalGMV = itemsSoldData.results.reduce((sum, item) => {
-            const itemTotal = Number(item.unit_price || 0) * Number(item.quantity || 0);
-            return sum + itemTotal;
-          }, 0);
-          
-          // Count orders
-          totalOrders = new Set(itemsSoldData.results.map(item => item.order_id)).size;
-          
-          console.log(`Calculated metrics - Units: ${totalUnits}, GMV: ${totalGMV}, Orders: ${totalOrders}`);
-          
-          // Update dashboard data
-          dashboardData.summary.units = totalUnits;
-          dashboardData.summary.gmv = totalGMV;
-          
-          // Sort by revenue to get top products
-          const productMap = new Map();
-          
-          itemsSoldData.results.forEach(item => {
-            const productId = item.item_id;
-            const productName = item.title || 'Producto sin nombre';
+          // Check if we need to fetch more pages
+          if (ordersData.results.length < limit) {
+            hasMoreOrders = false;
+          } else {
+            offset += limit;
+          }
+        } else {
+          hasMoreOrders = false;
+        }
+      } catch (error) {
+        console.error(`Error fetching orders page with offset ${offset}:`, error);
+        hasMoreOrders = false;
+      }
+    }
+    
+    console.log(`Total orders fetched across all pages: ${allOrders.length}`);
+    
+    // Process orders to calculate GMV and units
+    if (allOrders.length > 0) {
+      let totalGMV = 0;
+      let totalUnits = 0;
+      const productMap = new Map();
+      const provinceMap = new Map();
+      const salesByMonth = new Map();
+      
+      allOrders.forEach(order => {
+        // Calculate GMV from total_amount
+        const orderAmount = Number(order.total_amount) || 0;
+        totalGMV += orderAmount;
+        
+        // Calculate units from order items
+        if (order.order_items && Array.isArray(order.order_items)) {
+          order.order_items.forEach(item => {
             const quantity = Number(item.quantity) || 0;
+            totalUnits += quantity;
+            
+            // Track product data for top products
+            const productId = item.item?.id || 'unknown';
+            const productName = item.item?.title || 'Producto sin nombre';
             const unitPrice = Number(item.unit_price) || 0;
             const revenue = quantity * unitPrice;
             
@@ -447,91 +472,80 @@ async function fetchDashboardMetrics(accessToken: string, meliUserId: string, da
               });
             }
           });
-          
-          // Convert to array and sort by revenue
-          dashboardData.topProducts = Array.from(productMap.values())
-            .sort((a, b) => b.revenue - a.revenue)
-            .slice(0, 5);
-          
-          console.log(`Top products calculated:`, dashboardData.topProducts);
-          
-          // Group sales by month
-          const salesByMonth = new Map();
-          
-          itemsSoldData.results.forEach(item => {
-            if (!item.date_closed) return;
-            
-            const orderDate = new Date(item.date_closed);
-            const monthKey = `${orderDate.getFullYear()}-${orderDate.getMonth() + 1}`;
-            const monthName = new Intl.DateTimeFormat('es', { month: 'short' }).format(orderDate);
-            const revenue = Number(item.unit_price || 0) * Number(item.quantity || 0);
-            
-            if (salesByMonth.has(monthKey)) {
-              salesByMonth.set(monthKey, {
-                ...salesByMonth.get(monthKey),
-                value: salesByMonth.get(monthKey).value + revenue
-              });
-            } else {
-              salesByMonth.set(monthKey, {
-                key: monthKey,
-                name: monthName,
-                value: revenue
-              });
-            }
-          });
-          
-          dashboardData.salesByMonth = Array.from(salesByMonth.values())
-            .sort((a, b) => a.key.localeCompare(b.key))
-            .slice(-6);
-          
-          console.log(`Sales by month calculated:`, dashboardData.salesByMonth);
-          
-          // Group sales by province if shipping data exists
-          const provinceMap = new Map();
-          
-          for (const item of itemsSoldData.results) {
-            // We need to fetch order details to get province information
-            if (item.order_id) {
-              try {
-                const orderUrl = new URL(`https://api.mercadolibre.com/orders/${item.order_id}`);
-                const orderResponse = await fetch(orderUrl.toString(), {
-                  headers: { "Authorization": `Bearer ${accessToken}` }
-                });
-                
-                if (orderResponse.ok) {
-                  const orderData = await orderResponse.json();
-                  
-                  if (orderData.shipping && orderData.shipping.receiver_address && 
-                      orderData.shipping.receiver_address.state && 
-                      orderData.shipping.receiver_address.state.name) {
-                    
-                    const provinceName = orderData.shipping.receiver_address.state.name;
-                    const revenue = Number(item.unit_price || 0) * Number(item.quantity || 0);
-                    
-                    if (provinceMap.has(provinceName)) {
-                      provinceMap.set(provinceName, provinceMap.get(provinceName) + revenue);
-                    } else {
-                      provinceMap.set(provinceName, revenue);
-                    }
-                  }
-                }
-              } catch (error) {
-                console.error(`Error fetching order details for ${item.order_id}:`, error);
-              }
-            }
-          }
-          
-          dashboardData.salesByProvince = Array.from(provinceMap.entries())
-            .map(([name, value]) => ({ name, value }))
-            .sort((a, b) => b.value - a.value);
-          
-          console.log(`Sales by province calculated:`, dashboardData.salesByProvince);
         }
-      } else {
-        console.error("Failed to fetch items sold:", await itemsSoldResponse.text());
-      }
-    } catch (error) {
-      console.error("Error fetching items sold:", error);
+        
+        // Track sales by province if shipping data exists
+        if (order.shipping?.receiver_address?.state?.name) {
+          const provinceName = order.shipping.receiver_address.state.name;
+          if (provinceMap.has(provinceName)) {
+            provinceMap.set(provinceName, provinceMap.get(provinceName) + orderAmount);
+          } else {
+            provinceMap.set(provinceName, orderAmount);
+          }
+        }
+        
+        // Track sales by month
+        const orderDate = new Date(order.date_closed || order.date_created);
+        const monthKey = `${orderDate.getFullYear()}-${orderDate.getMonth() + 1}`;
+        const monthName = new Intl.DateTimeFormat('es', { month: 'short' }).format(orderDate);
+        
+        if (salesByMonth.has(monthKey)) {
+          salesByMonth.set(monthKey, {
+            ...salesByMonth.get(monthKey),
+            value: salesByMonth.get(monthKey).value + orderAmount
+          });
+        } else {
+          salesByMonth.set(monthKey, {
+            key: monthKey,
+            name: monthName,
+            value: orderAmount
+          });
+        }
+      });
+      
+      console.log(`Calculated GMV: ${totalGMV}, Units: ${totalUnits} from ${allOrders.length} orders`);
+      
+      // Update summary data
+      dashboardData.summary.gmv = totalGMV;
+      dashboardData.summary.units = totalUnits;
+      dashboardData.summary.avgTicket = totalUnits > 0 ? totalGMV / totalUnits : 0;
+      
+      // Update top products
+      dashboardData.topProducts = Array.from(productMap.values())
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 5);
+      
+      // Update sales by province
+      dashboardData.salesByProvince = Array.from(provinceMap.entries())
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value);
+      
+      // Update sales by month
+      dashboardData.salesByMonth = Array.from(salesByMonth.values())
+        .sort((a, b) => a.key.localeCompare(b.key))
+        .slice(-6);
+      
+      console.log("Top products calculated:", dashboardData.topProducts);
+      console.log("Sales by province calculated:", dashboardData.salesByProvince);
+      console.log("Sales by month calculated:", dashboardData.salesByMonth);
+      
+      // Calculate costs using fixed percentages
+      const gmv = dashboardData.summary.gmv;
+      dashboardData.summary.commissions = gmv * 0.07; // 7% commissions
+      dashboardData.summary.taxes = gmv * 0.17;       // 17% taxes
+      dashboardData.summary.shipping = gmv * 0.03;    // 3% shipping
+      dashboardData.summary.discounts = gmv * 0.05;   // 5% discounts
+      dashboardData.summary.refunds = gmv * 0.02;     // 2% refunds
+      dashboardData.summary.iva = gmv * 0.21;         // 21% IVA
+      
+      // Update cost distribution
+      dashboardData.costDistribution = [
+        { name: 'Comisiones', value: dashboardData.summary.commissions },
+        { name: 'Impuestos', value: dashboardData.summary.taxes },
+        { name: 'Envíos', value: dashboardData.summary.shipping },
+        { name: 'Descuentos', value: dashboardData.summary.discounts },
+        { name: 'Anulaciones', value: dashboardData.summary.refunds }
+      ];
     }
     
     // 2. Fetch visits
@@ -584,29 +598,6 @@ async function fetchDashboardMetrics(accessToken: string, meliUserId: string, da
         dashboardData.summary.conversion = 4; // Assume 4% conversion rate
       }
     }
-    
-    // 3. Calculate average ticket
-    if (dashboardData.summary.units > 0) {
-      dashboardData.summary.avgTicket = dashboardData.summary.gmv / dashboardData.summary.units;
-    }
-    
-    // 4. Calculate costs using fixed percentages
-    const gmv = dashboardData.summary.gmv;
-    dashboardData.summary.commissions = gmv * 0.07; // 7% commissions
-    dashboardData.summary.taxes = gmv * 0.17;       // 17% taxes
-    dashboardData.summary.shipping = gmv * 0.03;    // 3% shipping
-    dashboardData.summary.discounts = gmv * 0.05;   // 5% discounts
-    dashboardData.summary.refunds = gmv * 0.02;     // 2% refunds
-    dashboardData.summary.iva = gmv * 0.21;         // 21% IVA
-    
-    // Update cost distribution
-    dashboardData.costDistribution = [
-      { name: 'Comisiones', value: dashboardData.summary.commissions },
-      { name: 'Impuestos', value: dashboardData.summary.taxes },
-      { name: 'Envíos', value: dashboardData.summary.shipping },
-      { name: 'Descuentos', value: dashboardData.summary.discounts },
-      { name: 'Anulaciones', value: dashboardData.summary.refunds }
-    ];
     
     // 5. Calculate previous period metrics for comparison
     // For simplicity, we'll use a percentage of current values as mock previous period data
