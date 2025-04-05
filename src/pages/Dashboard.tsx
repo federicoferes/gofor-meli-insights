@@ -217,6 +217,7 @@ const Dashboard = () => {
     
     try {
       setDataLoading(true);
+      console.log("🔁 Running loadMeliData with filter:", dateFilter);
       console.log("Loading MeLi data for user:", meliUser);
       
       let dateFrom, dateTo;
