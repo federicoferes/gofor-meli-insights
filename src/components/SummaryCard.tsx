@@ -10,6 +10,7 @@ interface SummaryCardProps {
   icon?: React.ReactNode;
   colorClass?: string;
   isLoading?: boolean;
+  suffix?: string; // Added suffix prop for % or other units
 }
 
 const SummaryCard = ({ 
@@ -18,7 +19,8 @@ const SummaryCard = ({
   percentChange, 
   icon, 
   colorClass = "bg-white",
-  isLoading = false
+  isLoading = false,
+  suffix = "" // Default to empty string if not provided
 }: SummaryCardProps) => {
   // Determinar si el cambio porcentual es positivo
   const isPositiveChange = percentChange !== undefined && percentChange >= 0;
@@ -28,7 +30,7 @@ const SummaryCard = ({
   
   // Mejorar la validación para valores
   const hasValue = value !== undefined && value !== null && value !== '' && value !== 0;
-  const displayValue = isLoading ? "Cargando..." : (hasValue ? value : "Sin datos");
+  const displayValue = isLoading ? "Cargando..." : (hasValue ? `${value}${suffix}` : "Sin datos");
   
   // Color dinámico por porcentaje
   const percentColor = isPositiveChange ? 'text-green-600' : 'text-red-600';

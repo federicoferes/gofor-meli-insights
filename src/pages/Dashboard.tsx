@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Navigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -234,7 +233,8 @@ const Dashboard = () => {
                   />
                   <SummaryCard 
                     title="Tasa de conversión"
-                    value={`${(Number(salesSummary.conversion) || 0).toFixed(1)}%`}
+                    value={Number(salesSummary.conversion || 0).toFixed(1)}
+                    suffix="%"
                     percentChange={calculatePercentChange(salesSummary.conversion, prevSalesSummary.conversion)}
                     icon={<Percent className="h-5 w-5" />}
                     isLoading={dataLoading}

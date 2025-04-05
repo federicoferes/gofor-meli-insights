@@ -273,11 +273,31 @@ export function useMeliData({
           }
           
           if (batchData.dashboard_data.summary) {
-            setSalesSummary(batchData.dashboard_data.summary);
+            // Asegurarnos de que la tasa de conversión se calcule correctamente
+            const summary = batchData.dashboard_data.summary;
+            
+            // Si tenemos visitas y unidades vendidas, calculamos la conversión
+            if (summary.visits && summary.units) {
+              // La conversión es (unidades vendidas / visitas) * 100
+              summary.conversion = (summary.units / summary.visits) * 100;
+            } else {
+              summary.conversion = 0;
+            }
+            
+            setSalesSummary(summary);
           }
           
           if (batchData.dashboard_data.prev_summary) {
-            setPrevSalesSummary(batchData.dashboard_data.prev_summary);
+            // También actualizamos la conversión del período anterior
+            const prevSummary = batchData.dashboard_data.prev_summary;
+            
+            if (prevSummary.visits && prevSummary.units) {
+              prevSummary.conversion = (prevSummary.units / prevSummary.visits) * 100;
+            } else {
+              prevSummary.conversion = 0;
+            }
+            
+            setPrevSalesSummary(prevSummary);
           }
           
           if (batchData.dashboard_data.costDistribution?.length > 0) {
