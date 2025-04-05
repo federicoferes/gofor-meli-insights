@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -310,6 +311,13 @@ const Dashboard = () => {
       };
       
       console.log("🔶 Making request to supabase function with payload:", JSON.stringify(requestPayload));
+      
+      // Add the requested logging here
+      console.log("🚀 Sending to Supabase:", {
+        user_id: session.user.id,
+        date_range: { begin: dateFrom, end: dateTo },
+        batch_requests
+      });
       
       const { data: batchData, error: batchError } = await supabase.functions.invoke('meli-data', {
         body: requestPayload
