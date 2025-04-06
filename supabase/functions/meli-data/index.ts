@@ -2,8 +2,8 @@
 // Supabase Edge function para interactuar con la API de Mercado Libre
 // sin dependencia de date-fns-tz
 
-// Importar función para manejar fechas
-import { isWithinInterval, parseISO } from 'date-fns';
+// Importar función para manejar fechas con la sintaxis correcta de Deno
+import { isWithinInterval, parseISO } from "npm:date-fns";
 
 // Helper para determinar si una fecha está en un rango
 const isDateInRange = (dateStr: string, fromStr: string, toStr: string) => {
