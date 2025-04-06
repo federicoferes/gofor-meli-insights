@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { format, startOfDay, endOfDay, subDays, isEqual } from "date-fns";
 import { es } from "date-fns/locale";
-import { zonedTimeToUtc, utcToZonedTime, format as formatTz } from "date-fns-tz";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -18,8 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
-const TIMEZONE = 'America/Argentina/Buenos_Aires';
+import { getPresetDateRange, formatDateForApi } from "@/utils/date";
 
 type DateRangePickerProps = {
   onDateRangeChange: (range: string, dates?: { 
@@ -42,41 +40,12 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
   const lastFromISO = useRef<string | null>(null);
   const lastToISO = useRef<string | null>(null);
 
-  const formatDateToISO = (date: Date, endOfDayFlag = false): string => {
-    const zonedDate = utcToZonedTime(date, TIMEZONE);
-    
-    if (endOfDayFlag) {
-      zonedDate.setHours(23, 59, 59, 999);
-    } else {
-      zonedDate.setHours(0, 0, 0, 0);
-    }
-    
-    return zonedTimeToUtc(zonedDate, TIMEZONE).toISOString();
-  };
-
   const getDateRange = (rangeType: string): { from: Date | undefined; to: Date | undefined } => {
-    const nowInArgentina = utcToZonedTime(new Date(), TIMEZONE);
-    let fromDate: Date | undefined;
-    
-    switch (rangeType) {
-      case "today":
-        fromDate = startOfDay(nowInArgentina);
-        return { from: fromDate, to: nowInArgentina };
-      case "yesterday":
-        fromDate = startOfDay(subDays(nowInArgentina, 1));
-        return { from: fromDate, to: endOfDay(subDays(nowInArgentina, 1)) };
-      case "7d":
-        fromDate = startOfDay(subDays(nowInArgentina, 7));
-        return { from: fromDate, to: nowInArgentina };
-      case "30d":
-        fromDate = startOfDay(subDays(nowInArgentina, 30));
-        return { from: fromDate, to: nowInArgentina };
-      case "custom":
-        return date;
-      default:
-        fromDate = startOfDay(subDays(nowInArgentina, 30));
-        return { from: fromDate, to: nowInArgentina };
+    if (rangeType === "custom") {
+      return date;
     }
+    
+    return getPresetDateRange(rangeType);
   };
 
   const handleRangeChange = (value: string) => {
@@ -96,10 +65,10 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
       
       let fromISO, toISO;
       if (dateRange.from) {
-        fromISO = formatDateToISO(dateRange.from);
+        fromISO = formatDateForApi(dateRange.from);
       }
       if (dateRange.to) {
-        toISO = formatDateToISO(dateRange.to, true);
+        toISO = formatDateForApi(dateRange.to, true);
       }
       
       if (fromISO === lastFromISO.current && toISO === lastToISO.current) {
@@ -121,10 +90,10 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
     } else {
       let fromISO, toISO;
       if (date.from) {
-        fromISO = formatDateToISO(date.from);
+        fromISO = formatDateForApi(date.from);
       }
       if (date.to) {
-        toISO = formatDateToISO(date.to, true);
+        toISO = formatDateForApi(date.to, true);
       }
       
       if (fromISO === lastFromISO.current && toISO === lastToISO.current) {
@@ -169,8 +138,8 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
       setSelectedRange("custom");
       lastRange.current = "custom";
       
-      const fromISO = value.from ? formatDateToISO(value.from) : undefined;
-      const toISO = value.to ? formatDateToISO(value.to, true) : undefined;
+      const fromISO = value.from ? formatDateForApi(value.from) : undefined;
+      const toISO = value.to ? formatDateForApi(value.to, true) : undefined;
       
       if (fromISO === lastFromISO.current && toISO === lastToISO.current) {
         console.log("📅 DateRangePicker: Ignorando cambio de fecha personalizada redundante");

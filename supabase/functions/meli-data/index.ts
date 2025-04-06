@@ -1,43 +1,44 @@
-// Añadir el manejo de zona horaria en la función meli-data 
-// (ajustar solo la parte relevante manteniendo el resto del código)
 
-// Importar función para manejar fechas y zona horaria
+// Supabase Edge function para interactuar con la API de Mercado Libre
+// sin dependencia de date-fns-tz
+
+// Importar función para manejar fechas
 import { isWithinInterval, parseISO } from 'date-fns';
-import { zonedTimeToUtc, utcToZonedTime } from 'date-fns-tz';
 
-// Helper para determinar si una fecha está en un rango, respetando zona horaria
-const isDateInRange = (dateStr: string, fromStr: string, toStr: string, timezone = 'America/Argentina/Buenos_Aires') => {
+// Helper para determinar si una fecha está en un rango
+const isDateInRange = (dateStr: string, fromStr: string, toStr: string) => {
   try {
     const date = parseISO(dateStr);
     const from = parseISO(fromStr);
     const to = parseISO(toStr);
     
-    // Convertir todas las fechas a la zona horaria especificada
-    const zonedDate = utcToZonedTime(date, timezone);
-    const zonedFrom = utcToZonedTime(from, timezone);
-    const zonedTo = utcToZonedTime(to, timezone);
-    
-    return isWithinInterval(zonedDate, { start: zonedFrom, end: zonedTo });
+    return isWithinInterval(date, { start: from, end: to });
   } catch (error) {
     console.error("Error validando rango de fechas:", error);
     return false;
   }
 };
 
-// Actualizar la función que procesa las órdenes para usar la zona horaria correcta 
-// y usar date_closed o payments.date_approved para el GMV
-const processOrders = (ordersData, dateFrom, dateTo, timezone) => {
+// Ajustar una fecha a la zona horaria de Argentina (UTC-3)
+const applyArgentinaOffset = (date: Date): Date => {
+  // No es necesario manipular la zona horaria en el servidor
+  // ya que las fechas ya vienen ajustadas desde el cliente
+  return date;
+};
+
+// Función para procesar órdenes y calcular métricas
+const processOrders = (ordersData, dateFrom, dateTo) => {
   // Filtrar órdenes por estado y fecha de cierre (cuando se confirmó el pago)
   const validOrders = ordersData.results?.filter(order => {
     // Solo incluir órdenes pagadas o entregadas
     const validStatus = ['paid', 'delivered'].includes(order.status);
     
-    // Preferir date_closed o la fecha de aprobación del pago para determinar cuándo contar la venta
+    // Preferir date_closed o la fecha de aprobación del pago
     const dateToCheck = order.date_closed || 
                        (order.payments && order.payments[0]?.date_approved) || 
                        order.date_created;
                        
-    return validStatus && isDateInRange(dateToCheck, dateFrom, dateTo, timezone);
+    return validStatus && isDateInRange(dateToCheck, dateFrom, dateTo);
   }) || [];
 
   let totalGMV = 0;
@@ -177,7 +178,7 @@ const processAdvertising = (campaignsData) => {
 };
 
 // Función para procesar todos los datos y generar el dashboard
-const processOrdersAndData = (batchResults, dateRange, timezone) => {
+const processOrdersAndData = (batchResults, dateRange) => {
   // Encontrar los resultados relevantes
   const ordersResult = batchResults.find(r => r.endpoint.includes('/orders/search'));
   const visitsResult = batchResults.find(r => r.endpoint.includes('/items_visits/time_window'));
@@ -188,7 +189,7 @@ const processOrdersAndData = (batchResults, dateRange, timezone) => {
   const dateFrom = dateRange?.begin ? `${dateRange.begin}T00:00:00.000Z` : undefined;
   const dateTo = dateRange?.end ? `${dateRange.end}T23:59:59.999Z` : undefined;
   
-  const processedOrders = ordersData ? processOrders(ordersData, dateFrom, dateTo, timezone) : {
+  const processedOrders = ordersData ? processOrders(ordersData, dateFrom, dateTo) : {
     orders: [],
     summary: {
       gmv: 0, commissions: 0, taxes: 0, shipping: 0, discounts: 0,
@@ -385,10 +386,9 @@ Deno.serve(async (req) => {
     const batchResults = await Promise.all(batchPromises);
     
     // Procesar los datos para el dashboard
-    const dashboardData = processOrdersAndData(batchResults, date_range, timezone);
+    const dashboardData = processOrdersAndData(batchResults, date_range);
     
     // Si se solicita período anterior, calcularlo también
-    let prevDashboardData = null;
     if (prev_period && date_range?.begin && date_range?.end) {
       // Calcular fechas del período anterior
       const beginDate = new Date(date_range.begin);

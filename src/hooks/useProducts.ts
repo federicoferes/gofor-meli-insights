@@ -1,10 +1,11 @@
+
 import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
-import { utcToZonedTime, zonedTimeToUtc } from 'date-fns-tz';
+import { addHours } from 'date-fns';
 
-// Definir la zona horaria de Argentina
-const TIMEZONE = 'America/Argentina/Buenos_Aires';
+// Definir la zona horaria de Argentina en horas (UTC-3)
+const ARG_OFFSET = -3;
 
 interface Product {
   id?: string;
