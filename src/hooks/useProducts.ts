@@ -138,7 +138,7 @@ export function useProducts({
 
               productItems.push(product);
               
-              // Upsert to database
+              // Upsert to database - use onConflict to avoid duplicates
               await supabase
                 .from('products')
                 .upsert(product, { onConflict: 'user_id,item_id' });
@@ -180,7 +180,7 @@ export function useProducts({
     try {
       const { error } = await supabase
         .from('products')
-        .update({ cost: newCost, updated_at: new Date().toISOString() })
+        .update({ cost: newCost })
         .eq('id', productId)
         .eq('user_id', userId);
 
