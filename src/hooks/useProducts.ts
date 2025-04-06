@@ -16,6 +16,9 @@ interface Product {
   permalink?: string | null;
 }
 
+// Define a type for upsert to ensure user_id is always defined
+type ProductUpsert = Omit<Product, 'user_id'> & { user_id: string };
+
 interface UseProductsProps {
   userId: string | undefined;
   meliUserId: string | null;
@@ -117,7 +120,6 @@ export function useProducts({
           for (const item of response.data.batch_results) {
             if (item) {
               const product: Product = {
-                user_id: userId,
                 item_id: item.id,
                 title: item.title,
                 price: item.price,
@@ -139,9 +141,15 @@ export function useProducts({
               productItems.push(product);
               
               // Upsert to database - use onConflict to avoid duplicates
+              // Fix TypeScript error by explicitly providing user_id and wrapping in array
               await supabase
                 .from('products')
-                .upsert(product, { onConflict: 'user_id,item_id' });
+                .upsert([{
+                  ...product,
+                  user_id: userId // Explicitly set user_id to ensure it's defined
+                }], { 
+                  onConflict: 'user_id,item_id' 
+                });
             }
           }
         }
