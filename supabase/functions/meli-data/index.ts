@@ -1,4 +1,3 @@
-
 // Supabase Edge function para interactuar con la API de Mercado Libre
 // sin dependencia de date-fns-tz
 
@@ -28,6 +27,8 @@ const applyArgentinaOffset = (date: Date): Date => {
 
 // Función para procesar órdenes y calcular métricas
 const processOrders = (ordersData, dateFrom, dateTo) => {
+  console.log(`Procesando órdenes con rango: ${dateFrom} a ${dateTo}`);
+  
   // Filtrar órdenes por estado y fecha de cierre (cuando se confirmó el pago)
   const validOrders = ordersData.results?.filter(order => {
     // Solo incluir órdenes pagadas o entregadas
@@ -37,9 +38,19 @@ const processOrders = (ordersData, dateFrom, dateTo) => {
     const dateToCheck = order.date_closed || 
                        (order.payments && order.payments[0]?.date_approved) || 
                        order.date_created;
-                       
-    return validStatus && isDateInRange(dateToCheck, dateFrom, dateTo);
+    
+    const isInRange = isDateInRange(dateToCheck, dateFrom, dateTo);
+    
+    if (!validStatus) {
+      console.log(`Orden ${order.id} ignorada: estado inválido (${order.status})`);
+    } else if (!isInRange) {
+      console.log(`Orden ${order.id} ignorada: fuera de rango (${dateToCheck})`);
+    }
+    
+    return validStatus && isInRange;
   }) || [];
+
+  console.log(`Se encontraron ${validOrders.length} órdenes válidas de ${ordersData.results?.length || 0} totales`);
 
   let totalGMV = 0;
   let totalCommissions = 0;
@@ -245,6 +256,8 @@ Deno.serve(async (req) => {
 
   try {
     const { user_id, batch_requests, date_range, timezone = 'America/Argentina/Buenos_Aires', prev_period, use_cache } = await req.json();
+    console.log(`Solicitud recibida para user_id: ${user_id}, timezone: ${timezone}`);
+    console.log(`Rango de fechas:`, date_range);
     
     // Validar que tenemos un user_id
     if (!user_id) {
@@ -358,6 +371,8 @@ Deno.serve(async (req) => {
         });
       }
       
+      console.log(`Ejecutando request a: ${url.toString()}`);
+      
       // Hacer la petición a MeLi
       const response = await fetch(url.toString(), {
         headers: {
@@ -387,6 +402,7 @@ Deno.serve(async (req) => {
     
     // Procesar los datos para el dashboard
     const dashboardData = processOrdersAndData(batchResults, date_range);
+    console.log(`Datos procesados: ${dashboardData.orders?.length || 0} órdenes`);
     
     // Si se solicita período anterior, calcularlo también
     if (prev_period && date_range?.begin && date_range?.end) {
