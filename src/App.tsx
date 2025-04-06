@@ -14,7 +14,7 @@ import NotFound from "./pages/NotFound";
 
 // Create a context for app-wide settings
 export const AppSettingsContext = createContext({
-  disableTestData: false,
+  disableTestData: true, // Changed to true by default
   setDisableTestData: (value: boolean) => {}
 });
 
@@ -29,8 +29,8 @@ const queryClient = new QueryClient({
 });
 
 const App = () => {
-  // App-wide setting to disable test data
-  const [disableTestData, setDisableTestData] = useState(false);
+  // App-wide setting to disable test data (changed to true by default)
+  const [disableTestData, setDisableTestData] = useState(true);
 
   return (
     <QueryClientProvider client={queryClient}>

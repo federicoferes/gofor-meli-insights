@@ -1,6 +1,7 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useContext } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
+import { AppSettingsContext } from '@/App';
 
 interface DateRange {
   from?: Date;
@@ -47,8 +48,12 @@ export function useMeliData({
   dateRange,
   isConnected,
   productCostsCalculator,
-  disableTestData = false
+  disableTestData
 }: MeliDataOptions): UseMeliDataReturn {
+  const { disableTestData: globalDisableTestData } = useContext(AppSettingsContext);
+  
+  const finalDisableTestData = disableTestData !== undefined ? disableTestData : globalDisableTestData;
+  
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [salesData, setSalesData] = useState([]);
@@ -85,11 +90,11 @@ export function useMeliData({
     if (dateFilter === 'custom' && dateRange.fromISO && dateRange.toISO) {
       key += `-${dateRange.fromISO}-${dateRange.toISO}`;
     }
-    if (disableTestData) {
+    if (finalDisableTestData) {
       key += '-no-test-data';
     }
     return key;
-  }, [userId, dateFilter, dateRange, disableTestData]);
+  }, [userId, dateFilter, dateRange, finalDisableTestData]);
 
   const loadData = useCallback(async (retryCount = 0) => {
     if (!userId || !isConnected || !meliUserId) {
@@ -149,6 +154,7 @@ export function useMeliData({
       
       console.log("🟣 Cargando datos para filtro:", dateFilter);
       console.log("📅 Rango de fechas:", { dateFrom, dateTo });
+      console.log("🚫 Datos de prueba desactivados:", finalDisableTestData);
 
       const batchRequests = [
         {
@@ -210,7 +216,7 @@ export function useMeliData({
         timezone: 'America/Argentina/Buenos_Aires',
         prev_period: true,
         use_cache: false,
-        disable_test_data: disableTestData
+        disable_test_data: finalDisableTestData
       };
 
       const payloadString = JSON.stringify(requestPayload);
@@ -244,7 +250,8 @@ export function useMeliData({
         success: batchData.success,
         has_dashboard_data: !!batchData.dashboard_data,
         has_batch_results: !!batchData.batch_results,
-        error: batchData.error
+        error: batchData.error,
+        is_test_data: !!batchData.is_test_data
       }));
 
       if (!batchData.success) {
@@ -286,11 +293,11 @@ export function useMeliData({
 
       if (allOrdersData.length === 0) {
         console.log("⚠️ No se encontraron órdenes en el período seleccionado");
-        if (!batchData.dashboard_data?.summary?.gmv && !batchData.dashboard_data?.orders?.length) {
-          console.log("🔍 No hay datos financieros para mostrar en este período");
+        if (!batchData.dashboard_data?.summary?.gmv && !batchData.dashboard_data?.orders?.length && finalDisableTestData) {
+          console.log("🔍 No hay datos financieros para mostrar en este período y no se usarán datos de prueba");
           toast({
             title: "Sin datos para mostrar",
-            description: "No se encontraron órdenes o métricas para el período seleccionado",
+            description: "No se encontraron órdenes o métricas reales para el período seleccionado",
             variant: "destructive",
           });
         }
@@ -378,7 +385,7 @@ export function useMeliData({
             title: "Sin datos del dashboard",
             description: batchData.is_test_data 
               ? "No se encontraron órdenes reales - mostrando datos de prueba" 
-              : "No se recibieron datos para el período seleccionado",
+              : "No se encontraron órdenes reales para el período seleccionado",
             variant: "destructive",
             duration: 5000
           });
@@ -397,7 +404,7 @@ export function useMeliData({
       if (isMounted.current) setIsLoading(false);
       requestInProgress.current = null;
     }
-  }, [userId, meliUserId, dateFilter, dateRange, isConnected, getCacheKey, toast, productCostsCalculator, disableTestData]);
+  }, [userId, meliUserId, dateFilter, dateRange, isConnected, getCacheKey, toast, productCostsCalculator, finalDisableTestData]);
 
   useEffect(() => {
     const validDateRange = dateFilter !== 'custom' || 

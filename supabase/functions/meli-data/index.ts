@@ -1,3 +1,4 @@
+
 // Supabase Edge function para interactuar con la API de Mercado Libre
 // sin dependencia de date-fns-tz
 
@@ -463,7 +464,7 @@ Deno.serve(async (req) => {
       timezone = 'America/Argentina/Buenos_Aires',
       prev_period,
       use_cache,
-      disable_test_data = false
+      disable_test_data = true // Changed default to true
     } = requestBody;
     
     console.log(`Solicitud recibida para user_id: ${user_id}, timezone: ${timezone}`);
