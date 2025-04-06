@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
@@ -28,9 +29,10 @@ interface UseMeliDataReturn {
   prevSalesSummary: any;
   ordersData: any[];
   refresh: () => Promise<void>;
+  error: string | null;
 }
 
-const CACHE_TIME = 10 * 60 * 1000;
+const CACHE_TIME = 5 * 60 * 1000; // 5 minutos para desarrollo, podría ser más largo en producción
 
 const responseCache = new Map<string, { 
   timestamp: number, 
@@ -46,6 +48,7 @@ export function useMeliData({
   productCostsCalculator
 }: MeliDataOptions): UseMeliDataReturn {
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [salesData, setSalesData] = useState([]);
   const [salesSummary, setSalesSummary] = useState({
     gmv: 0, commissions: 0, taxes: 0, shipping: 0, discounts: 0,
@@ -66,6 +69,7 @@ export function useMeliData({
   const requestInProgress = useRef<string | null>(null);
   const lastRequestPayload = useRef<string | null>(null);
   const { toast } = useToast();
+  const requestAttempts = useRef(0);
 
   useEffect(() => {
     return () => {
@@ -86,6 +90,9 @@ export function useMeliData({
       console.log("Requisitos de carga no cumplidos", { userId, isConnected, meliUserId });
       return;
     }
+    
+    // Limpiar error anterior
+    setError(null);
     
     const cacheKey = getCacheKey();
     
@@ -136,6 +143,7 @@ export function useMeliData({
       console.log("🟣 Cargando datos para filtro:", dateFilter);
       console.log("📅 Rango de fechas:", { dateFrom, dateTo });
 
+      // Endpoints para la búsqueda de datos
       const batchRequests = [
         {
           endpoint: '/orders/search',
@@ -143,8 +151,8 @@ export function useMeliData({
             seller: meliUserId,
             'order.status': 'paid',
             sort: 'date_desc',
-            date_closed_from: dateFrom,
-            date_closed_to: dateTo,
+            date_from: dateFrom,
+            date_to: dateTo,
             limit: 50
           }
         },
@@ -156,15 +164,25 @@ export function useMeliData({
           }
         },
         
+        // Endpoint para visitas - primero intentamos con el más específico
         {
-          endpoint: `/users/${meliUserId}/items_visits/time_window`,
+          endpoint: `/visits/items`,
           params: {
+            user_id: meliUserId,
             date_from: dateFrom?.split('T')[0],
-            date_to: dateTo?.split('T')[0],
-            time_window: 'day'
+            date_to: dateTo?.split('T')[0]
           }
         },
         
+        // Alternativa para visitas
+        {
+          endpoint: `/visits/search`,
+          params: {
+            user_id: meliUserId
+          }
+        },
+        
+        // Intentar obtener datos de campañas
         {
           endpoint: `/users/${meliUserId}/ads/campaigns`,
           params: {}
@@ -184,7 +202,7 @@ export function useMeliData({
       };
 
       const payloadString = JSON.stringify(requestPayload);
-      if (payloadString === lastRequestPayload.current) {
+      if (payloadString === lastRequestPayload.current && requestAttempts.current > 0) {
         console.log("🔄 Ignorando solicitud duplicada con el mismo payload");
         if (isMounted.current) setIsLoading(false);
         requestInProgress.current = null;
@@ -192,6 +210,7 @@ export function useMeliData({
       }
 
       lastRequestPayload.current = payloadString;
+      requestAttempts.current++;
       
       console.log("📦 Enviando batch requests:", batchRequests.map(r => r.endpoint));
       
@@ -222,6 +241,20 @@ export function useMeliData({
         batchResults: batchData.batch_results?.length || 0,
         dashboardData: batchData.dashboard_data ? "presente" : "ausente"
       });
+      
+      // Verificar que hay datos útiles
+      const ordersResult = batchData.batch_results?.find(r => r.endpoint.includes('/orders/search'));
+      const ordersData = ordersResult?.data?.results || [];
+      
+      console.log(`📊 Se encontraron ${ordersData.length} órdenes en la respuesta`);
+
+      if (ordersData.length === 0) {
+        console.log("⚠️ No se encontraron órdenes en el período seleccionado");
+        // Verificar si hay datos en el dashboard a pesar de no tener órdenes
+        if (!batchData.dashboard_data?.summary?.gmv && !batchData.dashboard_data?.orders?.length) {
+          console.log("🔍 No hay datos financieros para mostrar en este período");
+        }
+      }
       
       responseCache.set(cacheKey, {
         timestamp: Date.now(),
@@ -290,10 +323,12 @@ export function useMeliData({
           }
         } else {
           console.warn("⚠️ No se recibieron datos del dashboard");
+          setError("No se recibieron datos para el período seleccionado");
         }
       }
     } catch (error: any) {
       console.error("❌ Error cargando datos de Mercado Libre:", error);
+      setError(error.message || "No se pudieron cargar los datos de Mercado Libre.");
       toast({
         variant: "destructive",
         title: "Error cargando datos",
@@ -327,6 +362,7 @@ export function useMeliData({
     provinceData,
     prevSalesSummary,
     ordersData,
-    refresh: () => loadData(0)
+    refresh: () => loadData(0),
+    error
   };
 }

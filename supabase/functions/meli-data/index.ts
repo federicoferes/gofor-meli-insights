@@ -1,8 +1,9 @@
+
 // Supabase Edge function para interactuar con la API de Mercado Libre
 // sin dependencia de date-fns-tz
 
 // Importar función para manejar fechas con la sintaxis correcta de Deno
-import { isWithinInterval, parseISO } from "npm:date-fns";
+import { isWithinInterval, parseISO, addDays } from "npm:date-fns";
 
 // Helper para determinar si una fecha está en un rango
 const isDateInRange = (dateStr: string, fromStr: string, toStr: string) => {
@@ -27,7 +28,7 @@ const applyArgentinaOffset = (date: Date): Date => {
 
 // Función para procesar órdenes y calcular métricas
 const processOrders = (ordersData, dateFrom, dateTo) => {
-  console.log(`Procesando órdenes con rango: ${dateFrom} a ${dateTo}`);
+  console.log(`Procesando ${ordersData.results?.length || 0} órdenes con rango: ${dateFrom} a ${dateTo}`);
   
   // Filtrar órdenes por estado y fecha de cierre (cuando se confirmó el pago)
   const validOrders = ordersData.results?.filter(order => {
@@ -39,12 +40,12 @@ const processOrders = (ordersData, dateFrom, dateTo) => {
                        (order.payments && order.payments[0]?.date_approved) || 
                        order.date_created;
     
-    const isInRange = isDateInRange(dateToCheck, dateFrom, dateTo);
+    const isInRange = dateFrom && dateTo ? isDateInRange(dateToCheck, dateFrom, dateTo) : true;
     
     if (!validStatus) {
       console.log(`Orden ${order.id} ignorada: estado inválido (${order.status})`);
-    } else if (!isInRange) {
-      console.log(`Orden ${order.id} ignorada: fuera de rango (${dateToCheck})`);
+    } else if (!isInRange && dateFrom && dateTo) {
+      console.log(`Orden ${order.id} ignorada: fuera de rango (${dateToCheck} no está entre ${dateFrom} y ${dateTo})`);
     }
     
     return validStatus && isInRange;
@@ -142,6 +143,8 @@ const processOrders = (ordersData, dateFrom, dateTo) => {
     { name: 'Descuentos', value: totalDiscounts },
     { name: 'Reembolsos', value: totalRefunds }
   ].filter(item => item.value > 0);
+
+  console.log(`GMV calculado: ${totalGMV}, Órdenes: ${orderCount}, Unidades: ${totalUnits}`);
   
   return {
     orders: validOrders,
@@ -192,7 +195,8 @@ const processAdvertising = (campaignsData) => {
 const processOrdersAndData = (batchResults, dateRange) => {
   // Encontrar los resultados relevantes
   const ordersResult = batchResults.find(r => r.endpoint.includes('/orders/search'));
-  const visitsResult = batchResults.find(r => r.endpoint.includes('/items_visits/time_window'));
+  const visitsResult = batchResults.find(r => r.endpoint.includes('/items_visits'));
+  const visitsSearchResult = batchResults.find(r => r.endpoint.includes('/visits/search'));
   const campaignsResult = batchResults.find(r => r.endpoint.includes('/ads/campaigns'));
   
   // Procesar órdenes
@@ -211,9 +215,38 @@ const processOrdersAndData = (batchResults, dateRange) => {
     costDistribution: []
   };
   
-  // Procesar visitas
-  const visitsData = visitsResult?.data;
-  const totalVisits = processVisits(visitsData);
+  // Procesar visitas desde ambas fuentes
+  let totalVisits = 0;
+  
+  // Primero intentar con el resultado de items_visits
+  if (visitsResult?.data) {
+    totalVisits += processVisits(visitsResult.data);
+  }
+  
+  // Luego sumar el resultado de visits/search si está disponible
+  if (visitsSearchResult?.data) {
+    totalVisits += processVisits(visitsSearchResult.data);
+  }
+  
+  // Si no hay datos de visitas, buscar en los resultados por otro tipo de endpoint
+  if (totalVisits === 0) {
+    const alternativeVisitsResult = batchResults.find(r => r.endpoint.toLowerCase().includes('visit'));
+    if (alternativeVisitsResult?.data) {
+      console.log("Intentando procesar visitas de un endpoint alternativo:", alternativeVisitsResult.endpoint);
+      
+      // Buscar cualquier array en la respuesta que pueda contener datos de visitas
+      if (alternativeVisitsResult.data.results) {
+        console.log(`Encontrados ${alternativeVisitsResult.data.results.length} resultados potenciales de visitas`);
+        // Intentar sumar cualquier campo que parezca una cuenta de visitas
+        alternativeVisitsResult.data.results.forEach(item => {
+          if (typeof item.total === 'number') totalVisits += item.total;
+          if (typeof item.visits === 'number') totalVisits += item.visits;
+          if (typeof item.view === 'number') totalVisits += item.view;
+          if (typeof item.views === 'number') totalVisits += item.views;
+        });
+      }
+    }
+  }
   
   // Procesar publicidad
   const campaignsData = campaignsResult?.data;
@@ -243,6 +276,70 @@ const processOrdersAndData = (batchResults, dateRange) => {
 
 // Import Supabase client for Edge Functions
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+// Función para hacer paginación de órdenes y obtener todos los resultados
+async function fetchAllOrders(url, accessToken, maxPages = 5) {
+  console.log(`Iniciando paginación de órdenes desde: ${url}`);
+  const allResults = [];
+  let currentPage = 0;
+  let hasMore = true;
+  let totalFound = 0;
+  
+  try {
+    while (hasMore && currentPage < maxPages) {
+      const pageUrl = new URL(url);
+      pageUrl.searchParams.set('offset', (currentPage * 50).toString());
+      
+      console.log(`Obteniendo página ${currentPage + 1}, offset: ${currentPage * 50}`);
+      
+      const response = await fetch(pageUrl.toString(), {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Error en paginación de órdenes (página ${currentPage + 1}):`, errorText);
+        throw new Error(`Error ${response.status}: ${errorText}`);
+      }
+      
+      const data = await response.json();
+      
+      if (!data.results || !Array.isArray(data.results)) {
+        console.warn(`No se encontraron resultados en formato esperado para la página ${currentPage + 1}`);
+        break;
+      }
+      
+      console.log(`Página ${currentPage + 1}: ${data.results.length} órdenes encontradas`);
+      allResults.push(...data.results);
+      
+      // Verificar si hay más resultados
+      if (data.paging) {
+        totalFound = data.paging.total || 0;
+        hasMore = allResults.length < totalFound && data.results.length > 0;
+      } else {
+        hasMore = false;
+      }
+      
+      currentPage++;
+    }
+    
+    console.log(`Paginación completa: ${allResults.length} órdenes obtenidas de un total de ${totalFound}`);
+    
+    return {
+      results: allResults,
+      paging: {
+        total: totalFound,
+        limit: 50,
+        offset: 0
+      }
+    };
+  } catch (error) {
+    console.error("Error durante la paginación de órdenes:", error);
+    throw error;
+  }
+}
 
 // Función principal para manejar la solicitud
 Deno.serve(async (req) => {
@@ -289,11 +386,13 @@ Deno.serve(async (req) => {
         .single();
       
       if (error) {
+        console.error("Error al verificar conexión con MeLi:", error);
         return new Response(
           JSON.stringify({ 
             success: false, 
             is_connected: false,
-            error: 'No se encontró conexión con MeLi' 
+            error: 'No se encontró conexión con MeLi',
+            details: error.message
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
@@ -310,6 +409,7 @@ Deno.serve(async (req) => {
     }
     
     // Obtener token de acceso para MeLi
+    console.log(`Buscando token para user_id: ${user_id}`);
     const { data: connection, error: connectionError } = await supabase
       .from('meli_tokens')  // Changed from meli_connections to meli_tokens
       .select('*')
@@ -317,18 +417,28 @@ Deno.serve(async (req) => {
       .single();
     
     if (connectionError || !connection) {
+      console.error("Error al obtener token de MeLi:", connectionError);
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'No se encontró conexión con MeLi' 
+          error: 'No se encontró conexión con MeLi',
+          details: connectionError?.message
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
     
+    console.log(`Token encontrado para meli_user_id: ${connection.meli_user_id}`);
+    
     // Verificar si el token está expirado y refrescarlo si es necesario
     const now = Math.floor(Date.now() / 1000);
-    const expiresAt = new Date(connection.expires_at).getTime() / 1000;
+    
+    // Asegurar que expires_at sea una fecha válida
+    const expiresAt = connection.expires_at ? new Date(connection.expires_at).getTime() / 1000 : 0;
+    
+    console.log(`Token actual expira en: ${new Date(expiresAt * 1000).toISOString()}`);
+    console.log(`Hora actual: ${new Date(now * 1000).toISOString()}`);
+    
     let accessToken = connection.access_token;
     
     if (now >= expiresAt) {
@@ -378,8 +488,10 @@ Deno.serve(async (req) => {
       if (updateError) {
         console.error("Error actualizando token en base de datos:", updateError);
       } else {
-        console.log("Token actualizado en base de datos");
+        console.log("Token actualizado en base de datos, nuevo vencimiento:", newExpiresAt);
       }
+    } else {
+      console.log("Token válido, usando el existente");
     }
     
     // Ejecutar batch de requests a la API de MeLi
@@ -398,33 +510,54 @@ Deno.serve(async (req) => {
       
       console.log(`Ejecutando request a: ${url.toString()}`);
       
-      // Hacer la petición a MeLi
-      const response = await fetch(url.toString(), {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`
+      try {
+        // Si es una búsqueda de órdenes, usar paginación
+        if (endpoint.includes('/orders/search')) {
+          console.log("Aplicando paginación para búsqueda de órdenes");
+          const paginatedData = await fetchAllOrders(url.toString(), accessToken);
+          return {
+            endpoint,
+            success: true,
+            data: paginatedData
+          };
         }
-      });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Error en request a ${url.toString()}:`, errorText);
+        
+        // Para otros endpoints, hacer petición normal
+        const response = await fetch(url.toString(), {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`
+          }
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`Error en request a ${url.toString()}:`, errorText);
+          return {
+            endpoint,
+            success: false,
+            status: response.status,
+            error: errorText
+          };
+        }
+        
+        const data = await response.json();
+        return {
+          endpoint,
+          success: true,
+          data
+        };
+      } catch (error) {
+        console.error(`Error en request a ${url.toString()}:`, error);
         return {
           endpoint,
           success: false,
-          status: response.status,
-          error: errorText
+          error: error.message || "Error desconocido"
         };
       }
-      
-      const data = await response.json();
-      return {
-        endpoint,
-        success: true,
-        data
-      };
     });
     
     const batchResults = await Promise.all(batchPromises);
+    console.log(`Batch de ${batchResults.length} requests completados`);
     
     // Procesar los datos para el dashboard
     const dashboardData = processOrdersAndData(batchResults, date_range);
@@ -451,11 +584,13 @@ Deno.serve(async (req) => {
       const prevFromDate = `${prevDateRange.begin}T00:00:00.000Z`;
       const prevToDate = `${prevDateRange.end}T23:59:59.999Z`;
       
+      console.log(`Calculando período anterior: ${prevFromDate} a ${prevToDate}`);
+      
       // Encontrar el resultado de órdenes
       const ordersResult = batchResults.find(r => r.endpoint.includes('/orders/search'));
       if (ordersResult?.data) {
         // Procesar órdenes del período anterior con las mismas funciones
-        const prevProcessedOrders = processOrders(ordersResult.data, prevFromDate, prevToDate, timezone);
+        const prevProcessedOrders = processOrders(ordersResult.data, prevFromDate, prevToDate);
         
         // Agregar al dashboard
         dashboardData.prev_summary = prevProcessedOrders.summary;
