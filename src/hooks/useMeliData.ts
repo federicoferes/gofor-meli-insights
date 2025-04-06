@@ -186,6 +186,15 @@ export function useMeliData({
         {
           endpoint: `/users/${meliUserId}/ads/campaigns`,
           params: {}
+        },
+
+        // Intentar obtener órdenes recientes
+        {
+          endpoint: `/orders/search/recent`,
+          params: {
+            seller: meliUserId,
+            limit: 50
+          }
         }
       ];
 
@@ -198,7 +207,7 @@ export function useMeliData({
         },
         timezone: 'America/Argentina/Buenos_Aires',
         prev_period: true,
-        use_cache: true
+        use_cache: false // Desactivar caché para depuración
       };
 
       const payloadString = JSON.stringify(requestPayload);
@@ -213,6 +222,7 @@ export function useMeliData({
       requestAttempts.current++;
       
       console.log("📦 Enviando batch requests:", batchRequests.map(r => r.endpoint));
+      console.log("Payload completo:", JSON.stringify(requestPayload));
       
       const { data: batchData, error: batchError } = await supabase.functions.invoke('meli-data', {
         body: requestPayload
@@ -226,6 +236,13 @@ export function useMeliData({
       if (!batchData) {
         throw new Error("No se recibieron datos de la función meli-data");
       }
+
+      console.log("Respuesta recibida de meli-data:", JSON.stringify({
+        success: batchData.success,
+        has_dashboard_data: !!batchData.dashboard_data,
+        has_batch_results: !!batchData.batch_results,
+        error: batchData.error
+      }));
 
       if (!batchData.success) {
         if (batchData?.error?.includes('429') || batchData?.message?.includes('rate limit')) {
@@ -258,13 +275,24 @@ export function useMeliData({
       const ordersResult = batchData.batch_results?.find(r => r.endpoint.includes('/orders/search'));
       const ordersData = ordersResult?.data?.results || [];
       
-      console.log(`📊 Se encontraron ${ordersData.length} órdenes en la respuesta`);
+      // También probar con órdenes recientes si lo primero no funciona
+      const recentOrdersResult = batchData.batch_results?.find(r => r.endpoint.includes('/orders/search/recent'));
+      const recentOrdersData = recentOrdersResult?.data?.results || [];
+      
+      const allOrdersData = [...ordersData, ...recentOrdersData];
+      
+      console.log(`📊 Se encontraron ${allOrdersData.length} órdenes en la respuesta (${ordersData.length} normales + ${recentOrdersData.length} recientes)`);
 
-      if (ordersData.length === 0) {
+      if (allOrdersData.length === 0) {
         console.log("⚠️ No se encontraron órdenes en el período seleccionado");
         // Verificar si hay datos en el dashboard a pesar de no tener órdenes
         if (!batchData.dashboard_data?.summary?.gmv && !batchData.dashboard_data?.orders?.length) {
           console.log("🔍 No hay datos financieros para mostrar en este período");
+          toast({
+            title: "Sin datos para mostrar",
+            description: "No se encontraron órdenes o métricas para el período seleccionado",
+            variant: "destructive",
+          });
         }
       }
       
@@ -355,6 +383,12 @@ export function useMeliData({
         } else {
           console.warn("⚠️ No se recibieron datos del dashboard");
           setError("No se recibieron datos para el período seleccionado");
+          toast({
+            title: "Sin datos del dashboard",
+            description: "No se recibieron datos para el período seleccionado",
+            variant: "destructive",
+            duration: 5000
+          });
         }
       }
     } catch (error: any) {
@@ -393,6 +427,12 @@ export function useMeliData({
     responseCache.delete(cacheKey);
     
     // Recargar datos
+    toast({
+      title: "Actualizando datos",
+      description: "Recuperando datos más recientes de Mercado Libre...",
+      duration: 3000,
+    });
+    
     return loadData(0);
   };
 

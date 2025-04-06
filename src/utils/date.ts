@@ -11,6 +11,7 @@ const ARG_OFFSET = -3;
  */
 export const getArgDateRange = (base: Date) => {
   console.log(`Generando rango para fecha base: ${base.toISOString()}`);
+  // Ajustamos a la zona horaria de Argentina (UTC-3)
   const from = addHours(startOfDay(base), -ARG_OFFSET);
   const to = addHours(endOfDay(base), -ARG_OFFSET);
   console.log(`Rango generado: ${from.toISOString()} - ${to.toISOString()}`);
@@ -101,8 +102,17 @@ export const formatDateForDisplay = (date: Date): string => {
  * Crea un objeto con ISO strings para las APIs
  */
 export const getIsoDateRange = (dateRange: { from?: Date; to?: Date }) => {
-  return {
-    fromISO: dateRange.from ? formatDateForApi(dateRange.from) : undefined,
-    toISO: dateRange.to ? formatDateForApi(dateRange.to, true) : undefined
-  };
+  if (!dateRange.from || !dateRange.to) {
+    console.log("⚠️ dateRange incompleto:", dateRange);
+    return {
+      fromISO: undefined,
+      toISO: undefined
+    };
+  }
+  
+  const fromISO = formatDateForApi(dateRange.from);
+  const toISO = formatDateForApi(dateRange.to, true);
+  
+  console.log(`ISODateRange generado: ${fromISO} - ${toISO}`);
+  return { fromISO, toISO };
 };
