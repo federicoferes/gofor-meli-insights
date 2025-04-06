@@ -40,6 +40,11 @@ const MeliConnect = () => {
             }
           } catch (error) {
             console.error("Error checking MeLi connection:", error);
+            toast({
+              variant: "destructive",
+              title: "Error de conexión",
+              description: "No se pudo verificar la conexión con Mercado Libre."
+            });
           }
         } else {
           setIsLoggedIn(false);

@@ -241,20 +241,33 @@ const processOrdersAndData = (batchResults, dateRange) => {
   };
 };
 
+// Import Supabase client for Edge Functions
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
 // Función principal para manejar la solicitud
 Deno.serve(async (req) => {
   // Habilitar CORS
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  };
+  
   if (req.method === 'OPTIONS') {
-    return new Response('ok', {
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST',
-        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-      }
-    });
+    return new Response('ok', { headers: corsHeaders });
   }
 
   try {
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      throw new Error("Missing Supabase environment variables");
+    }
+    
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    
     const { user_id, batch_requests, date_range, timezone = 'America/Argentina/Buenos_Aires', prev_period, use_cache } = await req.json();
     console.log(`Solicitud recibida para user_id: ${user_id}, timezone: ${timezone}`);
     console.log(`Rango de fechas:`, date_range);
@@ -263,14 +276,14 @@ Deno.serve(async (req) => {
     if (!user_id) {
       return new Response(
         JSON.stringify({ success: false, error: 'Se requiere user_id' }),
-        { headers: { 'Content-Type': 'application/json' } }
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
     
     // Si no hay batch_requests, verificar la conexión con MeLi
     if (!batch_requests || batch_requests.length === 0) {
       const { data: connections, error } = await supabase
-        .from('meli_connections')
+        .from('meli_tokens')  // Changed from meli_connections to meli_tokens
         .select('*')
         .eq('user_id', user_id)
         .single();
@@ -282,7 +295,7 @@ Deno.serve(async (req) => {
             is_connected: false,
             error: 'No se encontró conexión con MeLi' 
           }),
-          { headers: { 'Content-Type': 'application/json' } }
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
       
@@ -292,13 +305,13 @@ Deno.serve(async (req) => {
           is_connected: true,
           meli_user_id: connections.meli_user_id
         }),
-        { headers: { 'Content-Type': 'application/json' } }
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
     
     // Obtener token de acceso para MeLi
     const { data: connection, error: connectionError } = await supabase
-      .from('meli_connections')
+      .from('meli_tokens')  // Changed from meli_connections to meli_tokens
       .select('*')
       .eq('user_id', user_id)
       .single();
@@ -309,16 +322,18 @@ Deno.serve(async (req) => {
           success: false, 
           error: 'No se encontró conexión con MeLi' 
         }),
-        { headers: { 'Content-Type': 'application/json' } }
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
     
     // Verificar si el token está expirado y refrescarlo si es necesario
     const now = Math.floor(Date.now() / 1000);
+    const expiresAt = new Date(connection.expires_at).getTime() / 1000;
     let accessToken = connection.access_token;
     
-    if (now >= connection.expires_at) {
+    if (now >= expiresAt) {
       // Refrescar token
+      console.log("Token expirado, refrescando...");
       const refreshResponse = await fetch('https://api.mercadolibre.com/oauth/token', {
         method: 'POST',
         headers: {
@@ -327,34 +342,44 @@ Deno.serve(async (req) => {
         },
         body: new URLSearchParams({
           grant_type: 'refresh_token',
-          client_id: Deno.env.get('MELI_APP_ID') || '',
-          client_secret: Deno.env.get('MELI_SECRET_KEY') || '',
+          client_id: Deno.env.get('MELI_APP_ID') || '8830083472538103',
+          client_secret: Deno.env.get('MELI_CLIENT_SECRET') || 'Wqfg0W6BDmK690ceKfiidQmuHposiCfg',
           refresh_token: connection.refresh_token
         }).toString()
       });
       
       if (!refreshResponse.ok) {
+        const responseText = await refreshResponse.text();
+        console.error("Error refrescando token:", responseText);
         return new Response(
           JSON.stringify({ 
             success: false, 
-            error: 'Error al refrescar token de MeLi' 
+            error: `Error al refrescar token de MeLi: ${responseText}` 
           }),
-          { headers: { 'Content-Type': 'application/json' } }
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
       
       const refreshData = await refreshResponse.json();
+      console.log("Token refrescado exitosamente");
       accessToken = refreshData.access_token;
       
       // Actualizar token en la base de datos
-      await supabase
-        .from('meli_connections')
+      const newExpiresAt = new Date(Date.now() + (refreshData.expires_in * 1000)).toISOString();
+      const { error: updateError } = await supabase
+        .from('meli_tokens')  // Changed from meli_connections to meli_tokens
         .update({
           access_token: refreshData.access_token,
           refresh_token: refreshData.refresh_token,
-          expires_at: now + refreshData.expires_in
+          expires_at: newExpiresAt
         })
         .eq('user_id', user_id);
+        
+      if (updateError) {
+        console.error("Error actualizando token en base de datos:", updateError);
+      } else {
+        console.log("Token actualizado en base de datos");
+      }
     }
     
     // Ejecutar batch de requests a la API de MeLi
@@ -382,6 +407,7 @@ Deno.serve(async (req) => {
       
       if (!response.ok) {
         const errorText = await response.text();
+        console.error(`Error en request a ${url.toString()}:`, errorText);
         return {
           endpoint,
           success: false,
@@ -442,7 +468,7 @@ Deno.serve(async (req) => {
         batch_results: batchResults,
         dashboard_data: dashboardData
       }),
-      { headers: { 'Content-Type': 'application/json' } }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
     
   } catch (error) {
@@ -452,7 +478,7 @@ Deno.serve(async (req) => {
         success: false, 
         error: error.message || 'Error interno del servidor' 
       }),
-      { headers: { 'Content-Type': 'application/json' } }
+      { headers: { 'Content-Type': 'application/json', ...corsHeaders } }
     );
   }
 });
