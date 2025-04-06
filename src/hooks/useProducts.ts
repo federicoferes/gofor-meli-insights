@@ -95,10 +95,20 @@ export function useProducts({
         throw new Error(`Error fetching MeLi products: ${meliError.message}`);
       }
 
-      console.log("MeLi API response:", meliData);
+      console.log("MeLi API response received");
+
+      if (!meliData?.batch_results?.[0]?.success) {
+        console.error("Error in MeLi API response:", meliData?.batch_results?.[0]?.error || "Unknown error");
+        throw new Error(`Error from MeLi API: ${meliData?.batch_results?.[0]?.error || "Respuesta inválida"}`);
+      }
 
       if (!meliData?.batch_results?.[0]?.data?.results?.length) {
         console.log("No products found in MeLi API");
+        // If we have stored products but no MeLi data, show the stored products
+        if (storedProducts && storedProducts.length > 0) {
+          setProducts(storedProducts);
+          console.log("Using stored products from database");
+        }
         setIsLoading(false);
         return;
       }
@@ -163,12 +173,21 @@ export function useProducts({
               console.log(`Upserting product ${product.item_id} (${product.title}) with userId: ${userId}`);
               
               try {
+                const upsertProduct: ProductUpsert = {
+                  ...product,
+                  user_id: userId // Explicitly set user_id to ensure it's defined
+                };
+                
+                console.log("Upserting product:", {
+                  item_id: upsertProduct.item_id,
+                  title: upsertProduct.title.substring(0, 20) + '...',
+                  user_id: upsertProduct.user_id,
+                  id: upsertProduct.id || 'new'
+                });
+                
                 const { error } = await supabase
                   .from('products')
-                  .upsert([{
-                    ...product,
-                    user_id: userId // Explicitly set user_id to ensure it's defined
-                  }], { 
+                  .upsert([upsertProduct], { 
                     onConflict: 'user_id,item_id' 
                   });
                   
@@ -180,6 +199,8 @@ export function useProducts({
               } catch (upsertError) {
                 console.error("Exception during product upsert:", upsertError);
               }
+            } else if (item.error) {
+              console.warn("Error fetching item details:", item.error);
             } else {
               console.warn("Received item without data:", item);
             }
@@ -190,7 +211,15 @@ export function useProducts({
       }
 
       console.log(`Processed ${processedItems} items, successfully upserted ${successfulUpserts} products`);
-      setProducts(productItems);
+      
+      if (productItems.length === 0 && storedProducts && storedProducts.length > 0) {
+        // If we couldn't get new products but have stored ones, use those
+        setProducts(storedProducts);
+        console.log("Using stored products from database as fallback");
+      } else {
+        setProducts(productItems);
+      }
+      
       toast({
         title: "Productos sincronizados",
         description: `Se han sincronizado ${productItems.length} productos desde Mercado Libre`,

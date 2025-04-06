@@ -4,8 +4,8 @@ import { Button } from "@/components/ui/button";
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2, Info, Check, RefreshCw } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { TooltipProvider, Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 const MeliConnect = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -281,32 +281,7 @@ const MeliConnect = () => {
           </DialogContent>
         </Dialog>
         
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button 
-              className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-2 px-6 py-3"
-            >
-              <img 
-                src="https://http2.mlstatic.com/frontend-assets/ui-navigation/5.19.5/mercadolibre/favicon.svg" 
-                alt="Mercado Libre logo" 
-                className="w-5 h-5"
-              />
-              <span className="flex items-center gap-1">
-                Conectado con Mercado Libre
-                <Check className="h-4 w-4 ml-1" />
-              </span>
-              <Info className="h-4 w-4 ml-1 text-white opacity-70" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent className="bg-white shadow-md border border-gray-200">
-            <div className="p-2">
-              <p className="font-medium">Cuenta de Mercado Libre conectada</p>
-              <p className="text-xs mt-1">ID: {connectionDetails?.meli_user_id || 'Desconocido'}</p>
-              <p className="text-xs mt-2">La aplicación tiene acceso a tus datos de ventas, productos y métricas.</p>
-              <p className="text-xs mt-1 text-blue-600 cursor-pointer">Haga clic para ver más detalles</p>
-            </div>
-          </TooltipContent>
-        </Tooltip>
+        {/* Remove this Tooltip section to eliminate the duplicate indicator */}
       </TooltipProvider>
     );
   }

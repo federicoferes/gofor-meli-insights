@@ -32,8 +32,8 @@ interface UseMeliDataReturn {
   error: string | null;
 }
 
-const CACHE_TIME = 5 * 60 * 1000; // 5 minutos para desarrollo, podría ser más largo en producción
-
+// Cache para datos - 5 minutos por defecto
+const CACHE_TIME = 5 * 60 * 1000; // 5 minutos para desarrollo
 const responseCache = new Map<string, { 
   timestamp: number, 
   data: any 
@@ -219,10 +219,15 @@ export function useMeliData({
       });
       
       if (batchError) {
+        console.error("Error en invoke meli-data:", batchError);
         throw new Error(`Error al obtener datos: ${batchError.message}`);
       }
       
-      if (!batchData || !batchData.success) {
+      if (!batchData) {
+        throw new Error("No se recibieron datos de la función meli-data");
+      }
+
+      if (!batchData.success) {
         if (batchData?.error?.includes('429') || batchData?.message?.includes('rate limit')) {
           if (retryCount < 3) {
             const delay = Math.pow(2, retryCount) * 1000;
@@ -233,7 +238,7 @@ export function useMeliData({
             return loadData(retryCount + 1);
           }
         }
-        throw new Error(batchData?.message || 'Error al obtener datos');
+        throw new Error(batchData?.message || batchData?.error || 'Error desconocido al obtener datos');
       }
       
       console.log("✅ Respuesta de batch recibida:", {
@@ -241,6 +246,13 @@ export function useMeliData({
         batchResults: batchData.batch_results?.length || 0,
         dashboardData: batchData.dashboard_data ? "presente" : "ausente"
       });
+      
+      // Verificar si hay resultados fallidos
+      const failedResults = batchData.batch_results?.filter(r => !r.success);
+      if (failedResults?.length > 0) {
+        console.warn(`⚠️ ${failedResults.length} requests fallidos:`, 
+          failedResults.map(r => `${r.endpoint}: ${r.error || r.status}`).join(', '));
+      }
       
       // Verificar que hay datos útiles
       const ordersResult = batchData.batch_results?.find(r => r.endpoint.includes('/orders/search'));
@@ -265,6 +277,16 @@ export function useMeliData({
         console.log("✅ Datos recibidos correctamente");
         
         if (batchData.dashboard_data) {
+          // Logueamos los datos del dashboard para debugging
+          console.log("Dashboard data:", {
+            summary: batchData.dashboard_data.summary ? "presente" : "ausente",
+            prev_summary: batchData.dashboard_data.prev_summary ? "presente" : "ausente",
+            orders: batchData.dashboard_data.orders?.length || 0,
+            topProducts: batchData.dashboard_data.topProducts?.length || 0,
+            costDistribution: batchData.dashboard_data.costDistribution?.length || 0,
+            salesByProvince: batchData.dashboard_data.salesByProvince?.length || 0
+          });
+          
           if (batchData.dashboard_data.salesByMonth?.length > 0) {
             setSalesData(batchData.dashboard_data.salesByMonth);
           }
@@ -281,6 +303,14 @@ export function useMeliData({
             if (summary.gmv > 0 && summary.orders > 0) {
               summary.avgTicket = summary.gmv / summary.orders;
             }
+            
+            console.log("Resumen actualizado:", {
+              gmv: summary.gmv,
+              orders: summary.orders,
+              units: summary.units,
+              visits: summary.visits,
+              conversion: summary.conversion
+            });
             
             setSalesSummary(summary);
           }
@@ -353,6 +383,18 @@ export function useMeliData({
     }
   }, [userId, meliUserId, dateFilter, dateRange.fromISO, dateRange.toISO, isConnected, loadData]);
 
+  // Función de utilidad para depuración
+  const refresh = async () => {
+    console.log("Forzando actualización de datos...");
+    
+    // Limpiar caché para este key
+    const cacheKey = getCacheKey();
+    responseCache.delete(cacheKey);
+    
+    // Recargar datos
+    return loadData(0);
+  };
+
   return {
     isLoading,
     salesData,
@@ -362,7 +404,7 @@ export function useMeliData({
     provinceData,
     prevSalesSummary,
     ordersData,
-    refresh: () => loadData(0),
+    refresh,
     error
   };
 }

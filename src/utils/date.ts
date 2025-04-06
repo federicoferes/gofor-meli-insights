@@ -1,5 +1,5 @@
 
-import { startOfDay, endOfDay, addHours, subDays } from 'date-fns';
+import { startOfDay, endOfDay, addHours, subDays, format } from 'date-fns';
 
 // UTC-3 Argentina
 const ARG_OFFSET = -3;
@@ -9,10 +9,13 @@ const ARG_OFFSET = -3;
  * @param base Fecha base para generar el rango
  * @returns Objeto con fechas de inicio y fin ajustadas a UTC
  */
-export const getArgDateRange = (base: Date) => ({
-  from: addHours(startOfDay(base), -ARG_OFFSET),
-  to: addHours(endOfDay(base), -ARG_OFFSET),
-});
+export const getArgDateRange = (base: Date) => {
+  console.log(`Generando rango para fecha base: ${base.toISOString()}`);
+  const from = addHours(startOfDay(base), -ARG_OFFSET);
+  const to = addHours(endOfDay(base), -ARG_OFFSET);
+  console.log(`Rango generado: ${from.toISOString()} - ${to.toISOString()}`);
+  return { from, to };
+};
 
 /**
  * Genera rangos de fecha predefinidos ajustados a Argentina
@@ -20,6 +23,7 @@ export const getArgDateRange = (base: Date) => ({
  * @returns Objeto con fechas from y to
  */
 export const getPresetDateRange = (rangeType: string) => {
+  console.log(`Generando preset para: ${rangeType}`);
   const now = new Date();
   
   switch (rangeType) {
@@ -77,4 +81,21 @@ export const isDateInRange = (dateStr: string, fromStr: string, toStr: string): 
     console.error("Error validando rango de fechas:", error);
     return false;
   }
+};
+
+/**
+ * Formatea la fecha para mostrar en la UI con formato argentino
+ */
+export const formatDateForDisplay = (date: Date): string => {
+  return format(date, 'dd/MM/yyyy');
+};
+
+/**
+ * Crea un objeto con ISO strings para las APIs
+ */
+export const getIsoDateRange = (dateRange: { from?: Date; to?: Date }) => {
+  return {
+    fromISO: dateRange.from ? formatDateForApi(dateRange.from) : undefined,
+    toISO: dateRange.to ? formatDateForApi(dateRange.to, true) : undefined
+  };
 };

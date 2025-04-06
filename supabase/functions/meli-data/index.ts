@@ -53,6 +53,10 @@ const processOrders = (ordersData, dateFrom, dateTo) => {
 
   console.log(`Se encontraron ${validOrders.length} órdenes válidas de ${ordersData.results?.length || 0} totales`);
 
+  if (validOrders.length > 0) {
+    console.log(`Ejemplo de primera orden válida:`, JSON.stringify(validOrders[0], null, 2).substring(0, 500) + '...');
+  }
+
   let totalGMV = 0;
   let totalCommissions = 0;
   let totalTaxes = 0;
@@ -167,6 +171,8 @@ const processOrders = (ordersData, dateFrom, dateTo) => {
 
 // Función para procesar datos de visitas
 const processVisits = (visitsData) => {
+  console.log("Procesando datos de visitas:", JSON.stringify(visitsData).substring(0, 200) + '...');
+  
   let totalVisits = 0;
   
   if (visitsData && Array.isArray(visitsData.results)) {
@@ -175,11 +181,14 @@ const processVisits = (visitsData) => {
     });
   }
   
+  console.log(`Total de visitas calculadas: ${totalVisits}`);
   return totalVisits;
 };
 
 // Función para procesar datos de publicidad
 const processAdvertising = (campaignsData) => {
+  console.log("Procesando datos de publicidad:", JSON.stringify(campaignsData).substring(0, 200) + '...');
+  
   let totalSpend = 0;
   
   if (campaignsData && Array.isArray(campaignsData.results)) {
@@ -188,6 +197,7 @@ const processAdvertising = (campaignsData) => {
     });
   }
   
+  console.log(`Total de gastos en publicidad calculados: ${totalSpend}`);
   return totalSpend;
 };
 
@@ -199,10 +209,19 @@ const processOrdersAndData = (batchResults, dateRange) => {
   const visitsSearchResult = batchResults.find(r => r.endpoint.includes('/visits/search'));
   const campaignsResult = batchResults.find(r => r.endpoint.includes('/ads/campaigns'));
   
+  console.log(`Resultados encontrados: 
+    - Órdenes: ${ordersResult ? 'Sí' : 'No'}
+    - Visitas (items): ${visitsResult ? 'Sí' : 'No'}
+    - Visitas (search): ${visitsSearchResult ? 'Sí' : 'No'}
+    - Campañas: ${campaignsResult ? 'Sí' : 'No'}
+  `);
+  
   // Procesar órdenes
   const ordersData = ordersResult?.data;
   const dateFrom = dateRange?.begin ? `${dateRange.begin}T00:00:00.000Z` : undefined;
   const dateTo = dateRange?.end ? `${dateRange.end}T23:59:59.999Z` : undefined;
+  
+  console.log(`Procesando datos con rango: ${dateFrom} - ${dateTo}`);
   
   const processedOrders = ordersData ? processOrders(ordersData, dateFrom, dateTo) : {
     orders: [],
@@ -365,9 +384,21 @@ Deno.serve(async (req) => {
     
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     
-    const { user_id, batch_requests, date_range, timezone = 'America/Argentina/Buenos_Aires', prev_period, use_cache } = await req.json();
+    let requestBody;
+    try {
+      requestBody = await req.json();
+    } catch (e) {
+      console.error("Error parsing request body:", e);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Error en formato de request' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const { user_id, batch_requests, date_range, timezone = 'America/Argentina/Buenos_Aires', prev_period, use_cache } = requestBody;
     console.log(`Solicitud recibida para user_id: ${user_id}, timezone: ${timezone}`);
     console.log(`Rango de fechas:`, date_range);
+    console.log(`Batch requests:`, batch_requests ? batch_requests.map(r => r.endpoint).join(', ') : 'N/A');
     
     // Validar que tenemos un user_id
     if (!user_id) {
@@ -541,6 +572,7 @@ Deno.serve(async (req) => {
         }
         
         const data = await response.json();
+        console.log(`Response de ${endpoint}: ${JSON.stringify(data).substring(0, 200)}...`);
         return {
           endpoint,
           success: true,
@@ -558,6 +590,13 @@ Deno.serve(async (req) => {
     
     const batchResults = await Promise.all(batchPromises);
     console.log(`Batch de ${batchResults.length} requests completados`);
+    
+    // Verificar errores en los resultados
+    const failedRequests = batchResults.filter(r => !r.success);
+    if (failedRequests.length > 0) {
+      console.warn(`⚠️ ${failedRequests.length} requests fallidos:`, 
+        failedRequests.map(r => `${r.endpoint}: ${r.error || r.status}`).join(', '));
+    }
     
     // Procesar los datos para el dashboard
     const dashboardData = processOrdersAndData(batchResults, date_range);
@@ -596,6 +635,14 @@ Deno.serve(async (req) => {
         dashboardData.prev_summary = prevProcessedOrders.summary;
       }
     }
+
+    // Agregar información del response para debugging
+    console.log("Resumen del dashboard generado:", {
+      gmv: dashboardData.summary?.gmv || 0,
+      orders: dashboardData.summary?.orders || 0,
+      units: dashboardData.summary?.units || 0,
+      visits: dashboardData.summary?.visits || 0
+    });
     
     return new Response(
       JSON.stringify({
