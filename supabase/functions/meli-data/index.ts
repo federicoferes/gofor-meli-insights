@@ -1,4 +1,3 @@
-
 // Supabase Edge function para interactuar con la API de Mercado Libre
 // sin dependencia de date-fns-tz
 
@@ -457,10 +456,20 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { user_id, batch_requests, date_range, timezone = 'America/Argentina/Buenos_Aires', prev_period, use_cache } = requestBody;
+    const {
+      user_id,
+      batch_requests,
+      date_range,
+      timezone = 'America/Argentina/Buenos_Aires',
+      prev_period,
+      use_cache,
+      disable_test_data = false
+    } = requestBody;
+    
     console.log(`Solicitud recibida para user_id: ${user_id}, timezone: ${timezone}`);
     console.log(`Rango de fechas:`, date_range);
     console.log(`Batch requests:`, batch_requests ? batch_requests.map(r => r.endpoint).join(', ') : 'N/A');
+    console.log(`Generar test data: ${!disable_test_data}`);
     
     // Validar que tenemos un user_id
     if (!user_id) {
@@ -716,8 +725,9 @@ Deno.serve(async (req) => {
       batch_results: batchResults,
       dashboard_data: {
         ...dashboardData,
-        date_range: date_range || { begin: null, end: null } // Asegurar que date_range siempre esté presente
-      }
+        date_range: date_range || { begin: null, end: null }
+      },
+      is_test_data: false
     };
     
     console.log("Estructura final del objeto de respuesta:", 
@@ -730,8 +740,10 @@ Deno.serve(async (req) => {
       })
     );
     
-    // PRUEBA: Si no hay órdenes reales, generar datos de prueba
-    if (!dashboardData.orders || dashboardData.orders.length === 0) {
+    // SOLO generar datos de prueba si: 
+    // 1. No hay órdenes reales
+    // 2. El flag disable_test_data NO está activado
+    if ((!dashboardData.orders || dashboardData.orders.length === 0) && !disable_test_data) {
       console.log("⚠️ No se encontraron órdenes reales, generando datos de prueba para testear frontend");
       
       // Datos de prueba para el dashboard
@@ -802,8 +814,27 @@ Deno.serve(async (req) => {
         date_range: date_range || { begin: null, end: null }
       };
       
+      // Marcar que estos son datos de prueba
+      result.is_test_data = true;
+      
       console.log("Datos de prueba generados para el dashboard");
       console.log(`GMV de prueba: ${testData.summary.gmv}, Órdenes: ${testData.summary.orders}`);
+    } else if (!dashboardData.orders || dashboardData.orders.length === 0) {
+      console.log("⚠️ No se encontraron órdenes y test data está desactivado. Mostrando datos vacíos.");
+      // Ensure we're returning a properly structured response even with empty data
+      result.dashboard_data = {
+        summary: {
+          gmv: 0, commissions: 0, taxes: 0, shipping: 0, discounts: 0,
+          refunds: 0, units: 0, orders: 0, avgTicket: 0, visits: 0, 
+          conversion: 0, advertising: 0
+        },
+        salesByMonth: [],
+        topProducts: [],
+        salesByProvince: [],
+        costDistribution: [],
+        orders: [],
+        date_range: date_range || { begin: null, end: null }
+      };
     }
     
     return new Response(
@@ -816,7 +847,8 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: error.message || 'Error interno del servidor' 
+        error: error.message || 'Error interno del servidor',
+        is_test_data: false
       }),
       { headers: { 'Content-Type': 'application/json', ...corsHeaders } }
     );

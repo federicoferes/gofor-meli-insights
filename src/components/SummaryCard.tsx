@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Card, CardContent } from "@/components/ui/card";
-import { TrendingUp, TrendingDown } from "lucide-react";
+import { TrendingUp, TrendingDown, AlertCircle } from "lucide-react";
 
 interface SummaryCardProps {
   title: React.ReactNode; 
@@ -12,6 +12,7 @@ interface SummaryCardProps {
   isLoading?: boolean;
   suffix?: string;
   additionalInfo?: string | null; 
+  isTestData?: boolean;
 }
 
 const SummaryCard = ({ 
@@ -22,7 +23,8 @@ const SummaryCard = ({
   colorClass = "bg-white",
   isLoading = false,
   suffix = "",
-  additionalInfo
+  additionalInfo,
+  isTestData = false
 }: SummaryCardProps) => {
   // Determine if percent change is positive
   const isPositiveChange = percentChange !== undefined && percentChange >= 0;
@@ -42,8 +44,16 @@ const SummaryCard = ({
       <CardContent className="p-4">
         <div className="flex justify-between items-start">
           <div className="w-full">
-            <div className="text-sm text-gray-600 font-medium">{title}</div>
-            <p className={`text-2xl font-bold font-poppins mt-1 ${isLoading ? 'opacity-50' : ''}`}>
+            <div className="text-sm text-gray-600 font-medium flex items-center gap-2">
+              {title}
+              {isTestData && (
+                <span className="inline-flex items-center text-amber-500 text-xs font-normal" title="Datos de ejemplo para visualización">
+                  <AlertCircle className="h-3 w-3 mr-1" />
+                  Demo
+                </span>
+              )}
+            </div>
+            <p className={`text-2xl font-bold font-poppins mt-1 ${isLoading ? 'opacity-50' : ''} ${isTestData ? 'text-amber-500' : ''}`}>
               {displayValue}
             </p>
             
@@ -58,7 +68,7 @@ const SummaryCard = ({
                 <span>Cargando datos comparativos...</span>
               </div>
             ) : hasPercentChange ? (
-              <div className={`flex items-center mt-2 text-sm font-medium ${percentColor}`}>
+              <div className={`flex items-center mt-2 text-sm font-medium ${isTestData ? 'text-amber-500' : percentColor}`}>
                 {isPositiveChange ? (
                   <TrendingUp className="h-4 w-4 mr-1" />
                 ) : (
@@ -77,7 +87,7 @@ const SummaryCard = ({
           </div>
           
           {icon && (
-            <div className="p-2 rounded-full bg-gofor-purple/10 text-gofor-purple">
+            <div className={`p-2 rounded-full ${isTestData ? 'bg-amber-100 text-amber-500' : 'bg-gofor-purple/10 text-gofor-purple'}`}>
               {icon}
             </div>
           )}
