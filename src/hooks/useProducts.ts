@@ -53,11 +53,14 @@ export function useProducts({
 
   const fetchProducts = useCallback(async () => {
     if (!userId || !isConnected || !meliUserId) {
+      console.log("Cannot fetch products: missing userId, connection or meliUserId", { userId, isConnected, meliUserId });
       return;
     }
 
     setIsLoading(true);
     try {
+      console.log("Fetching products for userId:", userId, "meliUserId:", meliUserId);
+      
       // First, check products in Supabase
       const { data: storedProducts, error: dbError } = await supabase
         .from('products')
@@ -68,7 +71,10 @@ export function useProducts({
         throw new Error(`Error fetching stored products: ${dbError.message}`);
       }
 
+      console.log("Stored products from Supabase:", storedProducts?.length || 0);
+
       // Then fetch products from MeLi API through our edge function
+      console.log("Fetching MeLi products via edge function");
       const { data: meliData, error: meliError } = await supabase.functions.invoke('meli-data', {
         body: {
           user_id: userId,
@@ -85,13 +91,17 @@ export function useProducts({
         throw new Error(`Error fetching MeLi products: ${meliError.message}`);
       }
 
-      if (!meliData?.batch_results?.[0]?.results?.length) {
+      console.log("MeLi API response:", meliData);
+
+      if (!meliData?.batch_results?.[0]?.data?.results?.length) {
         console.log("No products found in MeLi API");
+        setIsLoading(false);
         return;
       }
 
       // Get the item IDs from the search results
-      const itemIds = meliData.batch_results[0].results;
+      const itemIds = meliData.batch_results[0].data.results;
+      console.log(`Found ${itemIds.length} products in MeLi API, fetching details`);
       
       // Fetch details for each product
       const productDetailsPromises = [];
@@ -112,27 +122,32 @@ export function useProducts({
       }
 
       const detailsResponses = await Promise.all(productDetailsPromises);
+      console.log(`Received ${detailsResponses.length} batch responses with product details`);
       
       // Process all product details and update/insert to Supabase
       const productItems: Product[] = [];
+      let processedItems = 0;
+      let successfulUpserts = 0;
+      
       for (const response of detailsResponses) {
         if (response.data?.batch_results) {
           for (const item of response.data.batch_results) {
-            if (item) {
+            if (item?.data) {
+              processedItems++;
               const product: Product = {
-                item_id: item.id,
-                title: item.title,
-                price: item.price,
-                available_quantity: item.available_quantity,
-                sold_quantity: item.sold_quantity || 0,
-                thumbnail: item.thumbnail,
-                permalink: item.permalink,
+                item_id: item.data.id,
+                title: item.data.title,
+                price: item.data.price,
+                available_quantity: item.data.available_quantity,
+                sold_quantity: item.data.sold_quantity || 0,
+                thumbnail: item.data.thumbnail,
+                permalink: item.data.permalink,
                 // Find cost from stored products or default to null
                 cost: null
               };
 
               // Find if we already have this product with a cost
-              const existingProduct = storedProducts?.find(p => p.item_id === item.id);
+              const existingProduct = storedProducts?.find(p => p.item_id === item.data.id);
               if (existingProduct) {
                 product.id = existingProduct.id;
                 product.cost = existingProduct.cost;
@@ -141,20 +156,36 @@ export function useProducts({
               productItems.push(product);
               
               // Upsert to database - use onConflict to avoid duplicates
-              // Fix TypeScript error by explicitly providing user_id and wrapping in array
-              await supabase
-                .from('products')
-                .upsert([{
-                  ...product,
-                  user_id: userId // Explicitly set user_id to ensure it's defined
-                }], { 
-                  onConflict: 'user_id,item_id' 
-                });
+              console.log(`Upserting product ${product.item_id} (${product.title}) with userId: ${userId}`);
+              
+              try {
+                const { error } = await supabase
+                  .from('products')
+                  .upsert([{
+                    ...product,
+                    user_id: userId // Explicitly set user_id to ensure it's defined
+                  }], { 
+                    onConflict: 'user_id,item_id' 
+                  });
+                  
+                if (error) {
+                  console.error("Failed to upsert product", product.item_id, error);
+                } else {
+                  successfulUpserts++;
+                }
+              } catch (upsertError) {
+                console.error("Exception during product upsert:", upsertError);
+              }
+            } else {
+              console.warn("Received item without data:", item);
             }
           }
+        } else {
+          console.warn("Received response without batch_results:", response.data);
         }
       }
 
+      console.log(`Processed ${processedItems} items, successfully upserted ${successfulUpserts} products`);
       setProducts(productItems);
       toast({
         title: "Productos sincronizados",

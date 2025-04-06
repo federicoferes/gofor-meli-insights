@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
@@ -241,16 +240,16 @@ serve(async (req) => {
     if (batch_requests.length > 0) {
       console.log(`Processing ${batch_requests.length} batch requests`);
       
-      // Limitar el número de requests paralelos para evitar sobrecargar la API
+      // Limit concurrent requests to avoid API overload
       const maxConcurrentRequests = 3;
       const requestGroups = [];
       
-      // Dividir las solicitudes en grupos más pequeños
+      // Split requests into smaller groups
       for (let i = 0; i < batch_requests.length; i += maxConcurrentRequests) {
         requestGroups.push(batch_requests.slice(i, i + maxConcurrentRequests));
       }
       
-      // Procesar cada grupo secuencialmente
+      // Process each group sequentially
       for (const group of requestGroups) {
         const groupResults = await Promise.all(
           group.map(async (request) => {
@@ -269,16 +268,16 @@ serve(async (req) => {
             }
             
             try {
-              // Definir URL con parámetros
+              // Build URL with parameters
               const apiUrl = new URL(`https://api.mercadolibre.com${batchEndpoint}`);
               
-              // Asegurar orden.status=paid para búsquedas de órdenes
+              // Ensure order.status=paid for order searches
               const actualParams = {...batchParams};
               if (batchEndpoint.includes('/orders/search')) {
                 actualParams['order.status'] = 'paid';
               }
               
-              // Añadir parámetros para GET requests
+              // Add parameters for GET requests
               if (batchMethod === "GET" && actualParams) {
                 Object.entries(actualParams).forEach(([key, value]) => {
                   if (value !== undefined && value !== null) {
@@ -299,7 +298,7 @@ serve(async (req) => {
                   },
                   ...(batchMethod !== "GET" && actualParams ? { body: JSON.stringify(actualParams) } : {}),
                 },
-                3 // Máximo de reintentos
+                3 // Max retries
               );
               
               return {
@@ -320,7 +319,7 @@ serve(async (req) => {
         
         batchResults.push(...groupResults);
         
-        // Pequeña pausa entre grupos para evitar rate limits
+        // Small pause between groups to avoid rate limits
         if (requestGroups.length > 1) {
           await new Promise(res => setTimeout(res, 500));
         }
@@ -383,7 +382,7 @@ serve(async (req) => {
       );
     }
     
-    // Construir respuesta
+    // Build response
     const response = {
       success: true,
       is_connected: true,
@@ -391,7 +390,7 @@ serve(async (req) => {
       dashboard_data: dashboardData
     };
     
-    // Guardar en caché si está habilitado
+    // Cache if enabled
     if (use_cache) {
       const cacheKey = generateCacheKey(user_id, endpoint || 'batch', date_range);
       responseCache.set(cacheKey, {
