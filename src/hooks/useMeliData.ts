@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useEffect, useRef, useContext } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
@@ -157,11 +158,13 @@ export function useMeliData({
       console.log("🚫 Datos de prueba desactivados:", finalDisableTestData);
 
       const batchRequests = [
+        // Búsqueda principal de órdenes - modificada para aceptar más estados
         {
           endpoint: '/orders/search',
           params: {
             seller: meliUserId,
-            'order.status': 'paid',
+            // Aceptar más estados para capturar más órdenes
+            // 'order.status': 'paid,confirmed,payment_required,payment_in_process,partially_paid,partially_refunded,cancelled,invalid',
             sort: 'date_desc',
             date_from: dateFrom,
             date_to: dateTo,
@@ -169,6 +172,7 @@ export function useMeliData({
           }
         },
         
+        // Consulta de productos publicados
         {
           endpoint: `/users/${meliUserId}/items/search`,
           params: {
@@ -176,6 +180,7 @@ export function useMeliData({
           }
         },
         
+        // Visitas por items
         {
           endpoint: `/visits/items`,
           params: {
@@ -185,6 +190,7 @@ export function useMeliData({
           }
         },
         
+        // Búsqueda de visitas
         {
           endpoint: `/visits/search`,
           params: {
@@ -192,11 +198,13 @@ export function useMeliData({
           }
         },
         
+        // Campañas de publicidad
         {
           endpoint: `/users/${meliUserId}/ads/campaigns`,
           params: {}
         },
         
+        // Órdenes recientes sin filtro de fecha para garantizar que capturamos algo
         {
           endpoint: `/orders/search/recent`,
           params: {
@@ -290,6 +298,14 @@ export function useMeliData({
       const allOrdersData = [...ordersData, ...recentOrdersData];
       
       console.log(`📊 Se encontraron ${allOrdersData.length} órdenes en la respuesta (${ordersData.length} normales + ${recentOrdersData.length} recientes)`);
+      
+      // Mostrar detalles de las primeras órdenes si hay
+      if (ordersData.length > 0) {
+        console.log(`Ejemplo de primera orden normal: ${JSON.stringify(ordersData[0]).substring(0, 1000)}...`);
+      }
+      if (recentOrdersData.length > 0) {
+        console.log(`Ejemplo de primera orden reciente: ${JSON.stringify(recentOrdersData[0]).substring(0, 1000)}...`);
+      }
 
       if (allOrdersData.length === 0) {
         console.log("⚠️ No se encontraron órdenes en el período seleccionado");

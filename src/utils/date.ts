@@ -83,7 +83,11 @@ export const isDateInRange = (dateStr: string, fromStr: string, toStr: string): 
     const from = new Date(fromStr);
     const to = new Date(toStr);
     
-    return date >= from && date <= to;
+    console.log(`Verificando rango de fechas: ${dateStr} está entre ${fromStr} y ${toStr}?`);
+    const result = date >= from && date <= to;
+    console.log(`Resultado de verificación: ${result ? 'SÍ' : 'NO'}`);
+    
+    return result;
   } catch (error) {
     console.error("Error validando rango de fechas:", error);
     return false;

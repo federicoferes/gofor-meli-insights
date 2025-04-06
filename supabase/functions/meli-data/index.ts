@@ -38,6 +38,7 @@ const applyArgentinaOffset = (date: Date): Date => {
 const processOrders = (ordersData, dateFrom, dateTo) => {
   if (!ordersData || !ordersData.results) {
     console.log("⚠️ No se recibieron datos de órdenes válidos");
+    console.log("ordersData:", JSON.stringify(ordersData || {}).substring(0, 1000) + "...");
     return {
       orders: [],
       summary: {
@@ -51,12 +52,29 @@ const processOrders = (ordersData, dateFrom, dateTo) => {
   }
   
   console.log(`Procesando ${ordersData.results?.length || 0} órdenes con rango: ${dateFrom} a ${dateTo}`);
-  console.log(`Muestra de orden #1: ${JSON.stringify(ordersData.results[0]?.id || "No hay ordenes")}`);
+  if (ordersData.results && ordersData.results.length > 0) {
+    console.log(`Primera orden ID: ${ordersData.results[0]?.id}`);
+    console.log(`Primera orden status: ${ordersData.results[0]?.status}`);
+    console.log(`Primera orden created_date: ${ordersData.results[0]?.date_created}`);
+    console.log(`Primera orden closed_date: ${ordersData.results[0]?.date_closed}`);
+    if (ordersData.results[0]?.payments && ordersData.results[0]?.payments.length > 0) {
+      console.log(`Primera orden payment status: ${ordersData.results[0]?.payments[0]?.status}`);
+      console.log(`Primera orden payment date_approved: ${ordersData.results[0]?.payments[0]?.date_approved}`);
+    }
+  } else {
+    console.log("⚠️ No se encontraron órdenes en la respuesta de MeLi");
+  }
   
   // Filtrar órdenes por estado y fecha de cierre (cuando se confirmó el pago)
+  // Modificamos para aceptar también órdenes "processing", "packed" y otros estados relevantes
   const validOrders = ordersData.results?.filter(order => {
-    // Solo incluir órdenes pagadas o entregadas
-    const validStatus = ['paid', 'delivered'].includes(order.status);
+    // Aceptar más estados para capturar más órdenes
+    const validStatus = ['paid', 'delivered', 'processing', 'packed', 'ready_to_ship', 'shipped', 'partially_delivered'].includes(order.status);
+    
+    if (!validStatus) {
+      console.log(`Orden ${order.id} ignorada: estado inválido (${order.status})`);
+      return false;
+    }
     
     // Preferir date_closed o la fecha de aprobación del pago
     const dateToCheck = order.date_closed || 
@@ -65,15 +83,22 @@ const processOrders = (ordersData, dateFrom, dateTo) => {
     
     console.log(`Orden ${order.id}: estado=${order.status}, fecha=${dateToCheck}`);
     
-    const isInRange = dateFrom && dateTo ? isDateInRange(dateToCheck, dateFrom, dateTo) : true;
-    
-    if (!validStatus) {
-      console.log(`Orden ${order.id} ignorada: estado inválido (${order.status})`);
-    } else if (!isInRange && dateFrom && dateTo) {
-      console.log(`Orden ${order.id} ignorada: fuera de rango (${dateToCheck} no está entre ${dateFrom} y ${dateTo})`);
+    // Si no hay rango de fechas especificado, incluir todas las órdenes
+    if (!dateFrom || !dateTo) {
+      console.log(`Orden ${order.id} incluida: no hay filtro de fechas aplicado`);
+      return true;
     }
     
-    return validStatus && isInRange;
+    // Verificar si la fecha está dentro del rango
+    const isInRange = isDateInRange(dateToCheck, dateFrom, dateTo);
+    
+    if (!isInRange) {
+      console.log(`Orden ${order.id} ignorada: fuera de rango (${dateToCheck} no está entre ${dateFrom} y ${dateTo})`);
+      return false;
+    }
+    
+    console.log(`Orden ${order.id} incluida: ${order.status}, fecha ${dateToCheck}`);
+    return true;
   }) || [];
 
   console.log(`Se encontraron ${validOrders.length} órdenes válidas de ${ordersData.results?.length || 0} totales`);
@@ -257,6 +282,7 @@ const processOrdersAndData = (batchResults, dateRange) => {
         const firstOrder = ordersResult.data.results[0];
         console.log(`Primera orden: ID=${firstOrder.id}, Estado=${firstOrder.status}, Fecha=${firstOrder.date_created}`);
         console.log(`Total: ${firstOrder.total_amount}, Items: ${firstOrder.order_items?.length || 0}`);
+        console.log(`JSON completo de primera orden: ${JSON.stringify(firstOrder).substring(0, 2000)}...`);
       } else {
         console.log('No hay órdenes disponibles');
       }
@@ -265,6 +291,20 @@ const processOrdersAndData = (batchResults, dateRange) => {
     }
   } else {
     console.log('No se encontró resultado de órdenes');
+  }
+  
+  // También buscar en órdenes recientes
+  const recentOrdersResult = batchResults.find(r => r.endpoint.includes('/orders/search/recent'));
+  if (recentOrdersResult) {
+    console.log(`Estado de la respuesta de órdenes recientes: ${recentOrdersResult.success ? 'Éxito' : 'Error'}`);
+    if (recentOrdersResult.data) {
+      console.log(`Datos de órdenes recientes: ${recentOrdersResult.data.results ? `${recentOrdersResult.data.results.length} resultados` : 'Sin resultados'}`);
+      
+      if (recentOrdersResult.data.results && recentOrdersResult.data.results.length > 0) {
+        const firstOrder = recentOrdersResult.data.results[0];
+        console.log(`Primera orden reciente: ID=${firstOrder.id}, Estado=${firstOrder.status}, Fecha=${firstOrder.date_created}`);
+      }
+    }
   }
   
   // Procesar órdenes
@@ -543,6 +583,7 @@ Deno.serve(async (req) => {
     console.log(`Hora actual: ${new Date(now * 1000).toISOString()}`);
     
     let accessToken = connection.access_token;
+    console.log(`Usando access_token: ${accessToken.substring(0, 15)}...`);
     
     if (now >= expiresAt) {
       // Refrescar token
@@ -576,6 +617,7 @@ Deno.serve(async (req) => {
       const refreshData = await refreshResponse.json();
       console.log("Token refrescado exitosamente");
       accessToken = refreshData.access_token;
+      console.log(`Nuevo access_token: ${accessToken.substring(0, 15)}...`);
       
       // Actualizar token en la base de datos
       const newExpiresAt = new Date(Date.now() + (refreshData.expires_in * 1000)).toISOString();
