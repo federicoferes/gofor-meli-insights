@@ -50,6 +50,8 @@ export const getPresetDateRange = (rangeType: string) => {
  * Formatea una fecha para API requests (ISO string)
  */
 export const formatDateForApi = (date: Date, isEndOfDay = false): string => {
+  if (!date) return "";
+  
   if (isEndOfDay) {
     // Asegurarse de que tenga milisegundos
     const withMs = new Date(date);
@@ -63,6 +65,8 @@ export const formatDateForApi = (date: Date, isEndOfDay = false): string => {
  * Convierte una fecha ISO a una fecha local considerando la offset de Argentina
  */
 export const isoToArgDate = (isoString: string): Date => {
+  if (!isoString) return new Date();
+  
   const date = new Date(isoString);
   return addHours(date, ARG_OFFSET);
 };
@@ -72,6 +76,8 @@ export const isoToArgDate = (isoString: string): Date => {
  */
 export const isDateInRange = (dateStr: string, fromStr: string, toStr: string): boolean => {
   try {
+    if (!dateStr || !fromStr || !toStr) return false;
+    
     const date = new Date(dateStr);
     const from = new Date(fromStr);
     const to = new Date(toStr);
@@ -87,6 +93,7 @@ export const isDateInRange = (dateStr: string, fromStr: string, toStr: string): 
  * Formatea la fecha para mostrar en la UI con formato argentino
  */
 export const formatDateForDisplay = (date: Date): string => {
+  if (!date) return "";
   return format(date, 'dd/MM/yyyy');
 };
 

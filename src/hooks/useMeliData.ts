@@ -169,8 +169,8 @@ export function useMeliData({
           endpoint: `/visits/items`,
           params: {
             user_id: meliUserId,
-            date_from: dateFrom?.split('T')[0],
-            date_to: dateTo?.split('T')[0]
+            date_from: dateFrom ? dateFrom.split('T')[0] : undefined,
+            date_to: dateTo ? dateTo.split('T')[0] : undefined
           }
         },
         
@@ -284,7 +284,8 @@ export function useMeliData({
             orders: batchData.dashboard_data.orders?.length || 0,
             topProducts: batchData.dashboard_data.topProducts?.length || 0,
             costDistribution: batchData.dashboard_data.costDistribution?.length || 0,
-            salesByProvince: batchData.dashboard_data.salesByProvince?.length || 0
+            salesByProvince: batchData.dashboard_data.salesByProvince?.length || 0,
+            date_range: batchData.dashboard_data.date_range ? "presente" : "ausente"
           });
           
           if (batchData.dashboard_data.salesByMonth?.length > 0) {

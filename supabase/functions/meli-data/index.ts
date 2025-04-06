@@ -171,7 +171,7 @@ const processOrders = (ordersData, dateFrom, dateTo) => {
 
 // Función para procesar datos de visitas
 const processVisits = (visitsData) => {
-  console.log("Procesando datos de visitas:", JSON.stringify(visitsData).substring(0, 200) + '...');
+  console.log("Procesando datos de visitas:", visitsData ? (JSON.stringify(visitsData).substring(0, 200) + '...') : 'Sin datos');
   
   let totalVisits = 0;
   
@@ -187,7 +187,8 @@ const processVisits = (visitsData) => {
 
 // Función para procesar datos de publicidad
 const processAdvertising = (campaignsData) => {
-  console.log("Procesando datos de publicidad:", JSON.stringify(campaignsData).substring(0, 200) + '...');
+  // Fix: Agregamos verificación antes de usar substring
+  console.log("Procesando datos de publicidad:", campaignsData ? (JSON.stringify(campaignsData).substring(0, 200) + '...') : 'Sin datos');
   
   let totalSpend = 0;
   
@@ -572,7 +573,9 @@ Deno.serve(async (req) => {
         }
         
         const data = await response.json();
-        console.log(`Response de ${endpoint}: ${JSON.stringify(data).substring(0, 200)}...`);
+        // Fix: Asegurándonos de que hay datos antes de usar substring
+        const dataSummary = data ? JSON.stringify(data).substring(0, 200) + '...' : 'No data received';
+        console.log(`Response de ${endpoint}: ${dataSummary}`);
         return {
           endpoint,
           success: true,
@@ -644,12 +647,26 @@ Deno.serve(async (req) => {
       visits: dashboardData.summary?.visits || 0
     });
     
-    return new Response(
+    // Asegurándonos de que date_range esté presente en el resultado
+    const result = {
+      success: true,
+      batch_results: batchResults,
+      dashboard_data: {
+        ...dashboardData,
+        date_range: date_range || { begin: null, end: null } // Asegurar que date_range siempre esté presente
+      }
+    };
+    
+    console.log("Estructura final del objeto de respuesta:", 
       JSON.stringify({
-        success: true,
-        batch_results: batchResults,
-        dashboard_data: dashboardData
-      }),
+        success: result.success,
+        dashboard_data_exists: !!result.dashboard_data,
+        date_range_exists: !!result.dashboard_data?.date_range
+      })
+    );
+    
+    return new Response(
+      JSON.stringify(result),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
     
