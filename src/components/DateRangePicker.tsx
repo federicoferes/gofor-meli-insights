@@ -1,7 +1,7 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { format, startOfDay, endOfDay, subDays, isEqual } from "date-fns";
 import { es } from "date-fns/locale";
+import { zonedTimeToUtc, utcToZonedTime, format as formatTz } from "date-fns-tz";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -19,6 +19,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+const TIMEZONE = 'America/Argentina/Buenos_Aires';
+
 type DateRangePickerProps = {
   onDateRangeChange: (range: string, dates?: { 
     from: Date | undefined; 
@@ -35,48 +37,49 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
     to: undefined,
   });
   
-  // Referencia para evitar redisparo al inicializar
   const isInitialized = useRef(false);
   const lastRange = useRef<string | null>(null);
   const lastFromISO = useRef<string | null>(null);
   const lastToISO = useRef<string | null>(null);
 
-  // Function to format dates to ISO 8601 string
   const formatDateToISO = (date: Date, endOfDayFlag = false): string => {
+    const zonedDate = utcToZonedTime(date, TIMEZONE);
+    
     if (endOfDayFlag) {
-      return endOfDay(date).toISOString();
+      zonedDate.setHours(23, 59, 59, 999);
+    } else {
+      zonedDate.setHours(0, 0, 0, 0);
     }
-    return startOfDay(date).toISOString();
+    
+    return zonedTimeToUtc(zonedDate, TIMEZONE).toISOString();
   };
 
-  // Function to get the date range based on the selected option
   const getDateRange = (rangeType: string): { from: Date | undefined; to: Date | undefined } => {
-    const today = new Date();
+    const nowInArgentina = utcToZonedTime(new Date(), TIMEZONE);
     let fromDate: Date | undefined;
     
     switch (rangeType) {
       case "today":
-        fromDate = startOfDay(new Date(today));
-        return { from: fromDate, to: today };
+        fromDate = startOfDay(nowInArgentina);
+        return { from: fromDate, to: nowInArgentina };
       case "yesterday":
-        fromDate = startOfDay(subDays(today, 1));
-        return { from: fromDate, to: subDays(today, 1) };
+        fromDate = startOfDay(subDays(nowInArgentina, 1));
+        return { from: fromDate, to: endOfDay(subDays(nowInArgentina, 1)) };
       case "7d":
-        fromDate = startOfDay(subDays(today, 7));
-        return { from: fromDate, to: today };
+        fromDate = startOfDay(subDays(nowInArgentina, 7));
+        return { from: fromDate, to: nowInArgentina };
       case "30d":
-        fromDate = startOfDay(subDays(today, 30));
-        return { from: fromDate, to: today };
+        fromDate = startOfDay(subDays(nowInArgentina, 30));
+        return { from: fromDate, to: nowInArgentina };
       case "custom":
         return date;
       default:
-        fromDate = startOfDay(subDays(today, 30));
-        return { from: fromDate, to: today };
+        fromDate = startOfDay(subDays(nowInArgentina, 30));
+        return { from: fromDate, to: nowInArgentina };
     }
   };
 
   const handleRangeChange = (value: string) => {
-    // Si ya estamos en el mismo rango, no hacemos nada
     if (value === lastRange.current && value !== 'custom') {
       console.log(`🔄 DateRangePicker: Ignorando cambio de rango redundante a ${value}`);
       return;
@@ -86,23 +89,19 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
     setSelectedRange(value);
     lastRange.current = value;
     
-    // Generate date range based on selected option
     const dateRange = getDateRange(value);
     
-    // Only pass ISO formatted dates if we have valid dates
     if (value !== "custom") {
       setDate(dateRange);
       
-      // Add ISO formatted dates to the callback
       let fromISO, toISO;
       if (dateRange.from) {
         fromISO = formatDateToISO(dateRange.from);
       }
       if (dateRange.to) {
-        toISO = formatDateToISO(dateRange.to, true); // End of day for the to-date
+        toISO = formatDateToISO(dateRange.to, true);
       }
       
-      // Verificar si es redundante con la última selección
       if (fromISO === lastFromISO.current && toISO === lastToISO.current) {
         console.log("📅 DateRangePicker: Ignorando cambio de fecha redundante");
         return;
@@ -120,17 +119,14 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
       
       onDateRangeChange(value, { ...dateRange, fromISO, toISO });
     } else {
-      // For custom, we'll rely on the custom date picker
-      // Add ISO formatted dates if they exist
       let fromISO, toISO;
       if (date.from) {
         fromISO = formatDateToISO(date.from);
       }
       if (date.to) {
-        toISO = formatDateToISO(date.to, true); // End of day for the to-date
+        toISO = formatDateToISO(date.to, true);
       }
       
-      // Verificar si es redundante con la última selección
       if (fromISO === lastFromISO.current && toISO === lastToISO.current) {
         console.log("📅 DateRangePicker: Ignorando cambio de fecha personalizada redundante");
         return;
@@ -151,13 +147,11 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
   };
 
   const handleCustomDateChange = (value: { from?: Date; to?: Date } | undefined) => {
-    // Safely handle potentially undefined value
     if (!value) {
       console.log("📅 Custom date selection cleared or undefined");
       return;
     }
     
-    // Verificar si es redundante con la selección actual
     if (value.from && date.from && value.to && date.to) {
       if (isEqual(value.from, date.from) && isEqual(value.to, date.to)) {
         console.log("📅 Custom date selection unchanged, ignoring");
@@ -171,16 +165,13 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
       to: value.to || undefined
     });
 
-    // Only trigger the callback if we have both from and to dates
     if (value.from && value.to) {
       setSelectedRange("custom");
       lastRange.current = "custom";
       
-      // Add ISO formatted dates
       const fromISO = value.from ? formatDateToISO(value.from) : undefined;
-      const toISO = value.to ? formatDateToISO(value.to, true) : undefined; // End of day for the to-date
+      const toISO = value.to ? formatDateToISO(value.to, true) : undefined;
       
-      // Verificar si es redundante con la última selección
       if (fromISO === lastFromISO.current && toISO === lastToISO.current) {
         console.log("📅 DateRangePicker: Ignorando cambio de fecha personalizada redundante");
         return;
@@ -205,7 +196,6 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
     }
   };
 
-  // Initialize with the default date range on mount, evitando múltiples triggers
   useEffect(() => {
     if (!isInitialized.current) {
       console.log("📅 DateRangePicker initialized with default range:", selectedRange);

@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
@@ -111,7 +110,6 @@ export function useMeliData({
           if (dashData.salesByProvince?.length > 0) setProvinceData(dashData.salesByProvince);
           if (dashData.orders?.length > 0) setOrdersData(dashData.orders);
           
-          // Calculate product costs if calculator is provided
           if (productCostsCalculator && dashData.orders?.length > 0) {
             const productCosts = productCostsCalculator(dashData.orders);
             setSalesSummary(prev => ({ ...prev, productCosts }));
@@ -131,27 +129,8 @@ export function useMeliData({
         dateFrom = dateRange.fromISO;
         dateTo = dateRange.toISO;
       } else {
-        const today = new Date();
-        const formattedToday = today.toISOString().split('T')[0];
-        
-        let fromDate = new Date(today);
-        switch(dateFilter) {
-          case 'today':
-            break;
-          case 'yesterday':
-            fromDate.setDate(today.getDate() - 1);
-            break;
-          case '7d':
-            fromDate.setDate(today.getDate() - 7);
-            break;
-          case '30d':
-          default:
-            fromDate.setDate(today.getDate() - 30);
-        }
-        
-        const formattedFrom = fromDate.toISOString().split('T')[0];
-        dateFrom = `${formattedFrom}T00:00:00.000Z`;
-        dateTo = `${formattedToday}T23:59:59.999Z`;
+        dateFrom = dateRange.fromISO;
+        dateTo = dateRange.toISO;
       }
       
       console.log("🟣 Cargando datos para filtro:", dateFilter);
@@ -164,8 +143,8 @@ export function useMeliData({
             seller: meliUserId,
             'order.status': 'paid',
             sort: 'date_desc',
-            date_from: dateFrom,
-            date_to: dateTo,
+            date_closed_from: dateFrom,
+            date_closed_to: dateTo,
             limit: 50
           }
         },
@@ -199,6 +178,7 @@ export function useMeliData({
           begin: dateFrom ? dateFrom.split('T')[0] : null,
           end: dateTo ? dateTo.split('T')[0] : null
         },
+        timezone: 'America/Argentina/Buenos_Aires',
         prev_period: true,
         use_cache: true
       };
@@ -303,7 +283,6 @@ export function useMeliData({
           if (batchData.dashboard_data.orders) {
             setOrdersData(batchData.dashboard_data.orders);
             
-            // Calculate product costs if calculator is provided
             if (productCostsCalculator) {
               const productCosts = productCostsCalculator(batchData.dashboard_data.orders);
               setSalesSummary(prev => ({ ...prev, productCosts }));

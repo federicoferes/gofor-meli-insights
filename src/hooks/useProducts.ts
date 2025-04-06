@@ -1,7 +1,10 @@
-
 import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
+import { utcToZonedTime, zonedTimeToUtc } from 'date-fns-tz';
+
+// Definir la zona horaria de Argentina
+const TIMEZONE = 'America/Argentina/Buenos_Aires';
 
 interface Product {
   id?: string;
@@ -259,7 +262,10 @@ export function useProducts({
     const soldItems: Record<string, number> = {};
     
     orders.forEach(order => {
-      if (order.order_items && Array.isArray(order.order_items)) {
+      // Solo considerar órdenes con estado pagado o entregado
+      if ((order.status === 'paid' || order.status === 'delivered') && 
+          order.order_items && 
+          Array.isArray(order.order_items)) {
         order.order_items.forEach((item: any) => {
           const itemId = item.item?.id;
           if (itemId) {
