@@ -8,6 +8,8 @@ import { isWithinInterval, parseISO, addDays } from "npm:date-fns";
 // Helper para determinar si una fecha está en un rango
 const isDateInRange = (dateStr: string, fromStr: string, toStr: string) => {
   try {
+    if (!dateStr || !fromStr || !toStr) return false;
+    
     const date = parseISO(dateStr);
     const from = parseISO(fromStr);
     const to = parseISO(toStr);
@@ -290,7 +292,8 @@ const processOrdersAndData = (batchResults, dateRange) => {
     topProducts: processedOrders.topProducts,
     salesByProvince: processedOrders.salesByProvince,
     costDistribution: processedOrders.costDistribution,
-    orders: processedOrders.orders
+    orders: processedOrders.orders,
+    date_range: dateRange || { begin: null, end: null }
   };
 };
 
