@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -45,7 +44,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [meliConnected, setMeliConnected] = useState(false);
   const [meliUser, setMeliUser] = useState(null);
-  const [dateFilter, setDateFilter] = useState('30d');
+  const [dateFilter, setDateFilter] = useState('7d');
   const [salesData, setSalesData] = useState([]);
   const [salesSummary, setSalesSummary] = useState({
     gmv: 0,
@@ -130,7 +129,7 @@ const Dashboard = () => {
         
         // Process orders data
         const orders = ordersData.data.results || [];
-        console.log("Orders data:", orders);
+        console.log("Orders data from Mercado Libre:", orders);
         
         // In a real implementation, we would process the orders to extract:
         // - Monthly sales for the chart
