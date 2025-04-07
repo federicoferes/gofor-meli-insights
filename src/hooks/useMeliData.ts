@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useEffect, useRef, useContext } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
@@ -171,7 +170,6 @@ export function useMeliData({
       console.log("🚫 Datos de prueba desactivados:", finalDisableTestData);
       console.log("🌐 TimeZone: ", Intl.DateTimeFormat().resolvedOptions().timeZone);
 
-      // Construir fechas en formato correcto para MeLi API (con zona horaria Argentina)
       let fromArg, toArg;
       if (dateFrom) {
         const fromDate = new Date(dateFrom);
@@ -185,7 +183,6 @@ export function useMeliData({
         console.log(`📅 Fecha fin formateada para MeLi: ${toArg}`);
       }
 
-      // Lista de IDs de productos para el endpoint de visitas
       const { data: productsData, error: productsError } = await supabase
         .from('products')
         .select('item_id')
@@ -199,14 +196,12 @@ export function useMeliData({
       console.log(`📊 Obtenidos ${productIds.length} IDs de productos para consulta de visitas`);
 
       const batchRequests = [
-        // Búsqueda principal de órdenes con filtro por fecha
         {
           endpoint: '/orders/search',
           params: {
             seller: meliUserId,
             sort: 'date_desc',
             limit: 50,
-            // Aplicar filtros de fecha formateados correctamente para MeLi
             ...((fromArg && toArg) ? {
               'order.date_created.from': fromArg,
               'order.date_created.to': toArg
@@ -214,7 +209,6 @@ export function useMeliData({
           }
         },
         
-        // Consulta de productos publicados
         {
           endpoint: `/users/${meliUserId}/items/search`,
           params: {
@@ -222,7 +216,6 @@ export function useMeliData({
           }
         },
         
-        // FIX: Campañas de publicidad con el endpoint correcto
         {
           endpoint: `/advertising/campaigns/search`,
           params: {
@@ -230,13 +223,11 @@ export function useMeliData({
           }
         },
         
-        // Órdenes recientes sin filtro de fecha para garantizar que capturamos algo
         {
           endpoint: `/orders/search/recent`,
           params: {
             seller: meliUserId,
             limit: 50,
-            // También aplicar filtros de fecha aquí
             ...((fromArg && toArg) ? {
               'order.date_created.from': fromArg,
               'order.date_created.to': toArg
@@ -244,11 +235,9 @@ export function useMeliData({
           }
         },
         
-        // FIX: Ya no enviamos batches de visitas sino solo los IDs para procesamiento individual
         {
           endpoint: `/visits/items`,
           params: {
-            // Los IDs se procesan individualmente en el backend
             _productIds: productIds
           }
         }
@@ -265,7 +254,7 @@ export function useMeliData({
         prev_period: true,
         use_cache: false,
         disable_test_data: finalDisableTestData,
-        product_ids: productIds // Enviamos los IDs por separado para procesamiento individual 
+        product_ids: productIds
       };
 
       const payloadString = JSON.stringify(requestPayload);
@@ -303,7 +292,6 @@ export function useMeliData({
         is_test_data: !!batchData.is_test_data
       }));
 
-      // Imprimir URLs completas para debug
       if (batchData.batch_results) {
         console.log("🌐 URLs completas utilizadas:");
         batchData.batch_results.forEach(r => {
@@ -348,7 +336,6 @@ export function useMeliData({
       if (isMounted.current) {
         console.log("✅ Datos recibidos correctamente");
         
-        // FIX: Manejamos correctamente el caso donde hay dashboard_data pero vacío
         if (batchData.dashboard_data) {
           setIsTestData(!!batchData.is_test_data);
           
@@ -357,17 +344,14 @@ export function useMeliData({
           }
           
           if (batchData.dashboard_data.summary) {
-            // Calculamos las métricas basadas en datos reales recibidos
             const summary = batchData.dashboard_data.summary;
             
-            // Calculamos la conversión (unidades / visitas) * 100
             if (summary.visits > 0 && summary.units > 0) {
               summary.conversion = (summary.units / summary.visits) * 100;
             } else {
               summary.conversion = 0;
             }
             
-            // Ticket promedio (GMV / órdenes)
             if (summary.gmv > 0 && summary.orders > 0) {
               summary.avgTicket = summary.gmv / summary.orders;
             } else {
@@ -389,7 +373,6 @@ export function useMeliData({
           }
           
           if (batchData.dashboard_data.prev_summary) {
-            // Aplicamos la misma lógica para el resumen del periodo anterior
             const prevSummary = batchData.dashboard_data.prev_summary;
             
             if (prevSummary.visits > 0 && prevSummary.units > 0) {
@@ -430,10 +413,8 @@ export function useMeliData({
         } else {
           console.warn("⚠️ No se recibieron datos del dashboard");
           
-          // Mostrar datos de prueba si están permitidos
-          if (!batchData.is_test_data && !disable_test_data) {
+          if (!batchData.is_test_data && !finalDisableTestData) {
             console.log("📊 No hay datos reales, generando datos de prueba...");
-            // Usar una función para generar datos de prueba
             const testData = {
               summary: createEmptySalesSummary(),
               prev_summary: createEmptySalesSummary(),
@@ -452,7 +433,6 @@ export function useMeliData({
               duration: 5000
             });
             
-            // Configurar datos básicos para que la UI no se rompa
             setSalesSummary(testData.summary);
             setPrevSalesSummary(testData.prev_summary);
             setSalesData(testData.salesByMonth);
@@ -463,8 +443,7 @@ export function useMeliData({
           } else {
             setError("No se encontraron datos para el período seleccionado");
             
-            // Mostrar el error solo si datos de prueba no están permitidos
-            if (disable_test_data) {
+            if (finalDisableTestData) {
               toast({
                 title: "Sin datos del dashboard",
                 description: "No se encontraron órdenes para el período seleccionado",
