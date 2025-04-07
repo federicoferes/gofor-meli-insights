@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { format, startOfDay, endOfDay, subDays, isEqual } from "date-fns";
 import { es } from "date-fns/locale";

@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useEffect, useRef, useContext } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
@@ -287,6 +286,11 @@ export function useMeliData({
         dateTo = dateRange.toISO;
       }
 
+      console.log('useMeliData - dateFilter:', dateFilter);
+      console.log('useMeliData - dateRange:', JSON.stringify(dateRange, null, 2));
+      console.log('useMeliData - dateFrom:', dateFrom);
+      console.log('useMeliData - dateTo:', dateTo);
+
       // Get product IDs for visiting data
       const { data: productsData, error: productsError } = await supabase
         .from('products')
@@ -354,6 +358,8 @@ export function useMeliData({
         disable_test_data: finalDisableTestData,
         product_ids: productIds
       };
+
+      console.log('useMeliData - Payload date_range:', JSON.stringify(requestPayload.date_range, null, 2));
 
       // Check for duplicate requests
       const payloadString = JSON.stringify(requestPayload);

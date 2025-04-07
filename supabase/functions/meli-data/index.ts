@@ -20,8 +20,13 @@ const responseWithCors = (body: any, status = 200) => {
 function formatDateForMeLiApi(dateString: string): string {
   if (!dateString) return "";
   
+  console.log(`Formatting date: ${dateString}`);
+  
   // Split at the decimal point to remove milliseconds and timezone
-  return dateString.split('.')[0];
+  const formattedDate = dateString.split('.')[0];
+  console.log(`Formatted date result: ${formattedDate}`);
+  
+  return formattedDate;
 }
 
 // Test data generator with consistent structure
@@ -606,7 +611,9 @@ serve(async (req) => {
     const body = await req.json();
     const { user_id, batch_requests: originalBatchRequests, date_range, timezone, prev_period, use_cache, disable_test_data, product_ids } = body;
     
-    console.log("Received date_range:", date_range);
+    console.log("Received date_range:", JSON.stringify(date_range, null, 2));
+    console.log("Type of date_range:", typeof date_range);
+    console.log("Date range has properties:", date_range ? Object.keys(date_range) : "undefined");
     
     // If no user_id, just check connection
     if (!user_id && !originalBatchRequests) {
@@ -652,15 +659,24 @@ serve(async (req) => {
     let formattedToDate = "";
     
     if (date_range) {
+      console.log("Date range begin:", date_range.begin);
+      console.log("Date range end:", date_range.end);
+      
       if (date_range.begin) {
         formattedFromDate = formatDateForMeLiApi(date_range.begin);
         console.log("Formatted from date:", formattedFromDate);
+      } else {
+        console.log("Missing date_range.begin");
       }
       
       if (date_range.end) {
         formattedToDate = formatDateForMeLiApi(date_range.end);
         console.log("Formatted to date:", formattedToDate);
+      } else {
+        console.log("Missing date_range.end");
       }
+    } else {
+      console.log("date_range is undefined or null");
     }
     
     // Ensure date parameters are properly added to each request with correct format

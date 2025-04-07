@@ -1,4 +1,3 @@
-
 import { startOfDay, endOfDay, addHours, subDays, format } from 'date-fns';
 
 // UTC-3 Argentina
@@ -14,6 +13,8 @@ export const getArgDateRange = (base: Date) => {
   const from = addHours(startOfDay(base), -ARG_OFFSET);
   const to = addHours(endOfDay(base), -ARG_OFFSET);
   
+  console.log(`getArgDateRange - base: ${base.toISOString()}, from: ${from.toISOString()}, to: ${to.toISOString()}`);
+  
   return { from, to };
 };
 
@@ -24,6 +25,7 @@ export const getArgDateRange = (base: Date) => {
  */
 export const getPresetDateRange = (rangeType: string) => {
   const now = new Date();
+  console.log(`getPresetDateRange - rangeType: ${rangeType}, now: ${now.toISOString()}`);
   
   switch (rangeType) {
     case "today":
@@ -31,15 +33,19 @@ export const getPresetDateRange = (rangeType: string) => {
     case "yesterday":
       return getArgDateRange(subDays(now, 1));
     case "7d":
-      return {
+      const sevenDays = {
         from: addHours(startOfDay(subDays(now, 7)), -ARG_OFFSET),
         to: addHours(endOfDay(now), -ARG_OFFSET)
       };
+      console.log(`getPresetDateRange - 7d: from: ${sevenDays.from.toISOString()}, to: ${sevenDays.to.toISOString()}`);
+      return sevenDays;
     case "30d":
-      return {
+      const thirtyDays = {
         from: addHours(startOfDay(subDays(now, 30)), -ARG_OFFSET),
         to: addHours(endOfDay(now), -ARG_OFFSET)
       };
+      console.log(`getPresetDateRange - 30d: from: ${thirtyDays.from.toISOString()}, to: ${thirtyDays.to.toISOString()}`);
+      return thirtyDays;
     default:
       return getArgDateRange(now);
   }
@@ -55,9 +61,14 @@ export const formatDateForApi = (date: Date, isEndOfDay = false): string => {
     // Asegurarse de que tenga milisegundos
     const withMs = new Date(date);
     withMs.setMilliseconds(999);
-    return withMs.toISOString();
+    const result = withMs.toISOString();
+    console.log(`formatDateForApi - isEndOfDay=true, date: ${date.toISOString()}, result: ${result}`);
+    return result;
   }
-  return date.toISOString();
+  
+  const result = date.toISOString();
+  console.log(`formatDateForApi - isEndOfDay=false, date: ${date.toISOString()}, result: ${result}`);
+  return result;
 };
 
 /**
@@ -122,6 +133,7 @@ export const formatDateForDisplay = (date: Date): string => {
  */
 export const getIsoDateRange = (dateRange: { from?: Date; to?: Date }) => {
   if (!dateRange.from || !dateRange.to) {
+    console.log(`getIsoDateRange - dateRange incompleto: ${JSON.stringify(dateRange)}`);
     return {
       fromISO: undefined,
       toISO: undefined
@@ -130,6 +142,8 @@ export const getIsoDateRange = (dateRange: { from?: Date; to?: Date }) => {
   
   const fromISO = formatDateForApi(dateRange.from);
   const toISO = formatDateForApi(dateRange.to, true);
+  
+  console.log(`getIsoDateRange - resultado: fromISO: ${fromISO}, toISO: ${toISO}`);
   
   return { fromISO, toISO };
 };
