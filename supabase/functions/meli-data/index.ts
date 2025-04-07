@@ -359,7 +359,7 @@ async function getItemVisitsIndividually(token, itemIds) {
   let completedRequests = 0;
   
   // Procesar hasta 5 items a la vez para no saturar la API (rate limiting)
-  const batchSize = 5;
+  const batchSize = 1; // FIX: Solo 1 item por request según límite de API
   
   for (let i = 0; i < Math.min(itemIds.length, 50); i += batchSize) {
     const batch = itemIds.slice(i, i + batchSize);
@@ -367,8 +367,11 @@ async function getItemVisitsIndividually(token, itemIds) {
     // Crear promesas para cada item y esperar por ellas
     const batchPromises = batch.map(async (itemId) => {
       try {
+        // FIX: Usar formato correcto para item_id como parámetro
         const url = new URL(`https://api.mercadolibre.com/visits/items`);
         url.searchParams.append('item_id', itemId);
+        
+        console.log(`👁️ Solicitando visitas para item: ${itemId}`);
         
         const response = await fetch(url, {
           headers: {
@@ -418,32 +421,7 @@ async function getItemVisitsIndividually(token, itemIds) {
 async function processAdvertising(adResponses, token, meliUserId) {
   let totalSpent = 0;
   
-  // Primero intentamos procesar las respuestas que pudieran haber funcionado
-  if (adResponses && adResponses.length > 0) {
-    console.log(`📣 Procesando ${adResponses.length} respuestas de publicidad`);
-    
-    adResponses.forEach(adResponse => {
-      if (adResponse && adResponse.success && adResponse.data) {
-        const campaignsData = adResponse.data;
-        
-        // Sumar gastos de campañas activas
-        if (Array.isArray(campaignsData)) {
-          campaignsData.forEach(campaign => {
-            if (campaign && campaign.status === 'ACTIVE' && campaign.spent) {
-              totalSpent += campaign.spent;
-            }
-          });
-        }
-      }
-    });
-    
-    if (totalSpent > 0) {
-      console.log(`📣 Gastos en publicidad procesados (endpoint original): ${totalSpent}`);
-      return totalSpent;
-    }
-  }
-  
-  // Si no tenemos datos de publicidad, intentamos con el endpoint correcto
+  // FIX: Ir directamente al endpoint correcto de publicidad
   try {
     if (!token || !meliUserId) {
       return 0;
@@ -454,6 +432,8 @@ async function processAdvertising(adResponses, token, meliUserId) {
     // FIX: Usar el endpoint correcto para campañas de publicidad
     const url = new URL(`https://api.mercadolibre.com/advertising/campaigns/search`);
     url.searchParams.append('seller_id', meliUserId);
+    
+    console.log(`📣 URL de publicidad: ${url.toString()}`);
     
     const response = await fetch(url, {
       headers: {
@@ -610,6 +590,7 @@ async function batchRequests(token, requests) {
       const url = new URL(`https://api.mercadolibre.com${endpoint}`);
       
       for (const [key, value] of Object.entries(params)) {
+        if (key === '_productIds') continue; // Ignoramos este parámetro especial para visitas
         if (value !== undefined && value !== null && value !== '') {
           url.searchParams.append(key, String(value));
         }
@@ -737,26 +718,20 @@ serve(async (req) => {
       });
     }
     
-    // Realizar batch de solicitudes
-    const batchResults = await batchRequests(tokenResult.token, batch_requests);
+    // Realizar batch de solicitudes excluyendo las visitas que las procesaremos individualmente
+    const filteredRequests = batch_requests.filter(req => !req.endpoint.includes('/visits/'));
+    
+    // Extraer los IDs de productos para procesar visitas individualmente
+    const productIdsRequest = batch_requests.find(req => req.endpoint.includes('/visits/items'));
+    const productIds = productIdsRequest?.params?._productIds || [];
+    
+    // Realizar batch de solicitudes (excluyendo visitas)
+    const batchResults = await batchRequests(tokenResult.token, filteredRequests);
     
     // Extraer datos relevantes de las respuestas
     const ordersResponses = batchResults.filter(res => 
       res.success && 
       (res.endpoint === '/orders/search' || res.endpoint === '/orders/search/recent')
-    );
-    
-    // FIX: Las respuestas de visitas mediante batch probablemente fallaron
-    // Las mantenemos para compatibilidad pero ahora usaremos solicitudes individuales
-    const visitsResponses = batchResults.filter(res => 
-      res.success && res.endpoint === '/visits/items'
-    );
-    
-    // FIX: Las respuestas de publicidad probablemente fallaron
-    // Las mantenemos para compatibilidad pero intentaremos con el endpoint correcto
-    const adResponses = batchResults.filter(res => 
-      res.success && 
-      (res.endpoint.includes('/ads/campaigns') || res.endpoint.includes('/advertising/campaigns'))
     );
     
     // ---- Procesamiento de datos ----
@@ -808,22 +783,12 @@ serve(async (req) => {
     
     // Si hay órdenes, procesarlas; de lo contrario, usar datos de prueba si están permitidos
     if (allOrders.length > 0) {
-      // FIX: Proceso de visitas mejorado para obtener datos por item_id individualmente
-      let visitsData;
+      // Procesar visitas individualmente llamando a la API correctamente
+      const visitsData = await getItemVisitsIndividually(tokenResult.token, allProductIds);
       
-      // Primero intentamos procesar las respuestas batch que pudieron haber funcionado
-      const batchVisitsData = await processVisits(visitsResponses);
-      
-      // Si no hay suficientes visitas del batch, intentamos individualmente
-      if (batchVisitsData.totalVisits === 0 && allProductIds.length > 0) {
-        visitsData = await getItemVisitsIndividually(tokenResult.token, allProductIds);
-      } else {
-        visitsData = batchVisitsData;
-      }
-      
-      // FIX: Proceso de publicidad mejorado con el endpoint correcto
+      // Procesar datos de publicidad con el endpoint correcto
       const advertisingSpent = await processAdvertising(
-        adResponses, 
+        [], // Ya no usamos respuestas batch para publicidad
         tokenResult.token, 
         tokenResult.meliUserId
       );
@@ -839,11 +804,15 @@ serve(async (req) => {
       // Calcular conversión si hay visitas
       if (visitsData.totalVisits > 0) {
         processedData.summary.conversion = (processedData.summary.units / visitsData.totalVisits) * 100;
+      } else {
+        processedData.summary.conversion = 0;
       }
       
       // Calcular ticket promedio
       if (processedData.summary.orders > 0) {
         processedData.summary.avgTicket = processedData.summary.gmv / processedData.summary.orders;
+      } else {
+        processedData.summary.avgTicket = 0;
       }
       
       // Calcular datos de periodo anterior si se solicita
@@ -868,9 +837,23 @@ serve(async (req) => {
       console.log("⚠️ No se encontraron órdenes y los datos de prueba están desactivados");
     }
     
+    // Incluir todos los resultados del batch en la respuesta para depuración
+    // pero también añadir las solicitudes de visitas individuales de manera manual
+    const allResults = [...batchResults];
+    
+    // Añadir resultado de publicidad si se procesó correctamente
+    if (dashboardData?.summary?.advertising > 0) {
+      allResults.push({
+        endpoint: '/advertising/campaigns/search',
+        success: true,
+        status: 200,
+        data: { spent: dashboardData.summary.advertising }
+      });
+    }
+    
     return responseWithCors({
       success: true,
-      batch_results: batchResults,
+      batch_results: allResults,
       dashboard_data: dashboardData,
       is_test_data: isTestData
     });
@@ -883,3 +866,4 @@ serve(async (req) => {
     }, 500);
   }
 });
+

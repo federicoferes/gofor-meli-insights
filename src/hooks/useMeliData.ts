@@ -78,12 +78,12 @@ export function useMeliData({
   
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [salesData, setSalesData] = useState([]);
+  const [salesData, setSalesData] = useState<any[]>([]);
   const [salesSummary, setSalesSummary] = useState(createEmptySalesSummary());
-  const [topProducts, setTopProducts] = useState([]);
-  const [costData, setCostData] = useState([]);
-  const [provinceData, setProvinceData] = useState([]);
-  const [ordersData, setOrdersData] = useState([]);
+  const [topProducts, setTopProducts] = useState<any[]>([]);
+  const [costData, setCostData] = useState<any[]>([]);
+  const [provinceData, setProvinceData] = useState<any[]>([]);
+  const [ordersData, setOrdersData] = useState<any[]>([]);
   const [prevSalesSummary, setPrevSalesSummary] = useState(createEmptySalesSummary());
   const [isTestData, setIsTestData] = useState(false);
 
@@ -198,9 +198,6 @@ export function useMeliData({
       const productIds = productsData?.map(p => p.item_id) || [];
       console.log(`📊 Obtenidos ${productIds.length} IDs de productos para consulta de visitas`);
 
-      // FIX: Ya no creamos batches para visitas, ahora las obtenemos individualmente en el backend
-      // Solicitamos individualmente de uno en uno en la función edge
-
       const batchRequests = [
         // Búsqueda principal de órdenes con filtro por fecha
         {
@@ -248,11 +245,10 @@ export function useMeliData({
         },
         
         // FIX: Ya no enviamos batches de visitas sino solo los IDs para procesamiento individual
-        // Esto permite que el backend solicite las visitas item por item correctamente
         {
           endpoint: `/visits/items`,
           params: {
-            // No enviamos IDs aquí, lo resuelve el backend
+            // Los IDs se procesan individualmente en el backend
             _productIds: productIds
           }
         }
@@ -434,24 +430,48 @@ export function useMeliData({
         } else {
           console.warn("⚠️ No se recibieron datos del dashboard");
           
-          // FIX: Solo mostramos un error si no hay datos de prueba
-          if (!batchData.is_test_data) {
-            setError("No se recibieron datos para el período seleccionado");
+          // Mostrar datos de prueba si están permitidos
+          if (!batchData.is_test_data && !disable_test_data) {
+            console.log("📊 No hay datos reales, generando datos de prueba...");
+            // Usar una función para generar datos de prueba
+            const testData = {
+              summary: createEmptySalesSummary(),
+              prev_summary: createEmptySalesSummary(),
+              salesByMonth: [],
+              costDistribution: [],
+              topProducts: [],
+              salesByProvince: [],
+              orders: []
+            };
             
-            toast({
-              title: "Sin datos del dashboard",
-              description: "No se encontraron órdenes para el período seleccionado",
-              variant: "destructive",
-              duration: 5000
-            });
-          } else {
             setIsTestData(true);
             
             toast({
               title: "Mostrando datos de prueba",
-              description: "No se encontraron órdenes reales - mostrando datos de prueba",
+              description: "No se encontraron órdenes reales para el período seleccionado",
               duration: 5000
             });
+            
+            // Configurar datos básicos para que la UI no se rompa
+            setSalesSummary(testData.summary);
+            setPrevSalesSummary(testData.prev_summary);
+            setSalesData(testData.salesByMonth);
+            setCostData(testData.costDistribution);
+            setTopProducts(testData.topProducts);
+            setProvinceData(testData.salesByProvince);
+            setOrdersData(testData.orders);
+          } else {
+            setError("No se encontraron datos para el período seleccionado");
+            
+            // Mostrar el error solo si datos de prueba no están permitidos
+            if (disable_test_data) {
+              toast({
+                title: "Sin datos del dashboard",
+                description: "No se encontraron órdenes para el período seleccionado",
+                variant: "destructive",
+                duration: 5000
+              });
+            }
           }
         }
       }
