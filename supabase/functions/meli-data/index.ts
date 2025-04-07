@@ -684,8 +684,20 @@ serve(async (req) => {
       }
     }
     
-    // Filter out visits requests - we handle them separately
-    const filteredRequests = batch_requests.filter(req => !req.endpoint.includes('/visits/'));
+    // Filter out deprecated advertising endpoint and visits requests
+    const filteredRequests = batch_requests.filter(req => 
+      !req.endpoint.includes('/visits/') && 
+      !req.endpoint.includes('/users/') && 
+      !req.endpoint.includes('/ads/campaigns')
+    );
+    
+    // Add the correct advertising endpoint
+    filteredRequests.push({
+      endpoint: `/advertising/campaigns/search`,
+      params: {
+        seller_id: tokenResult.meliUserId
+      }
+    });
     
     // Extract product IDs for visits
     const productIdsRequest = batch_requests.find(req => req.endpoint.includes('/visits/items'));
