@@ -43,11 +43,16 @@ const OAuthCallback = () => {
         
         console.log("Processing OAuth callback with code:", code);
         
+        // Use the production domain for redirect URI
+        const redirectUri = 'https://melimetrics.app/oauth/callback';
+        
+        console.log("Using redirect URI:", redirectUri);
+        
         // Call Supabase edge function to exchange code for access token
         const { data, error } = await supabase.functions.invoke('meli-auth', {
           body: {
             code,
-            redirect_uri: 'https://gofor-meli-insights.lovable.app/oauth/callback',
+            redirect_uri: redirectUri,
             user_id: userId
           }
         });
