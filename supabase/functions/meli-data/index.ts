@@ -153,17 +153,6 @@ serve(async (req) => {
 
     const apiData = await apiResponse.json();
     console.log("Successfully fetched data from Mercado Libre API");
-    
-    // Add this console log to show the real data for the last 7 days
-    if (endpoint.includes('/orders/search') && params && 
-        (params.begin_date || params.date_from || params['date_created.from'])) {
-      console.log("===== ÚLTIMOS 7 DÍAS - DATOS REALES DE MERCADO LIBRE =====");
-      console.log("Endpoint:", endpoint);
-      console.log("Params:", params);
-      console.log("Resultados:", apiData.results?.length || 0, "órdenes");
-      console.log("Datos completos:", JSON.stringify(apiData, null, 2));
-      console.log("==========================================================");
-    }
 
     return new Response(
       JSON.stringify({
