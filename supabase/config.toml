@@ -4,8 +4,8 @@ project_id = "dpchgodejuyqpeezozec"
 [functions.meli-auth]
 verify_jwt = false
 
-[functions.meli-data]
-verify_jwt = true
-
 [functions.meli-notifications]
+verify_jwt = false
+
+[functions.meli-data]
 verify_jwt = false

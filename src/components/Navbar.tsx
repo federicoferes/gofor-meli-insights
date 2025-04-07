@@ -2,8 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Menu, X } from "lucide-react";
-import { Link as ScrollLink } from "react-scroll";
-import { Link as RouterLink } from "react-router-dom";
+import { Link } from "react-scroll";
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -48,7 +47,7 @@ const Navbar = () => {
           <div className="hidden md:block">
             <div className="ml-10 flex items-center space-x-4">
               {navLinks.map((link) => (
-                <ScrollLink
+                <Link
                   key={link.name}
                   to={link.to}
                   smooth={true}
@@ -56,18 +55,11 @@ const Navbar = () => {
                   className="text-gray-700 hover:text-gofor-purple px-3 py-2 text-sm font-medium cursor-pointer"
                 >
                   {link.name}
-                </ScrollLink>
+                </Link>
               ))}
-              <RouterLink to="/login">
-                <Button className="bg-gofor-purple hover:bg-gofor-lightPurple text-white">
-                  Iniciar Sesión
-                </Button>
-              </RouterLink>
-              <RouterLink to="/register">
-                <Button variant="outline" className="border-2 border-gofor-purple text-gofor-purple hover:bg-gofor-purple hover:text-white">
-                  Registro
-                </Button>
-              </RouterLink>
+              <Button className="bg-gofor-purple hover:bg-gofor-lightPurple text-white">
+                Iniciar Sesión
+              </Button>
             </div>
           </div>
           
@@ -87,7 +79,7 @@ const Navbar = () => {
         <div className="md:hidden bg-white shadow-lg">
           <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
             {navLinks.map((link) => (
-              <ScrollLink
+              <Link
                 key={link.name}
                 to={link.to}
                 smooth={true}
@@ -96,20 +88,11 @@ const Navbar = () => {
                 onClick={() => setIsOpen(false)}
               >
                 {link.name}
-              </ScrollLink>
+              </Link>
             ))}
-            <div className="flex flex-col space-y-2 mt-4">
-              <RouterLink to="/login" className="w-full">
-                <Button className="w-full bg-gofor-purple hover:bg-gofor-lightPurple text-white">
-                  Iniciar Sesión
-                </Button>
-              </RouterLink>
-              <RouterLink to="/register" className="w-full">
-                <Button variant="outline" className="w-full border-2 border-gofor-purple text-gofor-purple hover:bg-gofor-purple hover:text-white">
-                  Registro
-                </Button>
-              </RouterLink>
-            </div>
+            <Button className="w-full bg-gofor-purple hover:bg-gofor-lightPurple text-white mt-2">
+              Iniciar Sesión
+            </Button>
           </div>
         </div>
       )}
