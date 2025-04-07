@@ -9,7 +9,84 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      meli_tokens: {
+        Row: {
+          access_token: string
+          created_at: string | null
+          expires_at: string
+          id: string
+          meli_user_id: string
+          refresh_token: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          access_token: string
+          created_at?: string | null
+          expires_at: string
+          id?: string
+          meli_user_id: string
+          refresh_token: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          access_token?: string
+          created_at?: string | null
+          expires_at?: string
+          id?: string
+          meli_user_id?: string
+          refresh_token?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      products: {
+        Row: {
+          available_quantity: number
+          cost: number | null
+          created_at: string
+          id: string
+          item_id: string
+          permalink: string | null
+          price: number
+          sold_quantity: number
+          thumbnail: string | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          available_quantity: number
+          cost?: number | null
+          created_at?: string
+          id?: string
+          item_id: string
+          permalink?: string | null
+          price: number
+          sold_quantity: number
+          thumbnail?: string | null
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          available_quantity?: number
+          cost?: number | null
+          created_at?: string
+          id?: string
+          item_id?: string
+          permalink?: string | null
+          price?: number
+          sold_quantity?: number
+          thumbnail?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
