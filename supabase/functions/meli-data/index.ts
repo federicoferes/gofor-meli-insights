@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -523,6 +524,14 @@ async function batchRequests(token: string, requests: any[]) {
     return results;
   }
   
+  // Log what requests we're about to make
+  console.log(`Starting batch requests (${requests.length}):`, 
+    JSON.stringify(requests.map(r => ({
+      endpoint: r.endpoint,
+      params: r.params
+    })), null, 2)
+  );
+  
   // Iterate over each request
   for (const request of requests) {
     try {
@@ -535,6 +544,9 @@ async function batchRequests(token: string, requests: any[]) {
       
       // Build URL with parameters
       const url = new URL(`https://api.mercadolibre.com${endpoint}`);
+      
+      // Log all parameters being added
+      console.log(`Request parameters for ${endpoint}:`, JSON.stringify(params, null, 2));
       
       for (const [key, value] of Object.entries(params)) {
         if (key === '_productIds') continue; // Skip this special parameter
@@ -554,28 +566,51 @@ async function batchRequests(token: string, requests: any[]) {
         }
       });
       
+      // Create a response object
+      const result: any = {
+        endpoint,
+        url: url.toString(),
+        success: response.ok,
+        status: response.status,
+      };
+      
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`Error response from ${endpoint}: Status ${response.status} - ${errorText}`);
-        results.push({
-          endpoint,
-          url: url.toString(),
-          success: false,
-          status: response.status,
-          error: errorText
-        });
-        continue;
+        result.error = errorText;
+      } else {
+        const data = await response.json();
+        result.data = data;
+        
+        // Log info about the response data structure
+        if (data) {
+          if (data.results) {
+            console.log(`Response for ${endpoint} has 'results' with ${data.results.length} items`);
+            
+            // For orders, log more details
+            if (endpoint.includes('/orders/')) {
+              console.log(`Orders response structure: ${JSON.stringify({
+                total: data.paging?.total || 0,
+                limit: data.paging?.limit || 0,
+                offset: data.paging?.offset || 0,
+                resultsCount: data.results?.length || 0
+              }, null, 2)}`);
+              
+              // Log sample of first order if available
+              if (data.results?.length > 0) {
+                console.log("Sample first order ID:", data.results[0].id);
+                console.log("Sample order status:", data.results[0].status);
+              } else {
+                console.log("No order results found in response");
+              }
+            }
+          } else {
+            console.log(`Response for ${endpoint} has no 'results' array, data keys: ${Object.keys(data).join(', ')}`);
+          }
+        }
       }
       
-      const data = await response.json();
-      
-      results.push({
-        endpoint,
-        url: url.toString(),
-        success: true,
-        status: response.status,
-        data
-      });
+      results.push(result);
     } catch (error: any) {
       console.error(`Error processing request to ${request.endpoint}: ${error.message}`);
       results.push({
@@ -585,6 +620,9 @@ async function batchRequests(token: string, requests: any[]) {
       });
     }
   }
+  
+  // Full debug log of all results
+  console.log("DEBUG batchResults full:", JSON.stringify(results, null, 2));
   
   return results;
 }
@@ -623,6 +661,17 @@ serve(async (req) => {
     // Parse request body
     const body = await req.json();
     const { user_id, batch_requests: originalBatchRequests, date_range, timezone, prev_period, use_cache, disable_test_data, product_ids } = body;
+    
+    console.log("Received request with body:", JSON.stringify({
+      user_id,
+      has_batch_requests: !!originalBatchRequests,
+      date_range,
+      timezone,
+      prev_period,
+      use_cache,
+      disable_test_data,
+      product_ids_count: product_ids?.length
+    }, null, 2));
     
     console.log("Received date_range:", JSON.stringify(date_range, null, 2));
     console.log("Type of date_range:", typeof date_range);
@@ -709,7 +758,7 @@ serve(async (req) => {
           console.log(`Setting date_created.to for ${request.endpoint}:`, formattedToDate);
         }
         
-        console.log(`Final params for ${request.endpoint}:`, request.params);
+        console.log(`Final params for ${request.endpoint}:`, JSON.stringify(request.params, null, 2));
       }
     }
     
@@ -721,9 +770,16 @@ serve(async (req) => {
     const productIds = productIdsRequest?.params?._productIds || product_ids || [];
     
     // Make batch requests (excluding visits)
-    console.log("Making batch requests with filtered requests:", filteredRequests);
+    console.log("Making batch requests with filtered requests:", JSON.stringify(filteredRequests, null, 2));
     const batchResults = await batchRequests(tokenResult.token, filteredRequests);
-    console.log("Received batch results:", batchResults.map(r => ({ endpoint: r.endpoint, success: r.success, status: r.status })));
+    console.log("Received batch results:", batchResults.map(r => ({ 
+      endpoint: r.endpoint, 
+      success: r.success, 
+      status: r.status, 
+      hasData: r.data ? true : false,
+      hasResults: r.data?.results ? true : false,
+      resultsCount: r.data?.results?.length || 0
+    })));
     
     // Extract relevant data from responses
     const ordersResponses = batchResults.filter(res => 
@@ -745,8 +801,13 @@ serve(async (req) => {
         const validOrders = orderResponse.data.results.filter((order: any) => 
           order && order.status !== 'cancelled' && order.order_items
         );
-        console.log(`Found ${validOrders.length} valid orders in response for ${orderResponse.endpoint}`);
+        console.log(`Found ${validOrders.length} valid orders in response for ${orderResponse.endpoint} out of ${orderResponse.data.results.length} total`);
         allOrders = [...allOrders, ...validOrders];
+      } else {
+        console.log(`No valid results found in response for ${orderResponse.endpoint}`);
+        if (orderResponse.data) {
+          console.log(`Response data keys: ${Object.keys(orderResponse.data).join(', ')}`);
+        }
       }
     });
     
