@@ -105,7 +105,7 @@ const MeliConnect = () => {
 
   if (isLoading) {
     return (
-      <Button disabled className="bg-gray-300 text-gray-600">
+      <Button disabled variant="outline" className="bg-white text-gray-600 border-gray-300">
         <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Verificando...
       </Button>
     );
@@ -132,8 +132,8 @@ const MeliConnect = () => {
               <Info className="h-4 w-4 ml-1 text-white opacity-70" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>
-            <div className="p-1">
+          <TooltipContent className="bg-white shadow-md border border-gray-200">
+            <div className="p-2">
               <p className="font-medium">Cuenta de Mercado Libre conectada</p>
               <p className="text-xs mt-1">ID: {connectionDetails?.meli_user_id || 'Desconocido'}</p>
               <p className="text-xs mt-2">La aplicación tiene acceso a tus datos de ventas, productos y métricas.</p>
