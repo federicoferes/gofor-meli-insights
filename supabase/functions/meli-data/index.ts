@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -671,13 +670,14 @@ serve(async (req) => {
           request.params = {};
         }
         
-        // Add properly formatted date filters for order searches
+        // Fix: Changed parameter names from 'order.date_created.from' to 'date_created.from'
+        // and from 'order.date_created.to' to 'date_created.to'
         if (formattedFromDate) {
-          request.params['order.date_created.from'] = formattedFromDate;
+          request.params['date_created.from'] = formattedFromDate;
         }
         
         if (formattedToDate) {
-          request.params['order.date_created.to'] = formattedToDate;
+          request.params['date_created.to'] = formattedToDate;
         }
         
         console.log(`Added formatted date filters to ${request.endpoint}:`, request.params);
