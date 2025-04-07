@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Navigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -69,8 +68,7 @@ const Dashboard = () => {
     provinceData,
     prevSalesSummary,
     ordersData,
-    refresh: refreshData,
-    isTestData, // Extraemos isTestData del hook useMeliData
+    refresh: refreshData
   } = useMeliData({
     userId: session?.user?.id,
     meliUserId: meliUser,
@@ -316,7 +314,6 @@ const Dashboard = () => {
                       isLoading={dataLoading}
                       colorClass="bg-gradient-to-r from-gofor-purple/10 to-gofor-purple/5"
                       tooltip="Balance calculado como GMV - comisiones - envíos - impuestos - IVA - publicidad - costos de productos"
-                      isTestData={isTestData}
                     />
                   </div>
                   <SummaryCard 
