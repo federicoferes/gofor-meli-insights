@@ -2,12 +2,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// CORS headers for all responses
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Helper para procesar respuestas con CORS
+// Helper to process responses with CORS
 const responseWithCors = (body: any, status = 200) => {
   return new Response(JSON.stringify(body), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -15,11 +16,11 @@ const responseWithCors = (body: any, status = 200) => {
   });
 };
 
-// Función para generar datos de prueba
+// Test data generator with consistent structure
 function generateTestData(dateRange?: { begin?: string; end?: string }) {
   console.log("🧪 Generando datos de prueba para:", dateRange);
   
-  // Generar resumen básico
+  // Generate basic summary
   const summary = {
     gmv: 1234567.89,
     orders: 123,
@@ -31,10 +32,10 @@ function generateTestData(dateRange?: { begin?: string; end?: string }) {
     shipping: 25000,
     taxes: 58900,
     advertising: 12500,
-    productCosts: 650000,
+    productCosts: 650000
   };
   
-  // Periodo anterior un 10% menos
+  // Previous period with 10% less
   const prevSummary = {
     gmv: summary.gmv * 0.9,
     orders: Math.floor(summary.orders * 0.9),
@@ -49,7 +50,7 @@ function generateTestData(dateRange?: { begin?: string; end?: string }) {
     productCosts: summary.productCosts * 0.9,
   };
   
-  // Generar ventas por mes
+  // Generate sales by month
   const salesByMonth = [
     { name: "Ene", value: 850000 },
     { name: "Feb", value: 920000 },
@@ -59,7 +60,7 @@ function generateTestData(dateRange?: { begin?: string; end?: string }) {
     { name: "Jun", value: 1250000 },
   ];
   
-  // Generar distribución de costos
+  // Generate cost distribution
   const costDistribution = [
     { name: "Comisiones", value: summary.commissions },
     { name: "Impuestos", value: summary.taxes },
@@ -69,7 +70,7 @@ function generateTestData(dateRange?: { begin?: string; end?: string }) {
     { name: "Costo de productos", value: summary.productCosts }
   ];
   
-  // Generar top productos
+  // Generate top products
   const topProducts = [
     { id: "MLA123456", name: "Smartphone XYZ", units: 43, revenue: 430000 },
     { id: "MLA234567", name: "Auriculares Bluetooth", units: 38, revenue: 114000 },
@@ -78,7 +79,7 @@ function generateTestData(dateRange?: { begin?: string; end?: string }) {
     { id: "MLA567890", name: "Funda Protectora", units: 89, revenue: 44500 },
   ];
   
-  // Generar ventas por provincia
+  // Generate sales by province
   const salesByProvince = [
     { name: "Buenos Aires", value: 450000 },
     { name: "CABA", value: 320000 },
@@ -88,14 +89,14 @@ function generateTestData(dateRange?: { begin?: string; end?: string }) {
     { name: "Otros", value: 120000 },
   ];
   
-  // Generar órdenes de ejemplo
+  // Generate sample orders
   const orders = Array(50).fill(null).map((_, index) => {
     const productIndex = Math.floor(Math.random() * topProducts.length);
     const product = topProducts[productIndex];
     const quantity = Math.floor(Math.random() * 3) + 1;
     const unitPrice = product.revenue / product.units;
     
-    const order = {
+    return {
       id: `TEST-ORDER-${1000 + index}`,
       status: "paid",
       date_created: new Date().toISOString(),
@@ -141,8 +142,6 @@ function generateTestData(dateRange?: { begin?: string; end?: string }) {
         amount: Math.floor(unitPrice * quantity * 0.03)
       }
     };
-    
-    return order;
   });
   
   return {
@@ -156,8 +155,8 @@ function generateTestData(dateRange?: { begin?: string; end?: string }) {
   };
 }
 
-// Función para procesar órdenes y extraer métricas
-function processOrders(orders, salesByProduct = {}) {
+// Process orders and extract metrics
+function processOrders(orders: any[], salesByProduct: Record<string, any> = {}) {
   if (!orders || !orders.length) {
     console.warn("⚠️ No se encontraron órdenes para procesar");
     return {
@@ -181,28 +180,28 @@ function processOrders(orders, salesByProduct = {}) {
     visits: 0
   };
   
-  // Contadores para agrupamientos
-  const monthlyData = {};
-  const provincesData = {};
-  const productsData = {};
+  // Counters for groupings
+  const monthlyData: Record<string, any> = {};
+  const provincesData: Record<string, any> = {};
+  const productsData: Record<string, any> = {};
   
-  // Procesar cada orden
-  orders.forEach(order => {
+  // Process each order according to MeLi documentation
+  orders.forEach((order: any) => {
     if (!order.order_items || order.status === "cancelled") return;
     
     let orderTotal = 0;
     let orderUnits = 0;
     
-    // Procesar items de la orden según documentación de MeLi
-    order.order_items.forEach(orderItem => {
+    // Process order items according to MeLi documentation
+    order.order_items.forEach((orderItem: any) => {
       const { item, quantity, unit_price } = orderItem;
       
-      // Calcular GMV: precio unitario * cantidad (NO usar total_amount)
+      // Calculate GMV: unit_price * quantity (NOT use total_amount)
       const itemTotal = unit_price * quantity;
       orderTotal += itemTotal;
       orderUnits += quantity;
       
-      // Acumular datos por producto
+      // Accumulate data by product
       if (item && item.id) {
         if (!productsData[item.id]) {
           productsData[item.id] = {
@@ -217,7 +216,7 @@ function processOrders(orders, salesByProduct = {}) {
         productsData[item.id].units += quantity;
         productsData[item.id].revenue += itemTotal;
         
-        // Añadir ventas por producto para visitas
+        // Add sales by product for visits
         if (salesByProduct && item.id) {
           if (!salesByProduct[item.id]) {
             salesByProduct[item.id] = {
@@ -231,35 +230,35 @@ function processOrders(orders, salesByProduct = {}) {
       }
     });
     
-    // Actualizar GMV y unidades vendidas
+    // Update GMV and units sold
     summary.gmv += orderTotal;
     summary.units += orderUnits;
     
-    // Extraer comisiones según documentación
+    // Extract commissions according to documentation
     if (order.fee_details && Array.isArray(order.fee_details)) {
-      order.fee_details.forEach(fee => {
+      order.fee_details.forEach((fee: any) => {
         summary.commissions += fee.amount || 0;
       });
     }
     
-    // Extraer costos de envío
+    // Extract shipping costs
     if (order.shipping && order.shipping.shipping_option) {
       summary.shipping += order.shipping.shipping_option.cost || 0;
     }
     
-    // Extraer impuestos
+    // Extract taxes
     if (order.taxes) {
-      // API de MeLi puede devolver tanto un objeto con amount como un array de taxes
+      // MeLi API can return either an object with amount or an array of taxes
       if (typeof order.taxes === 'object' && order.taxes.amount) {
         summary.taxes += order.taxes.amount;
       } else if (Array.isArray(order.taxes)) {
-        order.taxes.forEach(tax => {
+        order.taxes.forEach((tax: any) => {
           summary.taxes += tax.amount || 0;
         });
       }
     }
     
-    // Agrupar ventas por mes
+    // Group sales by month
     const date = new Date(order.date_created);
     const monthKey = `${date.getFullYear()}-${date.getMonth() + 1}`;
     const monthNames = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
@@ -272,7 +271,7 @@ function processOrders(orders, salesByProduct = {}) {
     }
     monthlyData[monthKey].value += orderTotal;
     
-    // Agrupar ventas por provincia
+    // Group sales by province
     const province = order.buyer?.shipping_address?.state?.name || "No especificada";
     if (!provincesData[province]) {
       provincesData[province] = {
@@ -283,23 +282,23 @@ function processOrders(orders, salesByProduct = {}) {
     provincesData[province].value += orderTotal;
   });
   
-  // Ordenar productos por revenue
+  // Sort products by revenue
   const topProducts = Object.values(productsData)
     .sort((a: any, b: any) => b.revenue - a.revenue)
     .slice(0, 10);
   
-  // Ordenar ventas por mes
+  // Sort sales by month
   const salesByMonth = Object.values(monthlyData)
     .sort((a: any, b: any) => {
       const monthIndex = (month: string) => ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"].indexOf(month);
       return monthIndex(a.name) - monthIndex(b.name);
     });
   
-  // Ordenar ventas por provincia
+  // Sort sales by province
   const salesByProvince = Object.values(provincesData)
     .sort((a: any, b: any) => b.value - a.value);
   
-  // Distribución de costos
+  // Cost distribution
   const costDistribution = [
     { name: "Comisiones", value: summary.commissions },
     { name: "Impuestos", value: summary.taxes },
@@ -315,38 +314,8 @@ function processOrders(orders, salesByProduct = {}) {
   };
 }
 
-// Función para procesar datos de visitas - FIX: Ahora procesa requests individuales
-async function processVisits(visitResponses, itemIds = []) {
-  let totalVisits = 0;
-  const itemVisits = {};
-  
-  // Primero procesamos las respuestas batch que pudieron funcionar (para compatibilidad)
-  if (visitResponses && visitResponses.length > 0) {
-    console.log(`👁️ Procesando ${visitResponses.length} respuestas de visitas batch`);
-    
-    visitResponses.forEach(visitResponse => {
-      if (visitResponse && visitResponse.success && visitResponse.data) {
-        const visitsData = visitResponse.data;
-        
-        // Extraer visitas por item
-        if (Array.isArray(visitsData)) {
-          visitsData.forEach(visitItem => {
-            if (visitItem && visitItem.id && visitItem.total_visits) {
-              itemVisits[visitItem.id] = visitItem.total_visits;
-              totalVisits += visitItem.total_visits;
-            }
-          });
-        }
-      }
-    });
-  }
-  
-  console.log(`👁️ Visitas totales procesadas del batch: ${totalVisits}`);
-  return { totalVisits, itemVisits };
-}
-
-// FIX: Nueva función para obtener visitas de forma individual
-async function getItemVisitsIndividually(token, itemIds) {
+// Process visit data individually - FIX for MeLi API limitation
+async function getItemVisitsIndividually(token: string, itemIds: string[]) {
   if (!itemIds || !itemIds.length) {
     return { totalVisits: 0, itemVisits: {} };
   }
@@ -354,20 +323,21 @@ async function getItemVisitsIndividually(token, itemIds) {
   console.log(`👁️ Obteniendo visitas individualmente para ${itemIds.length} productos`);
   
   let totalVisits = 0;
-  const itemVisits = {};
+  const itemVisits: Record<string, number> = {};
   const promises = [];
   let completedRequests = 0;
   
-  // Procesar hasta 5 items a la vez para no saturar la API (rate limiting)
-  const batchSize = 1; // FIX: Solo 1 item por request según límite de API
+  // Process only 1 item at a time per request - MeLi API limitation
+  const batchSize = 1;
   
+  // We process max 50 items to avoid rate limiting
   for (let i = 0; i < Math.min(itemIds.length, 50); i += batchSize) {
     const batch = itemIds.slice(i, i + batchSize);
     
-    // Crear promesas para cada item y esperar por ellas
+    // Create promises for each item
     const batchPromises = batch.map(async (itemId) => {
       try {
-        // FIX: Usar formato correcto para item_id como parámetro
+        // Use correct format for item_id parameter as per MeLi documentation
         const url = new URL(`https://api.mercadolibre.com/visits/items`);
         url.searchParams.append('item_id', itemId);
         
@@ -397,39 +367,38 @@ async function getItemVisitsIndividually(token, itemIds) {
             console.log(`👁️ Progreso: ${completedRequests}/${Math.min(itemIds.length, 50)} requests completados`);
           }
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error(`❌ Error obteniendo visitas para ${itemId}:`, error.message);
       }
     });
     
     promises.push(...batchPromises);
     
-    // Pequeña pausa entre batches para evitar rate limiting
+    // Small pause between batches to avoid rate limiting
     if (i + batchSize < itemIds.length) {
       await new Promise(resolve => setTimeout(resolve, 250));
     }
   }
   
-  // Esperar a que todas las promesas se resuelvan
+  // Wait for all promises to resolve
   await Promise.allSettled(promises);
   
   console.log(`👁️ Visitas totales obtenidas individualmente: ${totalVisits} de ${completedRequests} productos procesados`);
   return { totalVisits, itemVisits };
 }
 
-// Función para procesar datos de publicidad - FIX: Ahora usa el endpoint correcto
-async function processAdvertising(adResponses, token, meliUserId) {
+// Process advertising data using correct endpoint - FIXED endpoint
+async function processAdvertising(token: string, meliUserId: string) {
   let totalSpent = 0;
   
-  // FIX: Ir directamente al endpoint correcto de publicidad
   try {
     if (!token || !meliUserId) {
       return 0;
     }
     
-    console.log(`📣 Intentando obtener datos de publicidad desde endpoint correcto para usuario ${meliUserId}`);
+    console.log(`📣 Obteniendo datos de publicidad para usuario ${meliUserId}`);
     
-    // FIX: Usar el endpoint correcto para campañas de publicidad
+    // Use correct advertising endpoint as per MeLi documentation
     const url = new URL(`https://api.mercadolibre.com/advertising/campaigns/search`);
     url.searchParams.append('seller_id', meliUserId);
     
@@ -450,25 +419,25 @@ async function processAdvertising(adResponses, token, meliUserId) {
     const campaignData = await response.json();
     
     if (campaignData && campaignData.results) {
-      campaignData.results.forEach(campaign => {
+      campaignData.results.forEach((campaign: any) => {
         if (campaign && campaign.status === 'ACTIVE' && campaign.spent) {
           totalSpent += campaign.spent;
         }
       });
     }
     
-    console.log(`📣 Gastos en publicidad procesados (endpoint correcto): ${totalSpent}`);
+    console.log(`📣 Gastos en publicidad procesados: ${totalSpent}`);
     return totalSpent;
-  } catch (error) {
+  } catch (error: any) {
     console.error("❌ Error procesando datos de publicidad:", error.message);
-    return 0; // Devolvemos 0 para no romper el dashboard
+    return 0; // Return 0 to prevent dashboard from breaking
   }
 }
 
-// Función principal para obtener un token válido
-async function getValidToken(userId, supabaseClient) {
+// Get a valid token
+async function getValidToken(userId: string, supabaseClient: any) {
   try {
-    // Buscar token existente
+    // Find existing token
     const { data: tokenData, error: tokenError } = await supabaseClient
       .from('meli_tokens')
       .select('*')
@@ -489,18 +458,18 @@ async function getValidToken(userId, supabaseClient) {
     
     console.log(`✅ Token encontrado para meli_user_id: ${tokenData.meli_user_id}`);
     
-    // Verificar si el token expiró
+    // Check if token is expired
     const now = new Date();
     const expiresAt = new Date(tokenData.expires_at);
     
     console.log(`⏰ Token actual expira en: ${expiresAt.toISOString()}`);
     console.log(`⏰ Hora actual: ${now.toISOString()}`);
     
-    // Si el token está por expirar o ya expiró
+    // Token is about to expire or already expired
     if (expiresAt.getTime() - now.getTime() < 10 * 60 * 1000) {
       console.log("⚠️ Token expirando pronto o ya expirado, refrescando...");
       
-      // Actualizar con refresh token
+      // Update with refresh token
       const clientId = Deno.env.get("MERCADOLIBRE_APP_ID");
       const clientSecret = Deno.env.get("MERCADOLIBRE_CLIENT_SECRET");
       
@@ -531,11 +500,11 @@ async function getValidToken(userId, supabaseClient) {
       
       const refreshData = await refreshResponse.json();
       
-      // Calcular expiración
+      // Calculate expiration
       const newExpiresAt = new Date();
       newExpiresAt.setSeconds(newExpiresAt.getSeconds() + refreshData.expires_in);
       
-      // Actualizar en Supabase
+      // Update in Supabase
       const { error: updateError } = await supabaseClient
         .from('meli_tokens')
         .update({
@@ -560,37 +529,42 @@ async function getValidToken(userId, supabaseClient) {
       };
     }
     
-    // Si el token sigue siendo válido
+    // Token is still valid
     console.log("✅ Token válido, usando el existente");
     return {
       success: true,
       token: tokenData.access_token,
       meliUserId: tokenData.meli_user_id
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error("❌ Error inesperado obteniendo token:", error);
     return { success: false, error: "Error inesperado obteniendo token: " + error.message };
   }
 }
 
-// Función para hacer batch de requests a la API de MeLi
-async function batchRequests(token, requests) {
+// Batch requests to MeLi API
+async function batchRequests(token: string, requests: any[]) {
   const results = [];
   
   if (!requests || !Array.isArray(requests) || requests.length === 0) {
     return results;
   }
   
-  // Iterar sobre cada solicitud
+  // Iterate over each request
   for (const request of requests) {
     try {
       const { endpoint, params = {} } = request;
       
-      // Construir URL con parámetros
+      // Skip visits requests - we handle them separately
+      if (endpoint.includes('/visits/')) {
+        continue;
+      }
+      
+      // Build URL with parameters
       const url = new URL(`https://api.mercadolibre.com${endpoint}`);
       
       for (const [key, value] of Object.entries(params)) {
-        if (key === '_productIds') continue; // Ignoramos este parámetro especial para visitas
+        if (key === '_productIds') continue; // Skip this special parameter
         if (value !== undefined && value !== null && value !== '') {
           url.searchParams.append(key, String(value));
         }
@@ -598,7 +572,7 @@ async function batchRequests(token, requests) {
       
       console.log(`🌐 Llamando a ${endpoint}:`, url.toString());
       
-      // Realizar solicitud
+      // Make request
       const response = await fetch(url, {
         headers: {
           "Authorization": `Bearer ${token}`,
@@ -629,7 +603,7 @@ async function batchRequests(token, requests) {
         status: response.status,
         data
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error(`❌ Error en ${request.endpoint}:`, error.message);
       results.push({
         endpoint: request.endpoint,
@@ -642,11 +616,10 @@ async function batchRequests(token, requests) {
   return results;
 }
 
-// Función para procesar datos del periodo previo
-function calculatePreviousPeriod(currentPeriod, dateRange, batchResults) {
-  // Implementación simple para prueba - en producción habría que hacer llamadas adicionales
+// Calculate previous period data
+function calculatePreviousPeriod(currentPeriod: any) {
   const prevSummary = { ...currentPeriod.summary };
-  // Reducir valores en 10-20% para simular diferencia con periodo anterior
+  // Reduce values by 10-20% to simulate difference with previous period
   Object.keys(prevSummary).forEach(key => {
     if (typeof prevSummary[key] === 'number') {
       prevSummary[key] *= (0.8 + Math.random() * 0.1);
@@ -656,14 +629,15 @@ function calculatePreviousPeriod(currentPeriod, dateRange, batchResults) {
   return prevSummary;
 }
 
+// Main function handler
 serve(async (req) => {
-  // Manejar preflight CORS
+  // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders, status: 204 });
   }
   
   try {
-    // Crear cliente de Supabase
+    // Create Supabase client
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
     const SUPABASE_SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
     
@@ -673,16 +647,16 @@ serve(async (req) => {
     
     const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE);
     
-    // Parsear body de la petición
+    // Parse request body
     const body = await req.json();
-    const { user_id, batch_requests, date_range, timezone, prev_period, use_cache, disable_test_data } = body;
+    const { user_id, batch_requests, date_range, timezone, prev_period, use_cache, disable_test_data, product_ids } = body;
     
     console.log(`🔷 Solicitud recibida para user_id: ${user_id}, timezone: ${timezone}`);
     console.log(`🔷 Rango de fechas:`, date_range);
     console.log(`🔷 Batch requests:`, batch_requests ? `${batch_requests.length} solicitudes` : "N/A");
     console.log(`🔷 Generar test data:`, !disable_test_data);
     
-    // Si no hay user_id, verificar solo la conexión
+    // If no user_id, just check connection
     if (!user_id && !batch_requests) {
       const { data: userData, error } = await supabaseClient
         .from('meli_tokens')
@@ -699,7 +673,7 @@ serve(async (req) => {
       });
     }
     
-    // Obtener token válido
+    // Get valid token
     const tokenResult = await getValidToken(user_id, supabaseClient);
     
     if (!tokenResult.success) {
@@ -709,7 +683,7 @@ serve(async (req) => {
       }, 400);
     }
     
-    // Si no hay batch_requests, solo verificar conexión
+    // If no batch_requests, just verify connection
     if (!batch_requests) {
       return responseWithCors({
         success: true,
@@ -718,31 +692,31 @@ serve(async (req) => {
       });
     }
     
-    // Realizar batch de solicitudes excluyendo las visitas que las procesaremos individualmente
+    // Filter out visits requests - we handle them separately
     const filteredRequests = batch_requests.filter(req => !req.endpoint.includes('/visits/'));
     
-    // Extraer los IDs de productos para procesar visitas individualmente
+    // Extract product IDs for visits
     const productIdsRequest = batch_requests.find(req => req.endpoint.includes('/visits/items'));
-    const productIds = productIdsRequest?.params?._productIds || [];
+    const productIds = productIdsRequest?.params?._productIds || product_ids || [];
     
-    // Realizar batch de solicitudes (excluyendo visitas)
+    // Make batch requests (excluding visits)
     const batchResults = await batchRequests(tokenResult.token, filteredRequests);
     
-    // Extraer datos relevantes de las respuestas
+    // Extract relevant data from responses
     const ordersResponses = batchResults.filter(res => 
       res.success && 
       (res.endpoint === '/orders/search' || res.endpoint === '/orders/search/recent')
     );
     
-    // ---- Procesamiento de datos ----
+    // Data processing
     let dashboardData = null;
     let isTestData = false;
     
-    // Extraer las órdenes de todas las páginas
+    // Extract orders from all pages
     let allOrders = [];
     ordersResponses.forEach(orderResponse => {
       if (orderResponse.data && orderResponse.data.results) {
-        const validOrders = orderResponse.data.results.filter(order => 
+        const validOrders = orderResponse.data.results.filter((order: any) => 
           order && order.status !== 'cancelled' && order.order_items
         );
         allOrders = [...allOrders, ...validOrders];
@@ -751,11 +725,11 @@ serve(async (req) => {
     
     console.log(`🛒 Se encontraron ${allOrders.length} órdenes válidas de ${ordersResponses.reduce((acc, res) => acc + (res.data?.results?.length || 0), 0)} totales`);
     
-    // Extrae todos los product IDs de las órdenes que necesitamos para visitas
+    // Extract product IDs from orders for visits
     const orderProductIds = [];
     allOrders.forEach(order => {
       if (order.order_items) {
-        order.order_items.forEach(item => {
+        order.order_items.forEach((item: any) => {
           if (item.item && item.item.id && !orderProductIds.includes(item.item.id)) {
             orderProductIds.push(item.item.id);
           }
@@ -765,60 +739,55 @@ serve(async (req) => {
     
     console.log(`🔍 Productos únicos encontrados en órdenes: ${orderProductIds.length}`);
     
-    // Extraer también los product IDs de las respuestas de productos del vendedor
+    // Extract product IDs from seller's products
     const productsResponse = batchResults.find(res => 
       res.success && res.endpoint.includes('/users/') && res.endpoint.includes('/items/search')
     );
     
-    let sellerProductIds = [];
+    let sellerProductIds: string[] = [];
     
     if (productsResponse && productsResponse.data && productsResponse.data.results) {
-      sellerProductIds = productsResponse.data.results.filter(id => !orderProductIds.includes(id));
+      sellerProductIds = productsResponse.data.results.filter((id: string) => !orderProductIds.includes(id));
     }
     
-    // Combinar ambos conjuntos de IDs para visitas
+    // Combine both sets of IDs for visits
     const allProductIds = [...orderProductIds, ...sellerProductIds];
     
     console.log(`🔍 Total products IDs para procesar visitas: ${allProductIds.length}`);
     
-    // Si hay órdenes, procesarlas; de lo contrario, usar datos de prueba si están permitidos
     if (allOrders.length > 0) {
-      // Procesar visitas individualmente llamando a la API correctamente
+      // Process visits individually - fixed to comply with MeLi API limitation
       const visitsData = await getItemVisitsIndividually(tokenResult.token, allProductIds);
       
-      // Procesar datos de publicidad con el endpoint correcto
-      const advertisingSpent = await processAdvertising(
-        [], // Ya no usamos respuestas batch para publicidad
-        tokenResult.token, 
-        tokenResult.meliUserId
-      );
+      // Process advertising with the correct endpoint
+      const advertisingSpent = await processAdvertising(tokenResult.token, tokenResult.meliUserId);
       
-      // Procesar órdenes para obtener métricas
-      const salesByProduct = {}; // Para cruzar con visitas
+      // Process orders to get metrics
+      const salesByProduct: Record<string, any> = {}; // For cross-referencing with visits
       const processedData = processOrders(allOrders, salesByProduct);
       
-      // Actualizar campos adicionales
+      // Update additional fields
       processedData.summary.visits = visitsData.totalVisits;
       processedData.summary.advertising = advertisingSpent;
       
-      // Calcular conversión si hay visitas
+      // Calculate conversion if there are visits
       if (visitsData.totalVisits > 0) {
         processedData.summary.conversion = (processedData.summary.units / visitsData.totalVisits) * 100;
       } else {
         processedData.summary.conversion = 0;
       }
       
-      // Calcular ticket promedio
+      // Calculate average ticket
       if (processedData.summary.orders > 0) {
         processedData.summary.avgTicket = processedData.summary.gmv / processedData.summary.orders;
       } else {
         processedData.summary.avgTicket = 0;
       }
       
-      // Calcular datos de periodo anterior si se solicita
+      // Calculate previous period data if requested
       let prevSummary = {};
       if (prev_period) {
-        prevSummary = calculatePreviousPeriod(processedData, date_range, batchResults);
+        prevSummary = calculatePreviousPeriod(processedData);
       }
       
       dashboardData = {
@@ -829,7 +798,7 @@ serve(async (req) => {
       
       console.log("📊 Dashboard data generada con datos reales");
     } else if (!disable_test_data) {
-      // Si no hay órdenes y se permiten datos de prueba
+      // Use test data if no orders and test data is allowed
       dashboardData = generateTestData(date_range);
       isTestData = true;
       console.log("🧪 Usando datos de prueba al no encontrar órdenes reales");
@@ -837,11 +806,10 @@ serve(async (req) => {
       console.log("⚠️ No se encontraron órdenes y los datos de prueba están desactivados");
     }
     
-    // Incluir todos los resultados del batch en la respuesta para depuración
-    // pero también añadir las solicitudes de visitas individuales de manera manual
+    // Include all batch results in the response for debugging
     const allResults = [...batchResults];
     
-    // Añadir resultado de publicidad si se procesó correctamente
+    // Add advertising result if processed correctly
     if (dashboardData?.summary?.advertising > 0) {
       allResults.push({
         endpoint: '/advertising/campaigns/search',
@@ -858,7 +826,7 @@ serve(async (req) => {
       is_test_data: isTestData
     });
     
-  } catch (error) {
+  } catch (error: any) {
     console.error("❌ Error en el servidor:", error);
     return responseWithCors({
       success: false,
@@ -866,4 +834,3 @@ serve(async (req) => {
     }, 500);
   }
 });
-

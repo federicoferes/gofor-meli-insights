@@ -1,9 +1,11 @@
+
 import { useState, useCallback, useEffect, useRef, useContext } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
 import { AppSettingsContext } from '@/App';
 import { formatDateForMeLi } from '@/utils/date';
 
+// Define types for better code maintainability
 interface DateRange {
   from?: Date;
   to?: Date;
@@ -35,7 +37,25 @@ interface UseMeliDataReturn {
   isTestData: boolean;
 }
 
-const CACHE_TIME = 5 * 60 * 1000;
+interface SalesSummary {
+  gmv: number;
+  commissions: number;
+  taxes: number;
+  shipping: number;
+  discounts: number;
+  refunds: number;
+  iva: number;
+  units: number;
+  orders: number;
+  avgTicket: number;
+  visits: number;
+  conversion: number;
+  advertising: number;
+  productCosts: number;
+}
+
+// Cache implementation for better performance
+const CACHE_TIME = 5 * 60 * 1000; // 5 minutes
 
 const responseCache = new Map<string, { 
   timestamp: number, 
@@ -43,9 +63,9 @@ const responseCache = new Map<string, {
 }>();
 
 /**
- * Crea un objeto con campos inicializados para el resumen de ventas
+ * Creates an object with initialized fields for sales summary
  */
-const createEmptySalesSummary = () => ({
+const createEmptySalesSummary = (): SalesSummary => ({
   gmv: 0, 
   commissions: 0, 
   taxes: 0, 
@@ -62,6 +82,10 @@ const createEmptySalesSummary = () => ({
   productCosts: 0
 });
 
+/**
+ * Custom hook to fetch and process Mercado Libre data
+ * Following SOLID principles: Single Responsibility, Open-closed, Dependency Inversion
+ */
 export function useMeliData({
   userId,
   meliUserId,
@@ -73,31 +97,36 @@ export function useMeliData({
 }: MeliDataOptions): UseMeliDataReturn {
   const { disableTestData: globalDisableTestData } = useContext(AppSettingsContext);
   
+  // Determine whether to disable test data based on prop or global context
   const finalDisableTestData = disableTestData !== undefined ? disableTestData : globalDisableTestData;
   
+  // State management
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [salesData, setSalesData] = useState<any[]>([]);
-  const [salesSummary, setSalesSummary] = useState(createEmptySalesSummary());
+  const [salesSummary, setSalesSummary] = useState<SalesSummary>(createEmptySalesSummary());
   const [topProducts, setTopProducts] = useState<any[]>([]);
   const [costData, setCostData] = useState<any[]>([]);
   const [provinceData, setProvinceData] = useState<any[]>([]);
   const [ordersData, setOrdersData] = useState<any[]>([]);
-  const [prevSalesSummary, setPrevSalesSummary] = useState(createEmptySalesSummary());
+  const [prevSalesSummary, setPrevSalesSummary] = useState<SalesSummary>(createEmptySalesSummary());
   const [isTestData, setIsTestData] = useState(false);
 
+  // Refs for managing component lifecycle and request state
   const isMounted = useRef(true);
   const requestInProgress = useRef<string | null>(null);
   const lastRequestPayload = useRef<string | null>(null);
   const { toast } = useToast();
   const requestAttempts = useRef(0);
 
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       isMounted.current = false;
     };
   }, []);
 
+  // Generate a cache key based on current filters
   const getCacheKey = useCallback(() => {
     let key = `${userId}-${dateFilter}`;
     if (dateFilter === 'custom' && dateRange.fromISO && dateRange.toISO) {
@@ -109,7 +138,9 @@ export function useMeliData({
     return key;
   }, [userId, dateFilter, dateRange, finalDisableTestData]);
 
+  // Main function to load data
   const loadData = useCallback(async (retryCount = 0) => {
+    // Early return if prerequisites aren't met
     if (!userId || !isConnected || !meliUserId) {
       console.log("Requisitos de carga no cumplidos", { userId, isConnected, meliUserId });
       return;
@@ -119,34 +150,19 @@ export function useMeliData({
     
     const cacheKey = getCacheKey();
     
+    // Prevent duplicate requests
     if (requestInProgress.current === cacheKey) {
       console.log("🔒 Request already in progress for:", cacheKey);
       return;
     }
 
+    // Check cache first
     const cachedResponse = responseCache.get(cacheKey);
     const now = Date.now();
     if (cachedResponse && now - cachedResponse.timestamp < CACHE_TIME) {
       console.log("🔄 Usando datos en caché para:", cacheKey);
       if (isMounted.current) {
-        if (cachedResponse.data.dashboard_data) {
-          const dashData = cachedResponse.data.dashboard_data;
-          
-          setIsTestData(!!cachedResponse.data.is_test_data);
-          
-          if (dashData.salesByMonth?.length > 0) setSalesData(dashData.salesByMonth);
-          if (dashData.summary) setSalesSummary(dashData.summary);
-          if (dashData.prev_summary) setPrevSalesSummary(dashData.prev_summary);
-          if (dashData.costDistribution?.length > 0) setCostData(dashData.costDistribution);
-          if (dashData.topProducts?.length > 0) setTopProducts(dashData.topProducts);
-          if (dashData.salesByProvince?.length > 0) setProvinceData(dashData.salesByProvince);
-          if (dashData.orders?.length > 0) setOrdersData(dashData.orders);
-          
-          if (productCostsCalculator && dashData.orders?.length > 0) {
-            const productCosts = productCostsCalculator(dashData.orders);
-            setSalesSummary(prev => ({ ...prev, productCosts }));
-          }
-        }
+        processResponseData(cachedResponse.data);
       }
       return;
     }
@@ -155,6 +171,7 @@ export function useMeliData({
       if (isMounted.current) setIsLoading(true);
       requestInProgress.current = cacheKey;
       
+      // Prepare date parameters
       let dateFrom, dateTo;
       
       if (dateFilter === 'custom' && dateRange.fromISO && dateRange.toISO) {
@@ -170,6 +187,7 @@ export function useMeliData({
       console.log("🚫 Datos de prueba desactivados:", finalDisableTestData);
       console.log("🌐 TimeZone: ", Intl.DateTimeFormat().resolvedOptions().timeZone);
 
+      // Format dates for MeLi API
       let fromArg, toArg;
       if (dateFrom) {
         const fromDate = new Date(dateFrom);
@@ -183,6 +201,7 @@ export function useMeliData({
         console.log(`📅 Fecha fin formateada para MeLi: ${toArg}`);
       }
 
+      // Get product IDs for visiting data
       const { data: productsData, error: productsError } = await supabase
         .from('products')
         .select('item_id')
@@ -195,6 +214,7 @@ export function useMeliData({
       const productIds = productsData?.map(p => p.item_id) || [];
       console.log(`📊 Obtenidos ${productIds.length} IDs de productos para consulta de visitas`);
 
+      // Prepare batch requests following MeLi API structure
       const batchRequests = [
         {
           endpoint: '/orders/search',
@@ -235,6 +255,8 @@ export function useMeliData({
           }
         },
         
+        // Note: We now handle visits individually in the backend
+        // to comply with MeLi's API restriction of 1 item per request
         {
           endpoint: `/visits/items`,
           params: {
@@ -243,6 +265,7 @@ export function useMeliData({
         }
       ];
 
+      // Prepare payload for the edge function
       const requestPayload = {
         user_id: userId,
         batch_requests: batchRequests,
@@ -257,6 +280,7 @@ export function useMeliData({
         product_ids: productIds
       };
 
+      // Check for duplicate requests
       const payloadString = JSON.stringify(requestPayload);
       if (payloadString === lastRequestPayload.current && requestAttempts.current > 0) {
         console.log("🔄 Ignorando solicitud duplicada con el mismo payload");
@@ -269,8 +293,8 @@ export function useMeliData({
       requestAttempts.current++;
       
       console.log("📦 Enviando batch requests:", batchRequests.map(r => r.endpoint));
-      console.log("📦 Payload completo:", JSON.stringify(requestPayload));
       
+      // Call the edge function to fetch data from MeLi
       const { data: batchData, error: batchError } = await supabase.functions.invoke('meli-data', {
         body: requestPayload
       });
@@ -292,6 +316,7 @@ export function useMeliData({
         is_test_data: !!batchData.is_test_data
       }));
 
+      // Log complete URLs used for debugging
       if (batchData.batch_results) {
         console.log("🌐 URLs completas utilizadas:");
         batchData.batch_results.forEach(r => {
@@ -301,6 +326,7 @@ export function useMeliData({
         });
       }
 
+      // Handle API errors and rate limiting
       if (!batchData.success) {
         if (batchData?.error?.includes('429') || batchData?.message?.includes('rate limit')) {
           if (retryCount < 3) {
@@ -322,137 +348,21 @@ export function useMeliData({
         isTestData: batchData.is_test_data ? "sí" : "no"
       });
       
+      // Log any failed requests
       const failedResults = batchData.batch_results?.filter(r => !r.success);
       if (failedResults?.length > 0) {
         console.warn(`⚠️ ${failedResults.length} requests fallidos:`, 
           failedResults.map(r => `${r.endpoint}: ${r.error || r.status}`).join(', '));
       }
       
+      // Save response to cache
       responseCache.set(cacheKey, {
         timestamp: Date.now(),
         data: batchData
       });
       
       if (isMounted.current) {
-        console.log("✅ Datos recibidos correctamente");
-        
-        if (batchData.dashboard_data) {
-          setIsTestData(!!batchData.is_test_data);
-          
-          if (batchData.dashboard_data.salesByMonth?.length > 0) {
-            setSalesData(batchData.dashboard_data.salesByMonth);
-          }
-          
-          if (batchData.dashboard_data.summary) {
-            const summary = batchData.dashboard_data.summary;
-            
-            if (summary.visits > 0 && summary.units > 0) {
-              summary.conversion = (summary.units / summary.visits) * 100;
-            } else {
-              summary.conversion = 0;
-            }
-            
-            if (summary.gmv > 0 && summary.orders > 0) {
-              summary.avgTicket = summary.gmv / summary.orders;
-            } else {
-              summary.avgTicket = 0;
-            }
-            
-            console.log("Resumen actualizado:", {
-              gmv: summary.gmv,
-              orders: summary.orders,
-              units: summary.units,
-              visits: summary.visits,
-              conversion: summary.conversion,
-              commissions: summary.commissions,
-              shipping: summary.shipping,
-              taxes: summary.taxes
-            });
-            
-            setSalesSummary(summary);
-          }
-          
-          if (batchData.dashboard_data.prev_summary) {
-            const prevSummary = batchData.dashboard_data.prev_summary;
-            
-            if (prevSummary.visits > 0 && prevSummary.units > 0) {
-              prevSummary.conversion = (prevSummary.units / prevSummary.visits) * 100;
-            } else {
-              prevSummary.conversion = 0;
-            }
-            
-            if (prevSummary.gmv > 0 && prevSummary.orders > 0) {
-              prevSummary.avgTicket = prevSummary.gmv / prevSummary.orders;
-            } else {
-              prevSummary.avgTicket = 0;
-            }
-            
-            setPrevSalesSummary(prevSummary);
-          }
-          
-          if (batchData.dashboard_data.costDistribution?.length > 0) {
-            setCostData(batchData.dashboard_data.costDistribution);
-          }
-          
-          if (batchData.dashboard_data.topProducts?.length > 0) {
-            setTopProducts(batchData.dashboard_data.topProducts);
-          }
-          
-          if (batchData.dashboard_data.salesByProvince?.length > 0) {
-            setProvinceData(batchData.dashboard_data.salesByProvince);
-          }
-          
-          if (batchData.dashboard_data.orders) {
-            setOrdersData(batchData.dashboard_data.orders);
-            
-            if (productCostsCalculator) {
-              const productCosts = productCostsCalculator(batchData.dashboard_data.orders);
-              setSalesSummary(prev => ({ ...prev, productCosts }));
-            }
-          }
-        } else {
-          console.warn("⚠️ No se recibieron datos del dashboard");
-          
-          if (!batchData.is_test_data && !finalDisableTestData) {
-            console.log("📊 No hay datos reales, generando datos de prueba...");
-            const testData = {
-              summary: createEmptySalesSummary(),
-              prev_summary: createEmptySalesSummary(),
-              salesByMonth: [],
-              costDistribution: [],
-              topProducts: [],
-              salesByProvince: [],
-              orders: []
-            };
-            
-            setIsTestData(true);
-            
-            toast({
-              title: "Mostrando datos de prueba",
-              description: "No se encontraron órdenes reales para el período seleccionado",
-              duration: 5000
-            });
-            
-            setSalesSummary(testData.summary);
-            setPrevSalesSummary(testData.prev_summary);
-            setSalesData(testData.salesByMonth);
-            setCostData(testData.costDistribution);
-            setTopProducts(testData.topProducts);
-            setProvinceData(testData.salesByProvince);
-            setOrdersData(testData.orders);
-          } else {
-            setError("No se encontraron datos para el período seleccionado");
-            
-            if (finalDisableTestData) {
-              toast({
-                title: "Sin datos del dashboard",
-                description: "No se encontraron órdenes para el período seleccionado",
-                variant: "destructive",
-                duration: 5000
-              });
-            }
-          }
-        }
+        processResponseData(batchData);
       }
     } catch (error: any) {
       console.error("❌ Error cargando datos de Mercado Libre:", error);
@@ -469,6 +379,131 @@ export function useMeliData({
     }
   }, [userId, meliUserId, dateFilter, dateRange, isConnected, getCacheKey, toast, productCostsCalculator, finalDisableTestData]);
 
+  // Process the response data and update state
+  const processResponseData = (batchData: any) => {
+    console.log("✅ Procesando datos recibidos");
+    
+    setIsTestData(!!batchData.is_test_data);
+    
+    if (batchData.dashboard_data) {
+      // Process sales by month
+      if (batchData.dashboard_data.salesByMonth?.length > 0) {
+        setSalesData(batchData.dashboard_data.salesByMonth);
+      }
+      
+      // Process summary
+      if (batchData.dashboard_data.summary) {
+        const summary = batchData.dashboard_data.summary;
+        
+        // Calculate conversion rate
+        if (summary.visits > 0 && summary.units > 0) {
+          summary.conversion = (summary.units / summary.visits) * 100;
+        } else {
+          summary.conversion = 0;
+        }
+        
+        // Calculate average ticket
+        if (summary.gmv > 0 && summary.orders > 0) {
+          summary.avgTicket = summary.gmv / summary.orders;
+        } else {
+          summary.avgTicket = 0;
+        }
+        
+        console.log("Resumen actualizado:", {
+          gmv: summary.gmv,
+          orders: summary.orders,
+          units: summary.units,
+          visits: summary.visits,
+          conversion: summary.conversion,
+          commissions: summary.commissions,
+          shipping: summary.shipping,
+          taxes: summary.taxes
+        });
+        
+        setSalesSummary(summary);
+      }
+      
+      // Process previous period summary
+      if (batchData.dashboard_data.prev_summary) {
+        const prevSummary = batchData.dashboard_data.prev_summary;
+        
+        if (prevSummary.visits > 0 && prevSummary.units > 0) {
+          prevSummary.conversion = (prevSummary.units / prevSummary.visits) * 100;
+        } else {
+          prevSummary.conversion = 0;
+        }
+        
+        if (prevSummary.gmv > 0 && prevSummary.orders > 0) {
+          prevSummary.avgTicket = prevSummary.gmv / prevSummary.orders;
+        } else {
+          prevSummary.avgTicket = 0;
+        }
+        
+        setPrevSalesSummary(prevSummary);
+      }
+      
+      // Process cost distribution
+      if (batchData.dashboard_data.costDistribution?.length > 0) {
+        setCostData(batchData.dashboard_data.costDistribution);
+      }
+      
+      // Process top products
+      if (batchData.dashboard_data.topProducts?.length > 0) {
+        setTopProducts(batchData.dashboard_data.topProducts);
+      }
+      
+      // Process province data
+      if (batchData.dashboard_data.salesByProvince?.length > 0) {
+        setProvinceData(batchData.dashboard_data.salesByProvince);
+      }
+      
+      // Process orders and calculate product costs if applicable
+      if (batchData.dashboard_data.orders) {
+        setOrdersData(batchData.dashboard_data.orders);
+        
+        if (productCostsCalculator) {
+          const productCosts = productCostsCalculator(batchData.dashboard_data.orders);
+          setSalesSummary(prev => ({ ...prev, productCosts }));
+        }
+      }
+    } else {
+      console.warn("⚠️ No se recibieron datos del dashboard");
+      
+      // Handle test data scenario
+      if (!batchData.is_test_data && !finalDisableTestData) {
+        console.log("📊 No hay datos reales, generando datos de prueba...");
+        setIsTestData(true);
+        
+        toast({
+          title: "Mostrando datos de prueba",
+          description: "No se encontraron órdenes reales para el período seleccionado",
+          duration: 5000
+        });
+        
+        // Reset all data to empty state when showing test data
+        setSalesSummary(createEmptySalesSummary());
+        setPrevSalesSummary(createEmptySalesSummary());
+        setSalesData([]);
+        setCostData([]);
+        setTopProducts([]);
+        setProvinceData([]);
+        setOrdersData([]);
+      } else {
+        setError("No se encontraron datos para el período seleccionado");
+        
+        if (finalDisableTestData) {
+          toast({
+            title: "Sin datos del dashboard",
+            description: "No se encontraron órdenes para el período seleccionado",
+            variant: "destructive",
+            duration: 5000
+          });
+        }
+      }
+    }
+  };
+
+  // Load data when dependencies change
   useEffect(() => {
     const validDateRange = dateFilter !== 'custom' || 
                           (dateRange.fromISO && dateRange.toISO);
@@ -481,6 +516,7 @@ export function useMeliData({
     }
   }, [userId, meliUserId, dateFilter, dateRange.fromISO, dateRange.toISO, isConnected, loadData]);
 
+  // Public method to force refresh data
   const refresh = async () => {
     console.log("Forzando actualización de datos...");
     
