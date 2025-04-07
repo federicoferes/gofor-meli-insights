@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Navigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -314,6 +313,7 @@ const Dashboard = () => {
                       icon={<DollarSign className="h-5 w-5" />}
                       isLoading={dataLoading}
                       colorClass="bg-gradient-to-r from-gofor-purple/10 to-gofor-purple/5"
+                      tooltip="Balance calculado como GMV - comisiones - envíos - impuestos - IVA - publicidad - costos de productos"
                     />
                   </div>
                   <SummaryCard 
@@ -322,6 +322,8 @@ const Dashboard = () => {
                     percentChange={calculatePercentChange(salesSummary.gmv, prevSalesSummary.gmv)}
                     icon={<ShoppingBag className="h-5 w-5" />}
                     isLoading={dataLoading}
+                    tooltip="Calculado como la suma de precio unitario * cantidad de todos los items vendidos"
+                    isTestData={isTestData}
                   />
                   <SummaryCard 
                     title="Unidades vendidas"
@@ -329,6 +331,8 @@ const Dashboard = () => {
                     percentChange={calculatePercentChange(salesSummary.units, prevSalesSummary.units)}
                     icon={<BarChart3 className="h-5 w-5" />}
                     isLoading={dataLoading}
+                    tooltip="Total de unidades (quantity) vendidas en todas las órdenes"
+                    isTestData={isTestData}
                   />
                 </div>
 
@@ -339,6 +343,8 @@ const Dashboard = () => {
                     percentChange={calculatePercentChange(salesSummary.avgTicket, prevSalesSummary.avgTicket)}
                     icon={<CreditCard className="h-5 w-5" />}
                     isLoading={dataLoading}
+                    tooltip="GMV / Número de órdenes"
+                    isTestData={isTestData}
                   />
                   <SummaryCard 
                     title="Visitas"
@@ -346,6 +352,8 @@ const Dashboard = () => {
                     percentChange={calculatePercentChange(salesSummary.visits, prevSalesSummary.visits)}
                     icon={<Users className="h-5 w-5" />}
                     isLoading={dataLoading}
+                    tooltip="Suma de visitas a productos publicados desde /visits/items"
+                    isTestData={isTestData}
                   />
                   <SummaryCard 
                     title="Tasa de conversión"
@@ -354,6 +362,8 @@ const Dashboard = () => {
                     percentChange={calculatePercentChange(salesSummary.conversion, prevSalesSummary.conversion)}
                     icon={<Percent className="h-5 w-5" />}
                     isLoading={dataLoading}
+                    tooltip="(Unidades vendidas / Visitas) * 100"
+                    isTestData={isTestData}
                   />
                   <SummaryCard 
                     title="IVA (aplicado)"
@@ -361,6 +371,8 @@ const Dashboard = () => {
                     percentChange={calculatePercentChange(currentIva, previousIva)}
                     icon={<DollarSign className="h-5 w-5" />}
                     isLoading={dataLoading}
+                    tooltip={`GMV * ${ivaRate}% (configurable)`}
+                    isTestData={isTestData}
                   />
                 </div>
                 
@@ -371,6 +383,8 @@ const Dashboard = () => {
                     percentChange={calculatePercentChange(salesSummary.commissions, prevSalesSummary.commissions)}
                     icon={<DollarSign className="h-5 w-5" />}
                     isLoading={dataLoading}
+                    tooltip="Suma de fee_details[].amount de todas las órdenes"
+                    isTestData={isTestData}
                   />
                   <SummaryCard 
                     title="Costos de envío"
@@ -378,6 +392,8 @@ const Dashboard = () => {
                     percentChange={calculatePercentChange(salesSummary.shipping, prevSalesSummary.shipping)}
                     icon={<Truck className="h-5 w-5" />}
                     isLoading={dataLoading}
+                    tooltip="Suma de shipping.shipping_option.cost de todas las órdenes"
+                    isTestData={isTestData}
                   />
                   <SummaryCard 
                     title="Impuestos"
@@ -385,6 +401,8 @@ const Dashboard = () => {
                     percentChange={calculatePercentChange(salesSummary.taxes, prevSalesSummary.taxes)}
                     icon={<DollarSign className="h-5 w-5" />}
                     isLoading={dataLoading}
+                    tooltip="Suma de taxes[].amount en órdenes"
+                    isTestData={isTestData}
                   />
                 </div>
 
@@ -399,6 +417,8 @@ const Dashboard = () => {
                     icon={<Megaphone className="h-5 w-5" />}
                     isLoading={dataLoading}
                     additionalInfo={advertisingGmvPercent ? `${advertisingGmvPercent}% del GMV` : null}
+                    tooltip="Gastos de campañas desde /ads/campaigns (0 si no hay datos)"
+                    isTestData={isTestData}
                   />
                   <SummaryCard 
                     title="Costo de Productos Vendidos"
@@ -410,6 +430,8 @@ const Dashboard = () => {
                     icon={<Package className="h-5 w-5" />}
                     isLoading={dataLoading}
                     additionalInfo={productCostsGmvPercent ? `${productCostsGmvPercent}% del GMV` : null}
+                    tooltip="Suma del costo registrado * cantidad vendida de cada producto"
+                    isTestData={isTestData}
                   />
                 </div>
                 

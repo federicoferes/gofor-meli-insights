@@ -1,7 +1,8 @@
 
 import React from 'react';
 import { Card, CardContent } from "@/components/ui/card";
-import { TrendingUp, TrendingDown, AlertCircle } from "lucide-react";
+import { TrendingUp, TrendingDown, AlertCircle, Info } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface SummaryCardProps {
   title: React.ReactNode; 
@@ -13,6 +14,7 @@ interface SummaryCardProps {
   suffix?: string;
   additionalInfo?: string | null; 
   isTestData?: boolean;
+  tooltip?: string;
 }
 
 const SummaryCard = ({ 
@@ -24,7 +26,8 @@ const SummaryCard = ({
   isLoading = false,
   suffix = "",
   additionalInfo,
-  isTestData = false
+  isTestData = false,
+  tooltip
 }: SummaryCardProps) => {
   // Determine if percent change is positive
   const isPositiveChange = percentChange !== undefined && percentChange >= 0;
@@ -51,6 +54,18 @@ const SummaryCard = ({
                   <AlertCircle className="h-3 w-3 mr-1" />
                   Demo
                 </span>
+              )}
+              {tooltip && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="cursor-help">
+                      <Info className="h-3 w-3 text-gray-400" />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs text-xs p-2">
+                    {tooltip}
+                  </TooltipContent>
+                </Tooltip>
               )}
             </div>
             <p className={`text-2xl font-bold font-poppins mt-1 ${isLoading ? 'opacity-50' : ''} ${isTestData ? 'text-amber-500' : ''}`}>

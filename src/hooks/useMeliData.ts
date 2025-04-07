@@ -3,6 +3,7 @@ import { useState, useCallback, useEffect, useRef, useContext } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
 import { AppSettingsContext } from '@/App';
+import { formatDateForMeLi } from '@/utils/date';
 
 interface DateRange {
   from?: Date;
@@ -42,6 +43,26 @@ const responseCache = new Map<string, {
   data: any 
 }>();
 
+/**
+ * Crea un objeto con campos inicializados para el resumen de ventas
+ */
+const createEmptySalesSummary = () => ({
+  gmv: 0, 
+  commissions: 0, 
+  taxes: 0, 
+  shipping: 0, 
+  discounts: 0,
+  refunds: 0, 
+  iva: 0, 
+  units: 0, 
+  orders: 0,
+  avgTicket: 0, 
+  visits: 0, 
+  conversion: 0,
+  advertising: 0, 
+  productCosts: 0
+});
+
 export function useMeliData({
   userId,
   meliUserId,
@@ -58,20 +79,12 @@ export function useMeliData({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [salesData, setSalesData] = useState([]);
-  const [salesSummary, setSalesSummary] = useState({
-    gmv: 0, commissions: 0, taxes: 0, shipping: 0, discounts: 0,
-    refunds: 0, iva: 0, units: 0, avgTicket: 0, visits: 0, conversion: 0,
-    advertising: 0, productCosts: 0
-  });
+  const [salesSummary, setSalesSummary] = useState(createEmptySalesSummary());
   const [topProducts, setTopProducts] = useState([]);
   const [costData, setCostData] = useState([]);
   const [provinceData, setProvinceData] = useState([]);
   const [ordersData, setOrdersData] = useState([]);
-  const [prevSalesSummary, setPrevSalesSummary] = useState({
-    gmv: 0, commissions: 0, taxes: 0, shipping: 0, discounts: 0,
-    refunds: 0, iva: 0, units: 0, avgTicket: 0, visits: 0, conversion: 0,
-    advertising: 0, productCosts: 0
-  });
+  const [prevSalesSummary, setPrevSalesSummary] = useState(createEmptySalesSummary());
   const [isTestData, setIsTestData] = useState(false);
 
   const isMounted = useRef(true);
@@ -162,14 +175,14 @@ export function useMeliData({
       let fromArg, toArg;
       if (dateFrom) {
         const fromDate = new Date(dateFrom);
-        fromArg = `${dateFrom.split('T')[0]}T00:00:00-03:00`;
-        console.log(`📅 Fecha inicio formateada: ${fromArg}`);
+        fromArg = formatDateForMeLi(fromDate);
+        console.log(`📅 Fecha inicio formateada para MeLi: ${fromArg}`);
       }
       
       if (dateTo) {
         const toDate = new Date(dateTo);
-        toArg = `${dateTo.split('T')[0]}T23:59:59-03:00`;
-        console.log(`📅 Fecha fin formateada: ${toArg}`);
+        toArg = formatDateForMeLi(toDate, true);
+        console.log(`📅 Fecha fin formateada para MeLi: ${toArg}`);
       }
 
       // Lista de IDs de productos para el endpoint de visitas
@@ -185,6 +198,20 @@ export function useMeliData({
       const productIds = productsData?.map(p => p.item_id) || [];
       console.log(`📊 Obtenidos ${productIds.length} IDs de productos para consulta de visitas`);
 
+      // Crear batches de hasta 20 IDs para las llamadas de visitas
+      const visitBatches = [];
+      if (productIds.length > 0) {
+        for (let i = 0; i < productIds.length; i += 20) {
+          const chunk = productIds.slice(i, i + 20);
+          visitBatches.push({
+            endpoint: `/visits/items`,
+            params: {
+              ids: chunk.join(',')
+            }
+          });
+        }
+      }
+
       const batchRequests = [
         // Búsqueda principal de órdenes con filtro por fecha
         {
@@ -193,7 +220,7 @@ export function useMeliData({
             seller: meliUserId,
             sort: 'date_desc',
             limit: 50,
-            // Aplicar filtros de fecha formateados correctamente
+            // Aplicar filtros de fecha formateados correctamente para MeLi
             ...((fromArg && toArg) ? {
               'order.date_created.from': fromArg,
               'order.date_created.to': toArg
@@ -206,14 +233,6 @@ export function useMeliData({
           endpoint: `/users/${meliUserId}/items/search`,
           params: {
             limit: 100
-          }
-        },
-        
-        // Visitas por items (corregido para usar específicamente los IDs)
-        {
-          endpoint: `/visits/items`,
-          params: {
-            ids: productIds.length > 0 ? productIds.slice(0, 20).join(',') : undefined
           }
         },
         
@@ -235,30 +254,18 @@ export function useMeliData({
               'order.date_created.to': toArg
             } : {})
           }
-        }
+        },
+        
+        // Añadimos los batches de visitas
+        ...visitBatches
       ];
-
-      // Batch adicional para visitas, separado en chunks de 20 IDs
-      if (productIds.length > 20) {
-        for (let i = 20; i < productIds.length; i += 20) {
-          const chunk = productIds.slice(i, i + 20);
-          if (chunk.length > 0) {
-            batchRequests.push({
-              endpoint: '/visits/items',
-              params: {
-                ids: chunk.join(',')
-              }
-            });
-          }
-        }
-      }
 
       const requestPayload = {
         user_id: userId,
         batch_requests: batchRequests,
         date_range: {
-          begin: dateFrom ? dateFrom.split('T')[0] : undefined,
-          end: dateTo ? dateTo.split('T')[0] : undefined
+          begin: dateFrom ? new Date(dateFrom).toISOString().split('T')[0] : undefined,
+          end: dateTo ? new Date(dateTo).toISOString().split('T')[0] : undefined
         },
         timezone: 'America/Argentina/Buenos_Aires',
         prev_period: true,
@@ -354,16 +361,21 @@ export function useMeliData({
           }
           
           if (batchData.dashboard_data.summary) {
+            // Calculamos las métricas basadas en datos reales recibidos
             const summary = batchData.dashboard_data.summary;
             
-            if (summary.visits && summary.units) {
+            // Calculamos la conversión (unidades / visitas) * 100
+            if (summary.visits > 0 && summary.units > 0) {
               summary.conversion = (summary.units / summary.visits) * 100;
             } else {
               summary.conversion = 0;
             }
             
+            // Ticket promedio (GMV / órdenes)
             if (summary.gmv > 0 && summary.orders > 0) {
               summary.avgTicket = summary.gmv / summary.orders;
+            } else {
+              summary.avgTicket = 0;
             }
             
             console.log("Resumen actualizado:", {
@@ -371,16 +383,20 @@ export function useMeliData({
               orders: summary.orders,
               units: summary.units,
               visits: summary.visits,
-              conversion: summary.conversion
+              conversion: summary.conversion,
+              commissions: summary.commissions,
+              shipping: summary.shipping,
+              taxes: summary.taxes
             });
             
             setSalesSummary(summary);
           }
           
           if (batchData.dashboard_data.prev_summary) {
+            // Aplicamos la misma lógica para el resumen del periodo anterior
             const prevSummary = batchData.dashboard_data.prev_summary;
             
-            if (prevSummary.visits && prevSummary.units) {
+            if (prevSummary.visits > 0 && prevSummary.units > 0) {
               prevSummary.conversion = (prevSummary.units / prevSummary.visits) * 100;
             } else {
               prevSummary.conversion = 0;
@@ -388,6 +404,8 @@ export function useMeliData({
             
             if (prevSummary.gmv > 0 && prevSummary.orders > 0) {
               prevSummary.avgTicket = prevSummary.gmv / prevSummary.orders;
+            } else {
+              prevSummary.avgTicket = 0;
             }
             
             setPrevSalesSummary(prevSummary);

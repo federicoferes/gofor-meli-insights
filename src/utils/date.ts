@@ -1,4 +1,3 @@
-
 import { startOfDay, endOfDay, addHours, subDays, format } from 'date-fns';
 
 // UTC-3 Argentina
@@ -68,6 +67,24 @@ export const formatDateForApi = (date: Date, isEndOfDay = false): string => {
     return withMs.toISOString();
   }
   return date.toISOString();
+};
+
+/**
+ * Formatea una fecha para la API de MercadoLibre con zona horaria Argentina
+ */
+export const formatDateForMeLi = (date: Date, isEndOfDay = false): string => {
+  if (!date) return "";
+  
+  // Formato YYYY-MM-DDTHH:MM:SS-03:00 para MeLi API
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  
+  let hours = isEndOfDay ? '23' : '00';
+  let minutes = isEndOfDay ? '59' : '00';
+  let seconds = isEndOfDay ? '59' : '00';
+  
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}-03:00`;
 };
 
 /**
