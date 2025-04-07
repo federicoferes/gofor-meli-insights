@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useEffect, useRef, useContext } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
@@ -245,7 +246,7 @@ export function useMeliData({
     }
   }, [finalDisableTestData, productCostsCalculator, toast]);
 
-  // Main function to load data
+  // Main function to load data - DEFINIENDO AQUÍ loadData antes de usarlo
   const loadData = useCallback(async (retryCount = 0) => {
     // Early return if prerequisites aren't met
     if (!userId || !isConnected || !meliUserId) {
@@ -422,9 +423,9 @@ export function useMeliData({
       if (isMounted.current) setIsLoading(false);
       requestInProgress.current = null;
     }
-  }, [finalDisableTestData, productCostsCalculator, toast, getCacheKey, loadData]);
+  }, [userId, meliUserId, dateFilter, dateRange, finalDisableTestData, productCostsCalculator, isConnected, getCacheKey, processResponseData]);
 
-  // Load data when dependencies change
+  // Load data when dependencies change - USANDO loadData después de definirlo
   useEffect(() => {
     const validDateRange = dateFilter !== 'custom' || 
                           (dateRange.fromISO && dateRange.toISO);
