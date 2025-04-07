@@ -1,4 +1,3 @@
-
 // Supabase Edge function para interactuar con la API de Mercado Libre
 // sin dependencia de date-fns-tz
 
@@ -594,7 +593,7 @@ Deno.serve(async (req) => {
     console.log(`⏰ Hora actual: ${new Date(now * 1000).toISOString()}`);
     
     let accessToken = connection.access_token;
-    console.log(`🔑 Usando access_token: ${accessToken.substring(0, 25)}...`);
+    console.log(`🔑 Usando access_token: ${accessToken.substring(0, 25)}... (parcialmente oculto)`);
     
     if (now >= expiresAt) {
       // Refrescar token
@@ -628,7 +627,7 @@ Deno.serve(async (req) => {
       const refreshData = await refreshResponse.json();
       console.log("✅ Token refrescado exitosamente");
       accessToken = refreshData.access_token;
-      console.log(`🔑 Nuevo access_token: ${accessToken.substring(0, 25)}...`);
+      console.log(`🔑 Nuevo access_token: ${accessToken.substring(0, 25)}... (parcialmente oculto)`);
       
       // Actualizar token en la base de datos
       const newExpiresAt = new Date(Date.now() + (refreshData.expires_in * 1000)).toISOString();
@@ -664,6 +663,16 @@ Deno.serve(async (req) => {
         });
       }
       
+      // Mejorado: Añadir filtros de fecha específicamente para órdenes si existen en date_range
+      if (endpoint.includes('/orders/search') && date_range?.begin && date_range?.end) {
+        const fromDate = `${date_range.begin}T00:00:00-03:00`;
+        const toDate = `${date_range.end}T23:59:59-03:00`;
+        
+        console.log(`📅 Añadiendo filtros de fecha a ${endpoint}: from=${fromDate}, to=${toDate}`);
+        url.searchParams.set('order.date_created.from', fromDate);
+        url.searchParams.set('order.date_created.to', toDate);
+      }
+      
       console.log(`🌐 Ejecutando request a: ${url.toString()}`);
       console.log(`🌐 Parámetros completos:`, JSON.stringify(params));
       
@@ -675,7 +684,8 @@ Deno.serve(async (req) => {
           return {
             endpoint,
             success: true,
-            data: paginatedData
+            data: paginatedData,
+            url: url.toString() // Guardar URL completa para debugging
           };
         }
         
@@ -693,7 +703,8 @@ Deno.serve(async (req) => {
             endpoint,
             success: false,
             status: response.status,
-            error: errorText
+            error: errorText,
+            url: url.toString() // Guardar URL completa para debugging
           };
         }
         
@@ -701,17 +712,31 @@ Deno.serve(async (req) => {
         // Asegurándonos de que hay datos antes de usar substring
         const dataSummary = data ? JSON.stringify(data).substring(0, 500) + '...' : 'No data received';
         console.log(`✅ Response de ${endpoint}: ${dataSummary}`);
+        
+        // Imprimir respuesta completa para análisis
+        if (endpoint.includes('/orders/search')) {
+          console.log(`📊 Respuesta completa de ${endpoint}:`, JSON.stringify(data));
+          console.log(`📊 Array results contiene ${data.results?.length || 0} elementos`);
+          if (data.results?.length > 0) {
+            console.log(`📊 Primer elemento de results:`, JSON.stringify(data.results[0]).substring(0, 1000) + '...');
+          } else {
+            console.log(`📊 El array results está vacío`);
+          }
+        }
+        
         return {
           endpoint,
           success: true,
-          data
+          data,
+          url: url.toString() // Guardar URL completa para debugging
         };
       } catch (error) {
         console.error(`❌ Error en request a ${url.toString()}:`, error);
         return {
           endpoint,
           success: false,
-          error: error.message || "Error desconocido"
+          error: error.message || "Error desconocido",
+          url: url.toString() // Guardar URL completa para debugging
         };
       }
     });
@@ -726,6 +751,25 @@ Deno.serve(async (req) => {
       console.warn(`⚠️ ${failedRequests.length} requests fallidos:`, 
         failedRequests.map(r => `${r.endpoint}: ${r.error || r.status}`).join(', '));
     }
+    
+    // URLs completas para debug
+    console.log(`🔍 URLs completas utilizadas:`);
+    batchResults.forEach(r => {
+      console.log(`- ${r.endpoint}: ${r.url}`);
+      
+      // Para órdenes, mostrar si hay parámetros de filtrado de fecha
+      if (r.endpoint.includes('/orders/search')) {
+        const urlObj = new URL(r.url);
+        const fromDate = urlObj.searchParams.get('order.date_created.from');
+        const toDate = urlObj.searchParams.get('order.date_created.to');
+        
+        if (fromDate && toDate) {
+          console.log(`  📅 Filtro de fechas: ${fromDate} a ${toDate}`);
+        } else {
+          console.log(`  ⚠️ No hay filtros de fecha aplicados`);
+        }
+      }
+    });
     
     // Procesar los datos para el dashboard
     const dashboardData = processOrdersAndData(batchResults, date_range);
@@ -812,7 +856,8 @@ Deno.serve(async (req) => {
           batch_results: batchResults.map(r => ({
             endpoint: r.endpoint,
             success: r.success,
-            error: r.error || r.status
+            error: r.error || r.status,
+            url: r.url // Incluir URL para debugging
           }))
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -826,7 +871,8 @@ Deno.serve(async (req) => {
         batch_results: batchResults.map(r => ({
           endpoint: r.endpoint,
           success: r.success,
-          error: r.error || r.status
+          error: r.error || r.status,
+          url: r.url // Incluir URL para debugging
         })),
         is_test_data: !dashboardHasRealData
       }),

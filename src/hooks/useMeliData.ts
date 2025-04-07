@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useEffect, useRef, useContext } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
@@ -157,6 +158,17 @@ export function useMeliData({
       console.log("🚫 Datos de prueba desactivados:", finalDisableTestData);
       console.log("🌐 TimeZone: ", Intl.DateTimeFormat().resolvedOptions().timeZone);
 
+      // Extraer fechas para el filtrado (solo la parte de fecha sin hora)
+      let dateBegin, dateEnd;
+      if (dateFrom) {
+        dateBegin = dateFrom.split('T')[0];
+        console.log(`📅 Fecha inicio extraída: ${dateBegin}`);
+      }
+      if (dateTo) {
+        dateEnd = dateTo.split('T')[0];
+        console.log(`📅 Fecha fin extraída: ${dateEnd}`);
+      }
+
       const batchRequests = [
         // Búsqueda principal de órdenes - modificada para incluir filtrado por fecha
         {
@@ -164,8 +176,6 @@ export function useMeliData({
           params: {
             seller: meliUserId,
             // Usar date_created para filtrar por fecha de creación de órdenes
-            'order.date_created.from': dateFrom ? dateFrom.split('T')[0] : undefined,
-            'order.date_created.to': dateTo ? dateTo.split('T')[0] : undefined,
             sort: 'date_desc',
             limit: 50
           }
@@ -183,9 +193,7 @@ export function useMeliData({
         {
           endpoint: `/visits/items`,
           params: {
-            user_id: meliUserId,
-            date_from: dateFrom ? dateFrom.split('T')[0] : undefined,
-            date_to: dateTo ? dateTo.split('T')[0] : undefined
+            user_id: meliUserId
           }
         },
         
@@ -217,8 +225,8 @@ export function useMeliData({
         user_id: userId,
         batch_requests: batchRequests,
         date_range: {
-          begin: dateFrom ? dateFrom.split('T')[0] : null,
-          end: dateTo ? dateTo.split('T')[0] : null
+          begin: dateBegin,
+          end: dateEnd
         },
         timezone: 'America/Argentina/Buenos_Aires',
         prev_period: true,
@@ -260,6 +268,16 @@ export function useMeliData({
         error: batchData.error,
         is_test_data: !!batchData.is_test_data
       }));
+
+      // Imprimir URLs completas para debug
+      if (batchData.batch_results) {
+        console.log("🌐 URLs completas utilizadas:");
+        batchData.batch_results.forEach(r => {
+          if (r.url) {
+            console.log(`- ${r.endpoint}: ${r.url}`);
+          }
+        });
+      }
 
       if (!batchData.success) {
         if (batchData?.error?.includes('429') || batchData?.message?.includes('rate limit')) {
