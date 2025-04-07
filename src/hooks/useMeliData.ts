@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useEffect, useRef, useContext } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
@@ -159,16 +158,15 @@ export function useMeliData({
       console.log("🌐 TimeZone: ", Intl.DateTimeFormat().resolvedOptions().timeZone);
 
       const batchRequests = [
-        // Búsqueda principal de órdenes - modificada para aceptar más estados
+        // Búsqueda principal de órdenes - modificada para incluir filtrado por fecha
         {
           endpoint: '/orders/search',
           params: {
             seller: meliUserId,
-            // Aceptar más estados para capturar más órdenes
-            // 'order.status': 'paid,confirmed,payment_required,payment_in_process,partially_paid,partially_refunded,cancelled,invalid',
+            // Usar date_created para filtrar por fecha de creación de órdenes
+            'order.date_created.from': dateFrom ? dateFrom.split('T')[0] : undefined,
+            'order.date_created.to': dateTo ? dateTo.split('T')[0] : undefined,
             sort: 'date_desc',
-            date_from: dateFrom,
-            date_to: dateTo,
             limit: 50
           }
         },
