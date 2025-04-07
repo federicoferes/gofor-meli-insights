@@ -1,7 +1,9 @@
 import { startOfDay, endOfDay, addHours, subDays, format } from 'date-fns';
+import { formatInTimeZone } from 'date-fns-tz';
 
 // UTC-3 Argentina
 const ARG_OFFSET = -3;
+const ARG_TIMEZONE = 'America/Argentina/Buenos_Aires';
 
 /**
  * Genera un rango de fechas ajustado a la zona horaria Argentina (UTC-3)
@@ -53,6 +55,7 @@ export const getPresetDateRange = (rangeType: string) => {
 
 /**
  * Formatea una fecha para API requests (ISO string)
+ * Ahora aseguramos que incluya milisegundos y zona horaria
  */
 export const formatDateForApi = (date: Date, isEndOfDay = false): string => {
   if (!date) return "";
@@ -73,21 +76,32 @@ export const formatDateForApi = (date: Date, isEndOfDay = false): string => {
 
 /**
  * Formatea una fecha para la API de MercadoLibre con zona horaria Argentina
- * Formato YYYY-MM-DDTHH:MM:SS (sin milisegundos ni timezone)
+ * Ahora formato completo con milisegundos y zona horaria: YYYY-MM-DDTHH:MM:SS.sss-03:00
  */
 export const formatDateForMeLi = (date: Date, isEndOfDay = false): string => {
   if (!date) return "";
   
-  // Formato YYYY-MM-DDTHH:MM:SS para MeLi API (sin milisegundos ni timezone)
-  const year = date.getUTCFullYear();
-  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(date.getUTCDate()).padStart(2, '0');
-  
-  let hours = isEndOfDay ? '23' : '00';
-  let minutes = isEndOfDay ? '59' : '00';
-  let seconds = isEndOfDay ? '59' : '00';
-  
-  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+  try {
+    let finalDate = new Date(date);
+    
+    // Si es fin del día, establecer a 23:59:59.999
+    if (isEndOfDay) {
+      finalDate.setHours(23, 59, 59, 999);
+    }
+    
+    // Usar date-fns-tz para formatear con zona horaria de Argentina
+    const formattedDate = formatInTimeZone(
+      finalDate,
+      ARG_TIMEZONE,
+      "yyyy-MM-dd'T'HH:mm:ss.SSSX"
+    );
+    
+    console.log(`formatDateForMeLi - input: ${date.toISOString()}, isEndOfDay: ${isEndOfDay}, output: ${formattedDate}`);
+    return formattedDate;
+  } catch (error) {
+    console.error("Error formateando fecha para MeLi:", error);
+    return date.toISOString(); // Fallback
+  }
 };
 
 /**
@@ -140,6 +154,7 @@ export const getIsoDateRange = (dateRange: { from?: Date; to?: Date }) => {
     };
   }
   
+  // Usar el nuevo formato para asegurar que tenemos milisegundos y zona horaria
   const fromISO = formatDateForApi(dateRange.from);
   const toISO = formatDateForApi(dateRange.to, true);
   

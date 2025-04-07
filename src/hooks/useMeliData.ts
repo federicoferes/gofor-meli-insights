@@ -287,11 +287,11 @@ export function useMeliData({
       }
 
       console.log('useMeliData - dateFilter:', dateFilter);
-      console.log('useMeliData - dateRange:', JSON.stringify(dateRange, null, 2));
-      console.log('useMeliData - dateFrom:', dateFrom);
-      console.log('useMeliData - dateTo:', dateTo);
+      console.log('useMeliData - dateRange completo:', JSON.stringify(dateRange, null, 2));
+      console.log('useMeliData - dateFrom (sin procesar):', dateFrom);
+      console.log('useMeliData - dateTo (sin procesar):', dateTo);
 
-      // Get product IDs for visiting data
+      // Obtener IDs de productos para datos de visitas
       const { data: productsData, error: productsError } = await supabase
         .from('products')
         .select('item_id')
@@ -299,7 +299,7 @@ export function useMeliData({
       
       const productIds = productsData?.map(p => p.item_id) || [];
 
-      // Prepare batch requests following MeLi API structure
+      // Preparar batch requests siguiendo la estructura de la API de MeLi
       const batchRequests = [
         {
           endpoint: '/orders/search',
@@ -344,7 +344,7 @@ export function useMeliData({
         }
       ];
 
-      // Prepare payload for the edge function
+      // Preparar payload para la función edge
       const requestPayload = {
         user_id: userId,
         batch_requests: batchRequests,
@@ -360,6 +360,8 @@ export function useMeliData({
       };
 
       console.log('useMeliData - Payload date_range:', JSON.stringify(requestPayload.date_range, null, 2));
+      console.log('useMeliData - Payload date_range.begin (procesado):', requestPayload.date_range.begin);
+      console.log('useMeliData - Payload date_range.end (procesado):', requestPayload.date_range.end);
 
       // Check for duplicate requests
       const payloadString = JSON.stringify(requestPayload);
@@ -420,7 +422,7 @@ export function useMeliData({
       if (isMounted.current) setIsLoading(false);
       requestInProgress.current = null;
     }
-  }, [userId, meliUserId, dateFilter, dateRange, isConnected, getCacheKey, toast, productCostsCalculator, finalDisableTestData, processResponseData]);
+  }, [finalDisableTestData, productCostsCalculator, toast, getCacheKey, loadData]);
 
   // Load data when dependencies change
   useEffect(() => {

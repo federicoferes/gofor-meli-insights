@@ -16,17 +16,36 @@ const responseWithCors = (body: any, status = 200) => {
 };
 
 // Function to format dates properly for MercadoLibre API
-// MercadoLibre requires ISO 8601 format WITHOUT milliseconds and timezone
+// MercadoLibre requires ISO 8601 format WITH milliseconds and timezone
 function formatDateForMeLiApi(dateString: string): string {
   if (!dateString) return "";
   
-  console.log(`Formatting date: ${dateString}`);
+  console.log(`Original date string: ${dateString}`);
   
-  // Split at the decimal point to remove milliseconds and timezone
-  const formattedDate = dateString.split('.')[0];
-  console.log(`Formatted date result: ${formattedDate}`);
-  
-  return formattedDate;
+  try {
+    // Parse the string into a Date object
+    const date = new Date(dateString);
+    
+    // Create ISO string with timezone offset for Buenos Aires (GMT-3)
+    // Format: 2025-04-06T00:00:00.000-03:00
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    const hours = String(date.getUTCHours()).padStart(2, '0');
+    const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+    const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+    const milliseconds = String(date.getUTCMilliseconds()).padStart(3, '0');
+    
+    // Argentina timezone offset: -03:00
+    const formattedDate = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${milliseconds}-03:00`;
+    
+    console.log(`Formatted date for MeLi API: ${formattedDate}`);
+    return formattedDate;
+  } catch (error) {
+    console.error(`Error formatting date: ${error}`);
+    // Fallback: return the original string if parsing fails
+    return dateString;
+  }
 }
 
 // Test data generator with consistent structure
@@ -529,6 +548,7 @@ async function batchRequests(token: string, requests: any[]) {
       for (const [key, value] of Object.entries(params)) {
         if (key === '_productIds') continue; // Skip this special parameter
         if (value !== undefined && value !== null && value !== '') {
+          console.log(`Adding parameter to ${endpoint}: ${key}=${value}`);
           url.searchParams.append(key, String(value));
         }
       }
@@ -545,6 +565,7 @@ async function batchRequests(token: string, requests: any[]) {
       
       if (!response.ok) {
         const errorText = await response.text();
+        console.error(`Error response from ${endpoint}: Status ${response.status} - ${errorText}`);
         results.push({
           endpoint,
           url: url.toString(),
@@ -565,6 +586,7 @@ async function batchRequests(token: string, requests: any[]) {
         data
       });
     } catch (error: any) {
+      console.error(`Error processing request to ${request.endpoint}: ${error.message}`);
       results.push({
         endpoint: request.endpoint,
         success: false,
@@ -654,7 +676,7 @@ serve(async (req) => {
     // Make a deep copy of the batch requests to avoid mutating the original
     const batch_requests = JSON.parse(JSON.stringify(originalBatchRequests));
     
-    // Format date parameters correctly for MercadoLibre API (without milliseconds and timezone)
+    // Format date parameters correctly for MercadoLibre API (WITH milliseconds and timezone)
     let formattedFromDate = "";
     let formattedToDate = "";
     
@@ -686,17 +708,17 @@ serve(async (req) => {
           request.params = {};
         }
         
-        // Fix: Changed parameter names from 'order.date_created.from' to 'date_created.from'
-        // and from 'order.date_created.to' to 'date_created.to'
         if (formattedFromDate) {
           request.params['date_created.from'] = formattedFromDate;
+          console.log(`Setting date_created.from for ${request.endpoint}:`, formattedFromDate);
         }
         
         if (formattedToDate) {
           request.params['date_created.to'] = formattedToDate;
+          console.log(`Setting date_created.to for ${request.endpoint}:`, formattedToDate);
         }
         
-        console.log(`Added formatted date filters to ${request.endpoint}:`, request.params);
+        console.log(`Final params for ${request.endpoint}:`, request.params);
       }
     }
     
