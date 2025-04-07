@@ -728,6 +728,7 @@ serve(async (req) => {
         orders: allOrders,
         prev_summary: prevSummary
       };
+      isTestData = false;
     } else if (!disable_test_data) {
       // Use test data if no orders and test data is allowed
       dashboardData = generateTestData(date_range);

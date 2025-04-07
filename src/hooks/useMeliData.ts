@@ -139,7 +139,8 @@ export function useMeliData({
   }, [userId, dateFilter, dateRange, finalDisableTestData]);
 
   // Process the response data and update state
-  const processResponseData = (batchData: any) => {
+  const processResponseData = useCallback((batchData: any) => {
+    // Initialize test data flag - this is the critical change to fix the error
     setIsTestData(!!batchData.is_test_data);
     
     if (batchData.dashboard_data) {
@@ -244,7 +245,7 @@ export function useMeliData({
         }
       }
     }
-  };
+  }, [finalDisableTestData, productCostsCalculator, toast]);
 
   // Main function to load data
   const loadData = useCallback(async (retryCount = 0) => {
@@ -432,7 +433,7 @@ export function useMeliData({
       if (isMounted.current) setIsLoading(false);
       requestInProgress.current = null;
     }
-  }, [userId, meliUserId, dateFilter, dateRange, isConnected, getCacheKey, toast, productCostsCalculator, finalDisableTestData]);
+  }, [userId, meliUserId, dateFilter, dateRange, isConnected, getCacheKey, toast, productCostsCalculator, finalDisableTestData, processResponseData]);
 
   // Load data when dependencies change
   useEffect(() => {
