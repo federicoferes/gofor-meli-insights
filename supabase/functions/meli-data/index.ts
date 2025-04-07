@@ -16,6 +16,15 @@ const responseWithCors = (body: any, status = 200) => {
   });
 };
 
+// Function to format dates properly for MercadoLibre API
+// MercadoLibre requires ISO 8601 format WITHOUT milliseconds and timezone
+function formatDateForMeLiApi(dateString: string): string {
+  if (!dateString) return "";
+  
+  // Split at the decimal point to remove milliseconds and timezone
+  return dateString.split('.')[0];
+}
+
 // Test data generator with consistent structure
 function generateTestData(dateRange?: { begin?: string; end?: string }) {
   // Generate basic summary
@@ -639,24 +648,39 @@ serve(async (req) => {
     // Make a deep copy of the batch requests to avoid mutating the original
     const batch_requests = JSON.parse(JSON.stringify(originalBatchRequests));
     
-    // Ensure date parameters are properly added to each request
-    if (date_range && (date_range.begin || date_range.end)) {
-      for (const request of batch_requests) {
-        if (request.endpoint.includes('/orders/search')) {
-          if (!request.params) {
-            request.params = {};
-          }
-          
-          // Add date filters for order searches
-          if (date_range.begin) {
-            request.params['order.date_created.from'] = date_range.begin;
-          }
-          if (date_range.end) {
-            request.params['order.date_created.to'] = date_range.end;
-          }
-          
-          console.log(`Added date filters to ${request.endpoint}:`, request.params);
+    // Format date parameters correctly for MercadoLibre API (without milliseconds and timezone)
+    let formattedFromDate = "";
+    let formattedToDate = "";
+    
+    if (date_range) {
+      if (date_range.begin) {
+        formattedFromDate = formatDateForMeLiApi(date_range.begin);
+        console.log("Formatted from date:", formattedFromDate);
+      }
+      
+      if (date_range.end) {
+        formattedToDate = formatDateForMeLiApi(date_range.end);
+        console.log("Formatted to date:", formattedToDate);
+      }
+    }
+    
+    // Ensure date parameters are properly added to each request with correct format
+    for (const request of batch_requests) {
+      if (request.endpoint.includes('/orders/search')) {
+        if (!request.params) {
+          request.params = {};
         }
+        
+        // Add properly formatted date filters for order searches
+        if (formattedFromDate) {
+          request.params['order.date_created.from'] = formattedFromDate;
+        }
+        
+        if (formattedToDate) {
+          request.params['order.date_created.to'] = formattedToDate;
+        }
+        
+        console.log(`Added formatted date filters to ${request.endpoint}:`, request.params);
       }
     }
     

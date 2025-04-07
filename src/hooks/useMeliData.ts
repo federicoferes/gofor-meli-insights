@@ -140,7 +140,7 @@ export function useMeliData({
 
   // Process the response data and update state
   const processResponseData = useCallback((batchData: any) => {
-    // Initialize test data flag - this is the critical change to fix the error
+    // Explicitly set isTestData based on the response
     setIsTestData(!!batchData.is_test_data);
     
     if (batchData.dashboard_data) {
@@ -287,18 +287,6 @@ export function useMeliData({
         dateTo = dateRange.toISO;
       }
 
-      // Format dates for MeLi API
-      let fromArg, toArg;
-      if (dateFrom) {
-        const fromDate = new Date(dateFrom);
-        fromArg = formatDateForMeLi(fromDate);
-      }
-      
-      if (dateTo) {
-        const toDate = new Date(dateTo);
-        toArg = formatDateForMeLi(toDate, true);
-      }
-
       // Get product IDs for visiting data
       const { data: productsData, error: productsError } = await supabase
         .from('products')
@@ -315,8 +303,7 @@ export function useMeliData({
             seller: meliUserId,
             sort: 'date_desc',
             limit: 50,
-            ...(fromArg && { 'order.date_created.from': fromArg }),
-            ...(toArg && { 'order.date_created.to': toArg })
+            // Date parameters will be processed on the server
           }
         },
         
@@ -339,8 +326,7 @@ export function useMeliData({
           params: {
             seller: meliUserId,
             limit: 50,
-            ...(fromArg && { 'order.date_created.from': fromArg }),
-            ...(toArg && { 'order.date_created.to': toArg })
+            // Date parameters will be processed on the server
           }
         },
         
