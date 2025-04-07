@@ -1,6 +1,5 @@
 
 import { startOfDay, endOfDay, addHours, subDays, format } from 'date-fns';
-import { formatInTimeZone } from 'date-fns-tz';
 
 // UTC-3 Argentina
 const ARG_OFFSET = -3;
@@ -76,33 +75,23 @@ export const formatDateForApi = (date: Date, isEndOfDay = false): string => {
 };
 
 /**
- * Formatea una fecha para la API de MercadoLibre con zona horaria Argentina
- * Formato completo con milisegundos y zona horaria: YYYY-MM-DDTHH:MM:SS.sss-03:00
+ * Formatea una fecha en ISO 8601 con milisegundos y zona horaria -03:00 (Argentina)
+ * Ejemplo: 2025-04-06T00:00:00.000-03:00
  */
 export const formatDateForMeLi = (date: Date, isEndOfDay = false): string => {
   if (!date) return "";
-  
-  try {
-    let finalDate = new Date(date);
-    
-    // Si es fin del día, establecer a 23:59:59.999
-    if (isEndOfDay) {
-      finalDate.setHours(23, 59, 59, 999);
-    }
-    
-    // Usar date-fns-tz para formatear con zona horaria de Argentina
-    const formattedDate = formatInTimeZone(
-      finalDate,
-      ARG_TIMEZONE,
-      "yyyy-MM-dd'T'HH:mm:ss.SSSX"
-    );
-    
-    console.log(`formatDateForMeLi - input: ${date.toISOString()}, isEndOfDay: ${isEndOfDay}, output: ${formattedDate}`);
-    return formattedDate;
-  } catch (error) {
-    console.error("Error formateando fecha para MeLi:", error);
-    return date.toISOString(); // Fallback
+
+  const d = new Date(date);
+
+  if (isEndOfDay) {
+    d.setHours(23, 59, 59, 999);
   }
+
+  const iso = d.toISOString(); // Ej: 2025-04-06T03:00:00.000Z
+  const result = iso.replace("Z", "-03:00"); // Lo convierte a horario argentino explícito
+  
+  console.log(`formatDateForMeLi - input: ${date.toISOString()}, isEndOfDay: ${isEndOfDay}, output: ${result}`);
+  return result;
 };
 
 /**

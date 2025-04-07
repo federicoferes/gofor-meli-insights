@@ -26,18 +26,9 @@ function formatDateForMeLiApi(dateString: string): string {
     // Parse the string into a Date object
     const date = new Date(dateString);
     
-    // Create ISO string with timezone offset for Buenos Aires (GMT-3)
-    // Format: 2025-04-06T00:00:00.000-03:00
-    const year = date.getUTCFullYear();
-    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(date.getUTCDate()).padStart(2, '0');
-    const hours = String(date.getUTCHours()).padStart(2, '0');
-    const minutes = String(date.getUTCMinutes()).padStart(2, '0');
-    const seconds = String(date.getUTCSeconds()).padStart(2, '0');
-    const milliseconds = String(date.getUTCMilliseconds()).padStart(3, '0');
-    
-    // Argentina timezone offset: -03:00
-    const formattedDate = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${milliseconds}-03:00`;
+    // Simple ISO conversion with Argentina timezone (-03:00)
+    const iso = date.toISOString();
+    const formattedDate = iso.replace("Z", "-03:00");
     
     console.log(`Formatted date for MeLi API: ${formattedDate}`);
     return formattedDate;
