@@ -56,7 +56,7 @@ export const getPresetDateRange = (rangeType: string) => {
 
 /**
  * Formatea una fecha para API requests (ISO string)
- * Ahora aseguramos que incluya milisegundos y zona horaria
+ * Asegura que incluya milisegundos y zona horaria
  */
 export const formatDateForApi = (date: Date, isEndOfDay = false): string => {
   if (!date) return "";
@@ -77,7 +77,7 @@ export const formatDateForApi = (date: Date, isEndOfDay = false): string => {
 
 /**
  * Formatea una fecha para la API de MercadoLibre con zona horaria Argentina
- * Ahora formato completo con milisegundos y zona horaria: YYYY-MM-DDTHH:MM:SS.sss-03:00
+ * Formato completo con milisegundos y zona horaria: YYYY-MM-DDTHH:MM:SS.sss-03:00
  */
 export const formatDateForMeLi = (date: Date, isEndOfDay = false): string => {
   if (!date) return "";
