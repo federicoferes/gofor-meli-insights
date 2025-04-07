@@ -520,6 +520,8 @@ async function batchRequests(token: string, requests: any[]) {
         }
       }
       
+      console.log(`Making request to: ${url.toString()}`);
+      
       // Make request
       const response = await fetch(url, {
         headers: {
@@ -594,10 +596,12 @@ serve(async (req) => {
     
     // Parse request body
     const body = await req.json();
-    const { user_id, batch_requests, date_range, timezone, prev_period, use_cache, disable_test_data, product_ids } = body;
+    const { user_id, batch_requests: originalBatchRequests, date_range, timezone, prev_period, use_cache, disable_test_data, product_ids } = body;
+    
+    console.log("Received date_range:", date_range);
     
     // If no user_id, just check connection
-    if (!user_id && !batch_requests) {
+    if (!user_id && !originalBatchRequests) {
       const { data: userData, error } = await supabaseClient
         .from('meli_tokens')
         .select('meli_user_id')
@@ -624,12 +628,36 @@ serve(async (req) => {
     }
     
     // If no batch_requests, just verify connection
-    if (!batch_requests) {
+    if (!originalBatchRequests) {
       return responseWithCors({
         success: true,
         is_connected: true,
         meli_user_id: tokenResult.meliUserId
       });
+    }
+    
+    // Make a deep copy of the batch requests to avoid mutating the original
+    const batch_requests = JSON.parse(JSON.stringify(originalBatchRequests));
+    
+    // Ensure date parameters are properly added to each request
+    if (date_range && (date_range.begin || date_range.end)) {
+      for (const request of batch_requests) {
+        if (request.endpoint.includes('/orders/search')) {
+          if (!request.params) {
+            request.params = {};
+          }
+          
+          // Add date filters for order searches
+          if (date_range.begin) {
+            request.params['order.date_created.from'] = date_range.begin;
+          }
+          if (date_range.end) {
+            request.params['order.date_created.to'] = date_range.end;
+          }
+          
+          console.log(`Added date filters to ${request.endpoint}:`, request.params);
+        }
+      }
     }
     
     // Filter out visits requests - we handle them separately
@@ -640,7 +668,9 @@ serve(async (req) => {
     const productIds = productIdsRequest?.params?._productIds || product_ids || [];
     
     // Make batch requests (excluding visits)
+    console.log("Making batch requests with filtered requests:", filteredRequests);
     const batchResults = await batchRequests(tokenResult.token, filteredRequests);
+    console.log("Received batch results:", batchResults.map(r => ({ endpoint: r.endpoint, success: r.success, status: r.status })));
     
     // Extract relevant data from responses
     const ordersResponses = batchResults.filter(res => 
@@ -648,9 +678,12 @@ serve(async (req) => {
       (res.endpoint === '/orders/search' || res.endpoint === '/orders/search/recent')
     );
     
+    console.log(`Found ${ordersResponses.length} successful order responses`);
+    
     // Data processing
     let dashboardData = null;
     let isTestData = false;
+    let hasDashboardData = false;
     
     // Extract orders from all pages
     let allOrders = [];
@@ -659,9 +692,12 @@ serve(async (req) => {
         const validOrders = orderResponse.data.results.filter((order: any) => 
           order && order.status !== 'cancelled' && order.order_items
         );
+        console.log(`Found ${validOrders.length} valid orders in response for ${orderResponse.endpoint}`);
         allOrders = [...allOrders, ...validOrders];
       }
     });
+    
+    console.log(`Total orders found: ${allOrders.length}`);
     
     // Extract product IDs from orders for visits
     const orderProductIds = [];
@@ -729,10 +765,12 @@ serve(async (req) => {
         prev_summary: prevSummary
       };
       isTestData = false;
+      hasDashboardData = true;
     } else if (!disable_test_data) {
       // Use test data if no orders and test data is allowed
       dashboardData = generateTestData(date_range);
       isTestData = true;
+      hasDashboardData = true;
     }
     
     // Include all batch results in the response for debugging
@@ -752,10 +790,13 @@ serve(async (req) => {
       success: true,
       batch_results: allResults,
       dashboard_data: dashboardData,
-      is_test_data: isTestData
+      is_test_data: isTestData,
+      has_dashboard_data: hasDashboardData,
+      has_batch_results: allResults.length > 0
     });
     
   } catch (error: any) {
+    console.error("Error in meli-data function:", error);
     return responseWithCors({
       success: false,
       error: `Error en el servidor: ${error.message}`

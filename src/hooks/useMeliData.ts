@@ -213,9 +213,28 @@ export function useMeliData({
           setSalesSummary(prev => ({ ...prev, productCosts }));
         }
       }
-    } else {
-      // Handle test data scenario
-      if (!batchData.is_test_data && !finalDisableTestData) {
+    } else if (!batchData.has_dashboard_data) {
+      // Handle case when no dashboard data is returned
+      setError("No se encontraron datos para el período seleccionado");
+      
+      // Clear all data
+      setSalesSummary(createEmptySalesSummary());
+      setPrevSalesSummary(createEmptySalesSummary());
+      setSalesData([]);
+      setCostData([]);
+      setTopProducts([]);
+      setProvinceData([]);
+      setOrdersData([]);
+      
+      if (finalDisableTestData) {
+        toast({
+          title: "Sin datos del dashboard",
+          description: "No se encontraron órdenes para el período seleccionado",
+          variant: "destructive",
+          duration: 5000
+        });
+      } else if (batchData.is_test_data) {
+        // Test data scenario
         setIsTestData(true);
         
         toast({
@@ -223,26 +242,6 @@ export function useMeliData({
           description: "No se encontraron órdenes reales para el período seleccionado",
           duration: 5000
         });
-        
-        // Reset all data to empty state when showing test data
-        setSalesSummary(createEmptySalesSummary());
-        setPrevSalesSummary(createEmptySalesSummary());
-        setSalesData([]);
-        setCostData([]);
-        setTopProducts([]);
-        setProvinceData([]);
-        setOrdersData([]);
-      } else {
-        setError("No se encontraron datos para el período seleccionado");
-        
-        if (finalDisableTestData) {
-          toast({
-            title: "Sin datos del dashboard",
-            description: "No se encontraron órdenes para el período seleccionado",
-            variant: "destructive",
-            duration: 5000
-          });
-        }
       }
     }
   }, [finalDisableTestData, productCostsCalculator, toast]);
@@ -316,10 +315,8 @@ export function useMeliData({
             seller: meliUserId,
             sort: 'date_desc',
             limit: 50,
-            ...((fromArg && toArg) ? {
-              'order.date_created.from': fromArg,
-              'order.date_created.to': toArg
-            } : {})
+            ...(fromArg && { 'order.date_created.from': fromArg }),
+            ...(toArg && { 'order.date_created.to': toArg })
           }
         },
         
@@ -342,10 +339,8 @@ export function useMeliData({
           params: {
             seller: meliUserId,
             limit: 50,
-            ...((fromArg && toArg) ? {
-              'order.date_created.from': fromArg,
-              'order.date_created.to': toArg
-            } : {})
+            ...(fromArg && { 'order.date_created.from': fromArg }),
+            ...(toArg && { 'order.date_created.to': toArg })
           }
         },
         
@@ -364,8 +359,8 @@ export function useMeliData({
         user_id: userId,
         batch_requests: batchRequests,
         date_range: {
-          begin: dateFrom ? new Date(dateFrom).toISOString().split('T')[0] : undefined,
-          end: dateTo ? new Date(dateTo).toISOString().split('T')[0] : undefined
+          begin: dateFrom ? new Date(dateFrom).toISOString() : undefined,
+          end: dateTo ? new Date(dateTo).toISOString() : undefined
         },
         timezone: 'America/Argentina/Buenos_Aires',
         prev_period: true,
