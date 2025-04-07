@@ -198,19 +198,8 @@ export function useMeliData({
       const productIds = productsData?.map(p => p.item_id) || [];
       console.log(`📊 Obtenidos ${productIds.length} IDs de productos para consulta de visitas`);
 
-      // Crear batches de hasta 20 IDs para las llamadas de visitas
-      const visitBatches = [];
-      if (productIds.length > 0) {
-        for (let i = 0; i < productIds.length; i += 20) {
-          const chunk = productIds.slice(i, i + 20);
-          visitBatches.push({
-            endpoint: `/visits/items`,
-            params: {
-              ids: chunk.join(',')
-            }
-          });
-        }
-      }
+      // FIX: Ya no creamos batches para visitas, ahora las obtenemos individualmente en el backend
+      // Solicitamos individualmente de uno en uno en la función edge
 
       const batchRequests = [
         // Búsqueda principal de órdenes con filtro por fecha
@@ -236,10 +225,12 @@ export function useMeliData({
           }
         },
         
-        // Campañas de publicidad
+        // FIX: Campañas de publicidad con el endpoint correcto
         {
-          endpoint: `/users/${meliUserId}/ads/campaigns`,
-          params: {}
+          endpoint: `/advertising/campaigns/search`,
+          params: {
+            seller_id: meliUserId
+          }
         },
         
         // Órdenes recientes sin filtro de fecha para garantizar que capturamos algo
@@ -256,8 +247,15 @@ export function useMeliData({
           }
         },
         
-        // Añadimos los batches de visitas
-        ...visitBatches
+        // FIX: Ya no enviamos batches de visitas sino solo los IDs para procesamiento individual
+        // Esto permite que el backend solicite las visitas item por item correctamente
+        {
+          endpoint: `/visits/items`,
+          params: {
+            // No enviamos IDs aquí, lo resuelve el backend
+            _productIds: productIds
+          }
+        }
       ];
 
       const requestPayload = {
@@ -270,7 +268,8 @@ export function useMeliData({
         timezone: 'America/Argentina/Buenos_Aires',
         prev_period: true,
         use_cache: false,
-        disable_test_data: finalDisableTestData
+        disable_test_data: finalDisableTestData,
+        product_ids: productIds // Enviamos los IDs por separado para procesamiento individual 
       };
 
       const payloadString = JSON.stringify(requestPayload);
@@ -353,6 +352,7 @@ export function useMeliData({
       if (isMounted.current) {
         console.log("✅ Datos recibidos correctamente");
         
+        // FIX: Manejamos correctamente el caso donde hay dashboard_data pero vacío
         if (batchData.dashboard_data) {
           setIsTestData(!!batchData.is_test_data);
           
@@ -433,18 +433,26 @@ export function useMeliData({
           }
         } else {
           console.warn("⚠️ No se recibieron datos del dashboard");
-          setError("No se recibieron datos para el período seleccionado");
           
-          const errorMsg = batchData.is_test_data 
-            ? "No se encontraron órdenes reales - mostrando datos de prueba" 
-            : "No se encontraron órdenes reales para el período seleccionado";
+          // FIX: Solo mostramos un error si no hay datos de prueba
+          if (!batchData.is_test_data) {
+            setError("No se recibieron datos para el período seleccionado");
             
-          toast({
-            title: "Sin datos del dashboard",
-            description: errorMsg,
-            variant: "destructive",
-            duration: 5000
-          });
+            toast({
+              title: "Sin datos del dashboard",
+              description: "No se encontraron órdenes para el período seleccionado",
+              variant: "destructive",
+              duration: 5000
+            });
+          } else {
+            setIsTestData(true);
+            
+            toast({
+              title: "Mostrando datos de prueba",
+              description: "No se encontraron órdenes reales - mostrando datos de prueba",
+              duration: 5000
+            });
+          }
         }
       }
     } catch (error: any) {

@@ -315,64 +315,174 @@ function processOrders(orders, salesByProduct = {}) {
   };
 }
 
-// Función para procesar datos de visitas
-function processVisits(visitResponses) {
+// Función para procesar datos de visitas - FIX: Ahora procesa requests individuales
+async function processVisits(visitResponses, itemIds = []) {
   let totalVisits = 0;
   const itemVisits = {};
   
-  if (!visitResponses || visitResponses.length === 0) {
-    console.warn("⚠️ No se recibieron datos de visitas");
-    return { totalVisits, itemVisits };
+  // Primero procesamos las respuestas batch que pudieron funcionar (para compatibilidad)
+  if (visitResponses && visitResponses.length > 0) {
+    console.log(`👁️ Procesando ${visitResponses.length} respuestas de visitas batch`);
+    
+    visitResponses.forEach(visitResponse => {
+      if (visitResponse && visitResponse.success && visitResponse.data) {
+        const visitsData = visitResponse.data;
+        
+        // Extraer visitas por item
+        if (Array.isArray(visitsData)) {
+          visitsData.forEach(visitItem => {
+            if (visitItem && visitItem.id && visitItem.total_visits) {
+              itemVisits[visitItem.id] = visitItem.total_visits;
+              totalVisits += visitItem.total_visits;
+            }
+          });
+        }
+      }
+    });
   }
   
-  // Procesar cada respuesta de visitas
-  visitResponses.forEach(visitResponse => {
-    if (visitResponse && visitResponse.success && visitResponse.data) {
-      const visitsData = visitResponse.data;
-      
-      // Extraer visitas por item
-      if (Array.isArray(visitsData)) {
-        visitsData.forEach(visitItem => {
-          if (visitItem && visitItem.id && visitItem.total_visits) {
-            itemVisits[visitItem.id] = visitItem.total_visits;
-            totalVisits += visitItem.total_visits;
-          }
-        });
-      }
-    }
-  });
-  
-  console.log(`👁️ Visitas totales procesadas: ${totalVisits}`);
+  console.log(`👁️ Visitas totales procesadas del batch: ${totalVisits}`);
   return { totalVisits, itemVisits };
 }
 
-// Función para procesar datos de publicidad
-function processAdvertising(adResponses) {
-  let totalSpent = 0;
-  
-  if (!adResponses || adResponses.length === 0) {
-    console.warn("⚠️ No se recibieron datos de publicidad");
-    return totalSpent;
+// FIX: Nueva función para obtener visitas de forma individual
+async function getItemVisitsIndividually(token, itemIds) {
+  if (!itemIds || !itemIds.length) {
+    return { totalVisits: 0, itemVisits: {} };
   }
   
-  // Procesar cada respuesta de campañas
-  adResponses.forEach(adResponse => {
-    if (adResponse && adResponse.success && adResponse.data) {
-      const campaignsData = adResponse.data;
-      
-      // Sumar gastos de campañas activas
-      if (Array.isArray(campaignsData)) {
-        campaignsData.forEach(campaign => {
-          if (campaign && campaign.status === 'ACTIVE' && campaign.spent) {
-            totalSpent += campaign.spent;
+  console.log(`👁️ Obteniendo visitas individualmente para ${itemIds.length} productos`);
+  
+  let totalVisits = 0;
+  const itemVisits = {};
+  const promises = [];
+  let completedRequests = 0;
+  
+  // Procesar hasta 5 items a la vez para no saturar la API (rate limiting)
+  const batchSize = 5;
+  
+  for (let i = 0; i < Math.min(itemIds.length, 50); i += batchSize) {
+    const batch = itemIds.slice(i, i + batchSize);
+    
+    // Crear promesas para cada item y esperar por ellas
+    const batchPromises = batch.map(async (itemId) => {
+      try {
+        const url = new URL(`https://api.mercadolibre.com/visits/items`);
+        url.searchParams.append('item_id', itemId);
+        
+        const response = await fetch(url, {
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Accept": "application/json"
           }
         });
+        
+        if (!response.ok) {
+          console.warn(`⚠️ Error al obtener visitas para item ${itemId}: ${response.status}`);
+          return;
+        }
+        
+        const visitData = await response.json();
+        completedRequests++;
+        
+        if (visitData && Array.isArray(visitData) && visitData.length > 0 && visitData[0].total_visits) {
+          const visits = visitData[0].total_visits;
+          itemVisits[itemId] = visits;
+          totalVisits += visits;
+          
+          if (completedRequests % 10 === 0) {
+            console.log(`👁️ Progreso: ${completedRequests}/${Math.min(itemIds.length, 50)} requests completados`);
+          }
+        }
+      } catch (error) {
+        console.error(`❌ Error obteniendo visitas para ${itemId}:`, error.message);
       }
+    });
+    
+    promises.push(...batchPromises);
+    
+    // Pequeña pausa entre batches para evitar rate limiting
+    if (i + batchSize < itemIds.length) {
+      await new Promise(resolve => setTimeout(resolve, 250));
     }
-  });
+  }
   
-  console.log(`📣 Gastos en publicidad procesados: ${totalSpent}`);
-  return totalSpent;
+  // Esperar a que todas las promesas se resuelvan
+  await Promise.allSettled(promises);
+  
+  console.log(`👁️ Visitas totales obtenidas individualmente: ${totalVisits} de ${completedRequests} productos procesados`);
+  return { totalVisits, itemVisits };
+}
+
+// Función para procesar datos de publicidad - FIX: Ahora usa el endpoint correcto
+async function processAdvertising(adResponses, token, meliUserId) {
+  let totalSpent = 0;
+  
+  // Primero intentamos procesar las respuestas que pudieran haber funcionado
+  if (adResponses && adResponses.length > 0) {
+    console.log(`📣 Procesando ${adResponses.length} respuestas de publicidad`);
+    
+    adResponses.forEach(adResponse => {
+      if (adResponse && adResponse.success && adResponse.data) {
+        const campaignsData = adResponse.data;
+        
+        // Sumar gastos de campañas activas
+        if (Array.isArray(campaignsData)) {
+          campaignsData.forEach(campaign => {
+            if (campaign && campaign.status === 'ACTIVE' && campaign.spent) {
+              totalSpent += campaign.spent;
+            }
+          });
+        }
+      }
+    });
+    
+    if (totalSpent > 0) {
+      console.log(`📣 Gastos en publicidad procesados (endpoint original): ${totalSpent}`);
+      return totalSpent;
+    }
+  }
+  
+  // Si no tenemos datos de publicidad, intentamos con el endpoint correcto
+  try {
+    if (!token || !meliUserId) {
+      return 0;
+    }
+    
+    console.log(`📣 Intentando obtener datos de publicidad desde endpoint correcto para usuario ${meliUserId}`);
+    
+    // FIX: Usar el endpoint correcto para campañas de publicidad
+    const url = new URL(`https://api.mercadolibre.com/advertising/campaigns/search`);
+    url.searchParams.append('seller_id', meliUserId);
+    
+    const response = await fetch(url, {
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Accept": "application/json"
+      }
+    });
+    
+    if (!response.ok) {
+      console.warn(`⚠️ No se pudo obtener data de publicidad: ${response.status}. Esto es normal si el vendedor no tiene campañas.`);
+      return 0;
+    }
+    
+    const campaignData = await response.json();
+    
+    if (campaignData && campaignData.results) {
+      campaignData.results.forEach(campaign => {
+        if (campaign && campaign.status === 'ACTIVE' && campaign.spent) {
+          totalSpent += campaign.spent;
+        }
+      });
+    }
+    
+    console.log(`📣 Gastos en publicidad procesados (endpoint correcto): ${totalSpent}`);
+    return totalSpent;
+  } catch (error) {
+    console.error("❌ Error procesando datos de publicidad:", error.message);
+    return 0; // Devolvemos 0 para no romper el dashboard
+  }
 }
 
 // Función principal para obtener un token válido
@@ -636,14 +746,17 @@ serve(async (req) => {
       (res.endpoint === '/orders/search' || res.endpoint === '/orders/search/recent')
     );
     
-    // Datos de visitas - usamos /visits/items
+    // FIX: Las respuestas de visitas mediante batch probablemente fallaron
+    // Las mantenemos para compatibilidad pero ahora usaremos solicitudes individuales
     const visitsResponses = batchResults.filter(res => 
       res.success && res.endpoint === '/visits/items'
     );
     
-    // Datos de publicidad
+    // FIX: Las respuestas de publicidad probablemente fallaron
+    // Las mantenemos para compatibilidad pero intentaremos con el endpoint correcto
     const adResponses = batchResults.filter(res => 
-      res.success && res.endpoint.includes('/ads/campaigns')
+      res.success && 
+      (res.endpoint.includes('/ads/campaigns') || res.endpoint.includes('/advertising/campaigns'))
     );
     
     // ---- Procesamiento de datos ----
@@ -663,25 +776,69 @@ serve(async (req) => {
     
     console.log(`🛒 Se encontraron ${allOrders.length} órdenes válidas de ${ordersResponses.reduce((acc, res) => acc + (res.data?.results?.length || 0), 0)} totales`);
     
+    // Extrae todos los product IDs de las órdenes que necesitamos para visitas
+    const orderProductIds = [];
+    allOrders.forEach(order => {
+      if (order.order_items) {
+        order.order_items.forEach(item => {
+          if (item.item && item.item.id && !orderProductIds.includes(item.item.id)) {
+            orderProductIds.push(item.item.id);
+          }
+        });
+      }
+    });
+    
+    console.log(`🔍 Productos únicos encontrados en órdenes: ${orderProductIds.length}`);
+    
+    // Extraer también los product IDs de las respuestas de productos del vendedor
+    const productsResponse = batchResults.find(res => 
+      res.success && res.endpoint.includes('/users/') && res.endpoint.includes('/items/search')
+    );
+    
+    let sellerProductIds = [];
+    
+    if (productsResponse && productsResponse.data && productsResponse.data.results) {
+      sellerProductIds = productsResponse.data.results.filter(id => !orderProductIds.includes(id));
+    }
+    
+    // Combinar ambos conjuntos de IDs para visitas
+    const allProductIds = [...orderProductIds, ...sellerProductIds];
+    
+    console.log(`🔍 Total products IDs para procesar visitas: ${allProductIds.length}`);
+    
     // Si hay órdenes, procesarlas; de lo contrario, usar datos de prueba si están permitidos
     if (allOrders.length > 0) {
-      // Procesar visitas
-      const { totalVisits, itemVisits } = processVisits(visitsResponses);
+      // FIX: Proceso de visitas mejorado para obtener datos por item_id individualmente
+      let visitsData;
       
-      // Procesar datos de publicidad
-      const advertisingSpent = processAdvertising(adResponses);
+      // Primero intentamos procesar las respuestas batch que pudieron haber funcionado
+      const batchVisitsData = await processVisits(visitsResponses);
+      
+      // Si no hay suficientes visitas del batch, intentamos individualmente
+      if (batchVisitsData.totalVisits === 0 && allProductIds.length > 0) {
+        visitsData = await getItemVisitsIndividually(tokenResult.token, allProductIds);
+      } else {
+        visitsData = batchVisitsData;
+      }
+      
+      // FIX: Proceso de publicidad mejorado con el endpoint correcto
+      const advertisingSpent = await processAdvertising(
+        adResponses, 
+        tokenResult.token, 
+        tokenResult.meliUserId
+      );
       
       // Procesar órdenes para obtener métricas
       const salesByProduct = {}; // Para cruzar con visitas
       const processedData = processOrders(allOrders, salesByProduct);
       
       // Actualizar campos adicionales
-      processedData.summary.visits = totalVisits;
+      processedData.summary.visits = visitsData.totalVisits;
       processedData.summary.advertising = advertisingSpent;
       
       // Calcular conversión si hay visitas
-      if (totalVisits > 0) {
-        processedData.summary.conversion = (processedData.summary.units / totalVisits) * 100;
+      if (visitsData.totalVisits > 0) {
+        processedData.summary.conversion = (processedData.summary.units / visitsData.totalVisits) * 100;
       }
       
       // Calcular ticket promedio
