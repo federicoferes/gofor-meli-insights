@@ -11,10 +11,15 @@ const ARG_OFFSET = -3;
  */
 export const getArgDateRange = (base: Date) => {
   console.log(`Generando rango para fecha base: ${base.toISOString()}`);
+  console.log(`Fecha base en formato local: ${base.toString()}`);
+  
   // Ajustamos a la zona horaria de Argentina (UTC-3)
   const from = addHours(startOfDay(base), -ARG_OFFSET);
   const to = addHours(endOfDay(base), -ARG_OFFSET);
+  
   console.log(`Rango generado: ${from.toISOString()} - ${to.toISOString()}`);
+  console.log(`Rango en formato local: ${from.toString()} - ${to.toString()}`);
+  
   return { from, to };
 };
 
@@ -26,6 +31,9 @@ export const getArgDateRange = (base: Date) => {
 export const getPresetDateRange = (rangeType: string) => {
   console.log(`Generando preset para: ${rangeType}`);
   const now = new Date();
+  console.log(`Fecha actual (UTC): ${now.toISOString()}`);
+  console.log(`Fecha actual (local): ${now.toString()}`);
+  console.log(`Timestamp: ${now.getTime()}, Offset: ${now.getTimezoneOffset()/60}`);
   
   switch (rangeType) {
     case "today":

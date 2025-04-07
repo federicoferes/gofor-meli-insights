@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { format, startOfDay, endOfDay, subDays, isEqual } from "date-fns";
 import { es } from "date-fns/locale";
@@ -17,7 +18,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { getPresetDateRange, formatDateForApi } from "@/utils/date";
+import {
+  getPresetDateRange,
+  formatDateForApi,
+  getIsoDateRange
+} from "@/utils/date";
 
 type DateRangePickerProps = {
   onDateRangeChange: (range: string, dates?: { 
@@ -63,13 +68,7 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
     if (value !== "custom") {
       setDate(dateRange);
       
-      let fromISO, toISO;
-      if (dateRange.from) {
-        fromISO = formatDateForApi(dateRange.from);
-      }
-      if (dateRange.to) {
-        toISO = formatDateForApi(dateRange.to, true);
-      }
+      const { fromISO, toISO } = getIsoDateRange(dateRange);
       
       if (fromISO === lastFromISO.current && toISO === lastToISO.current) {
         console.log("📅 DateRangePicker: Ignorando cambio de fecha redundante");
@@ -88,13 +87,12 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
       
       onDateRangeChange(value, { ...dateRange, fromISO, toISO });
     } else {
-      let fromISO, toISO;
-      if (date.from) {
-        fromISO = formatDateForApi(date.from);
+      if (!date.from || !date.to) {
+        console.log("📅 Custom date range incomplete, not triggering change");
+        return;
       }
-      if (date.to) {
-        toISO = formatDateForApi(date.to, true);
-      }
+      
+      const { fromISO, toISO } = getIsoDateRange(date);
       
       if (fromISO === lastFromISO.current && toISO === lastToISO.current) {
         console.log("📅 DateRangePicker: Ignorando cambio de fecha personalizada redundante");
@@ -138,8 +136,10 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
       setSelectedRange("custom");
       lastRange.current = "custom";
       
-      const fromISO = value.from ? formatDateForApi(value.from) : undefined;
-      const toISO = value.to ? formatDateForApi(value.to, true) : undefined;
+      const { fromISO, toISO } = getIsoDateRange({
+        from: value.from,
+        to: value.to
+      });
       
       if (fromISO === lastFromISO.current && toISO === lastToISO.current) {
         console.log("📅 DateRangePicker: Ignorando cambio de fecha personalizada redundante");

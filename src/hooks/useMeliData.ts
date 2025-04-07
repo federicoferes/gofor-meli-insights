@@ -156,6 +156,7 @@ export function useMeliData({
       console.log("🟣 Cargando datos para filtro:", dateFilter);
       console.log("📅 Rango de fechas:", { dateFrom, dateTo });
       console.log("🚫 Datos de prueba desactivados:", finalDisableTestData);
+      console.log("🌐 TimeZone: ", Intl.DateTimeFormat().resolvedOptions().timeZone);
 
       const batchRequests = [
         // Búsqueda principal de órdenes - modificada para aceptar más estados
@@ -239,14 +240,14 @@ export function useMeliData({
       requestAttempts.current++;
       
       console.log("📦 Enviando batch requests:", batchRequests.map(r => r.endpoint));
-      console.log("Payload completo:", JSON.stringify(requestPayload));
+      console.log("📦 Payload completo:", JSON.stringify(requestPayload));
       
       const { data: batchData, error: batchError } = await supabase.functions.invoke('meli-data', {
         body: requestPayload
       });
       
       if (batchError) {
-        console.error("Error en invoke meli-data:", batchError);
+        console.error("❌ Error en invoke meli-data:", batchError);
         throw new Error(`Error al obtener datos: ${batchError.message}`);
       }
       
@@ -254,7 +255,7 @@ export function useMeliData({
         throw new Error("No se recibieron datos de la función meli-data");
       }
 
-      console.log("Respuesta recibida de meli-data:", JSON.stringify({
+      console.log("📩 Respuesta recibida de meli-data:", JSON.stringify({
         success: batchData.success,
         has_dashboard_data: !!batchData.dashboard_data,
         has_batch_results: !!batchData.batch_results,
@@ -301,10 +302,10 @@ export function useMeliData({
       
       // Mostrar detalles de las primeras órdenes si hay
       if (ordersData.length > 0) {
-        console.log(`Ejemplo de primera orden normal: ${JSON.stringify(ordersData[0]).substring(0, 1000)}...`);
+        console.log(`📋 Ejemplo de primera orden normal: ${JSON.stringify(ordersData[0]).substring(0, 1000)}...`);
       }
       if (recentOrdersData.length > 0) {
-        console.log(`Ejemplo de primera orden reciente: ${JSON.stringify(recentOrdersData[0]).substring(0, 1000)}...`);
+        console.log(`📋 Ejemplo de primera orden reciente: ${JSON.stringify(recentOrdersData[0]).substring(0, 1000)}...`);
       }
 
       if (allOrdersData.length === 0) {

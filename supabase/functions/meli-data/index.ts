@@ -400,7 +400,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 // Función para hacer paginación de órdenes y obtener todos los resultados
 async function fetchAllOrders(url, accessToken, maxPages = 5) {
-  console.log(`Iniciando paginación de órdenes desde: ${url}`);
+  console.log(`🔍 Iniciando paginación de órdenes desde: ${url}`);
   const allResults = [];
   let currentPage = 0;
   let hasMore = true;
@@ -411,7 +411,8 @@ async function fetchAllOrders(url, accessToken, maxPages = 5) {
       const pageUrl = new URL(url);
       pageUrl.searchParams.set('offset', (currentPage * 50).toString());
       
-      console.log(`Obteniendo página ${currentPage + 1}, offset: ${currentPage * 50}`);
+      console.log(`🔍 Obteniendo página ${currentPage + 1}, offset: ${currentPage * 50}`);
+      console.log(`🔍 URL completa: ${pageUrl.toString()}`);
       
       const response = await fetch(pageUrl.toString(), {
         headers: {
@@ -421,24 +422,34 @@ async function fetchAllOrders(url, accessToken, maxPages = 5) {
       
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`Error en paginación de órdenes (página ${currentPage + 1}):`, errorText);
+        console.error(`❌ Error en paginación de órdenes (página ${currentPage + 1}):`, errorText);
         throw new Error(`Error ${response.status}: ${errorText}`);
       }
       
       const data = await response.json();
+      console.log(`✅ Respuesta página ${currentPage + 1}:`, JSON.stringify(data).substring(0, 500) + '...');
       
       if (!data.results || !Array.isArray(data.results)) {
-        console.warn(`No se encontraron resultados en formato esperado para la página ${currentPage + 1}`);
+        console.warn(`⚠️ No se encontraron resultados en formato esperado para la página ${currentPage + 1}`);
         break;
       }
       
-      console.log(`Página ${currentPage + 1}: ${data.results.length} órdenes encontradas`);
+      console.log(`📦 Página ${currentPage + 1}: ${data.results.length} órdenes encontradas`);
+      
+      // Ver detalle de algunas órdenes para debugging
+      if (data.results.length > 0) {
+        const sample = data.results[0];
+        console.log(`📋 Ejemplo primera orden: ID=${sample.id}, estado=${sample.status}, fecha=${sample.date_created}`);
+        console.log(`📋 Detalle completo primera orden:`, JSON.stringify(sample).substring(0, 1000) + '...');
+      }
+      
       allResults.push(...data.results);
       
       // Verificar si hay más resultados
       if (data.paging) {
         totalFound = data.paging.total || 0;
         hasMore = allResults.length < totalFound && data.results.length > 0;
+        console.log(`📊 Progreso paginación: ${allResults.length}/${totalFound} órdenes (${Math.round(allResults.length/totalFound*100)}%)`);
       } else {
         hasMore = false;
       }
@@ -446,7 +457,7 @@ async function fetchAllOrders(url, accessToken, maxPages = 5) {
       currentPage++;
     }
     
-    console.log(`Paginación completa: ${allResults.length} órdenes obtenidas de un total de ${totalFound}`);
+    console.log(`🏁 Paginación completa: ${allResults.length} órdenes obtenidas de un total de ${totalFound}`);
     
     return {
       results: allResults,
@@ -457,7 +468,7 @@ async function fetchAllOrders(url, accessToken, maxPages = 5) {
       }
     };
   } catch (error) {
-    console.error("Error durante la paginación de órdenes:", error);
+    console.error("❌ Error durante la paginación de órdenes:", error);
     throw error;
   }
 }
@@ -507,10 +518,10 @@ Deno.serve(async (req) => {
       disable_test_data = true // Changed default to true
     } = requestBody;
     
-    console.log(`Solicitud recibida para user_id: ${user_id}, timezone: ${timezone}`);
-    console.log(`Rango de fechas:`, date_range);
-    console.log(`Batch requests:`, batch_requests ? batch_requests.map(r => r.endpoint).join(', ') : 'N/A');
-    console.log(`Generar test data: ${!disable_test_data}`);
+    console.log(`🔷 Solicitud recibida para user_id: ${user_id}, timezone: ${timezone}`);
+    console.log(`🔷 Rango de fechas:`, JSON.stringify(date_range));
+    console.log(`🔷 Batch requests:`, batch_requests ? batch_requests.map(r => r.endpoint).join(', ') : 'N/A');
+    console.log(`🔷 Generar test data: ${!disable_test_data}`);
     
     // Validar que tenemos un user_id
     if (!user_id) {
@@ -552,7 +563,7 @@ Deno.serve(async (req) => {
     }
     
     // Obtener token de acceso para MeLi
-    console.log(`Buscando token para user_id: ${user_id}`);
+    console.log(`🔑 Buscando token para user_id: ${user_id}`);
     const { data: connection, error: connectionError } = await supabase
       .from('meli_tokens')  // Changed from meli_connections to meli_tokens
       .select('*')
@@ -571,7 +582,7 @@ Deno.serve(async (req) => {
       );
     }
     
-    console.log(`Token encontrado para meli_user_id: ${connection.meli_user_id}`);
+    console.log(`✅ Token encontrado para meli_user_id: ${connection.meli_user_id}`);
     
     // Verificar si el token está expirado y refrescarlo si es necesario
     const now = Math.floor(Date.now() / 1000);
@@ -579,15 +590,15 @@ Deno.serve(async (req) => {
     // Asegurar que expires_at sea una fecha válida
     const expiresAt = connection.expires_at ? new Date(connection.expires_at).getTime() / 1000 : 0;
     
-    console.log(`Token actual expira en: ${new Date(expiresAt * 1000).toISOString()}`);
-    console.log(`Hora actual: ${new Date(now * 1000).toISOString()}`);
+    console.log(`⏰ Token actual expira en: ${new Date(expiresAt * 1000).toISOString()}`);
+    console.log(`⏰ Hora actual: ${new Date(now * 1000).toISOString()}`);
     
     let accessToken = connection.access_token;
-    console.log(`Usando access_token: ${accessToken.substring(0, 15)}...`);
+    console.log(`🔑 Usando access_token: ${accessToken.substring(0, 25)}...`);
     
     if (now >= expiresAt) {
       // Refrescar token
-      console.log("Token expirado, refrescando...");
+      console.log("⚠️ Token expirado, refrescando...");
       const refreshResponse = await fetch('https://api.mercadolibre.com/oauth/token', {
         method: 'POST',
         headers: {
@@ -615,9 +626,9 @@ Deno.serve(async (req) => {
       }
       
       const refreshData = await refreshResponse.json();
-      console.log("Token refrescado exitosamente");
+      console.log("✅ Token refrescado exitosamente");
       accessToken = refreshData.access_token;
-      console.log(`Nuevo access_token: ${accessToken.substring(0, 15)}...`);
+      console.log(`🔑 Nuevo access_token: ${accessToken.substring(0, 25)}...`);
       
       // Actualizar token en la base de datos
       const newExpiresAt = new Date(Date.now() + (refreshData.expires_in * 1000)).toISOString();
@@ -633,10 +644,10 @@ Deno.serve(async (req) => {
       if (updateError) {
         console.error("Error actualizando token en base de datos:", updateError);
       } else {
-        console.log("Token actualizado en base de datos, nuevo vencimiento:", newExpiresAt);
+        console.log("✅ Token actualizado en base de datos, nuevo vencimiento:", newExpiresAt);
       }
     } else {
-      console.log("Token válido, usando el existente");
+      console.log("✅ Token válido, usando el existente");
     }
     
     // Ejecutar batch de requests a la API de MeLi
@@ -653,12 +664,13 @@ Deno.serve(async (req) => {
         });
       }
       
-      console.log(`Ejecutando request a: ${url.toString()}`);
+      console.log(`🌐 Ejecutando request a: ${url.toString()}`);
+      console.log(`🌐 Parámetros completos:`, JSON.stringify(params));
       
       try {
         // Si es una búsqueda de órdenes, usar paginación
         if (endpoint.includes('/orders/search')) {
-          console.log("Aplicando paginación para búsqueda de órdenes");
+          console.log("📑 Aplicando paginación para búsqueda de órdenes");
           const paginatedData = await fetchAllOrders(url.toString(), accessToken);
           return {
             endpoint,
@@ -676,7 +688,7 @@ Deno.serve(async (req) => {
         
         if (!response.ok) {
           const errorText = await response.text();
-          console.error(`Error en request a ${url.toString()}:`, errorText);
+          console.error(`❌ Error en request a ${url.toString()}:`, errorText);
           return {
             endpoint,
             success: false,
@@ -688,14 +700,14 @@ Deno.serve(async (req) => {
         const data = await response.json();
         // Asegurándonos de que hay datos antes de usar substring
         const dataSummary = data ? JSON.stringify(data).substring(0, 500) + '...' : 'No data received';
-        console.log(`Response de ${endpoint}: ${dataSummary}`);
+        console.log(`✅ Response de ${endpoint}: ${dataSummary}`);
         return {
           endpoint,
           success: true,
           data
         };
       } catch (error) {
-        console.error(`Error en request a ${url.toString()}:`, error);
+        console.error(`❌ Error en request a ${url.toString()}:`, error);
         return {
           endpoint,
           success: false,
@@ -704,9 +716,9 @@ Deno.serve(async (req) => {
       }
     });
     
-    console.log(`Ejecutando batch de ${batchPromises.length} requests a MeLi...`);
+    console.log(`🚀 Ejecutando batch de ${batchPromises.length} requests a MeLi...`);
     const batchResults = await Promise.all(batchPromises);
-    console.log(`Batch de ${batchResults.length} requests completados`);
+    console.log(`✅ Batch de ${batchResults.length} requests completados`);
     
     // Verificar errores en los resultados
     const failedRequests = batchResults.filter(r => !r.success);
@@ -717,7 +729,7 @@ Deno.serve(async (req) => {
     
     // Procesar los datos para el dashboard
     const dashboardData = processOrdersAndData(batchResults, date_range);
-    console.log(`Datos procesados: ${dashboardData.orders?.length || 0} órdenes`);
+    console.log(`📊 Datos procesados: ${dashboardData.orders?.length || 0} órdenes`);
     
     // Si se solicita período anterior, calcularlo también
     if (prev_period && date_range?.begin && date_range?.end) {
@@ -755,7 +767,7 @@ Deno.serve(async (req) => {
     }
 
     // Agregar información del response para debugging
-    console.log("Resumen del dashboard generado:", {
+    console.log("📊 Resumen del dashboard generado:", {
       gmv: dashboardData.summary?.gmv || 0,
       orders: dashboardData.summary?.orders || 0,
       units: dashboardData.summary?.units || 0,
@@ -773,7 +785,7 @@ Deno.serve(async (req) => {
       is_test_data: false
     };
     
-    console.log("Estructura final del objeto de respuesta:", 
+    console.log("📑 Estructura final del objeto de respuesta:", 
       JSON.stringify({
         success: result.success,
         dashboard_data_exists: !!result.dashboard_data,
@@ -886,7 +898,7 @@ Deno.serve(async (req) => {
     );
     
   } catch (error) {
-    console.error('Error en meli-data:', error);
+    console.error('❌ Error en meli-data:', error);
     return new Response(
       JSON.stringify({ 
         success: false, 
