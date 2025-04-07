@@ -158,26 +158,46 @@ export function useMeliData({
       console.log("🚫 Datos de prueba desactivados:", finalDisableTestData);
       console.log("🌐 TimeZone: ", Intl.DateTimeFormat().resolvedOptions().timeZone);
 
-      // Extraer fechas para el filtrado (solo la parte de fecha sin hora)
-      let dateBegin, dateEnd;
+      // Construir fechas en formato correcto para MeLi API (con zona horaria Argentina)
+      let fromArg, toArg;
       if (dateFrom) {
-        dateBegin = dateFrom.split('T')[0];
-        console.log(`📅 Fecha inicio extraída: ${dateBegin}`);
+        const fromDate = new Date(dateFrom);
+        fromArg = `${dateFrom.split('T')[0]}T00:00:00-03:00`;
+        console.log(`📅 Fecha inicio formateada: ${fromArg}`);
       }
+      
       if (dateTo) {
-        dateEnd = dateTo.split('T')[0];
-        console.log(`📅 Fecha fin extraída: ${dateEnd}`);
+        const toDate = new Date(dateTo);
+        toArg = `${dateTo.split('T')[0]}T23:59:59-03:00`;
+        console.log(`📅 Fecha fin formateada: ${toArg}`);
       }
 
+      // Lista de IDs de productos para el endpoint de visitas
+      const { data: productsData, error: productsError } = await supabase
+        .from('products')
+        .select('item_id')
+        .eq('user_id', userId);
+      
+      if (productsError) {
+        console.warn("⚠️ Error al obtener IDs de productos:", productsError.message);
+      }
+      
+      const productIds = productsData?.map(p => p.item_id) || [];
+      console.log(`📊 Obtenidos ${productIds.length} IDs de productos para consulta de visitas`);
+
       const batchRequests = [
-        // Búsqueda principal de órdenes - modificada para incluir filtrado por fecha
+        // Búsqueda principal de órdenes con filtro por fecha
         {
           endpoint: '/orders/search',
           params: {
             seller: meliUserId,
-            // Usar date_created para filtrar por fecha de creación de órdenes
             sort: 'date_desc',
-            limit: 50
+            limit: 50,
+            // Aplicar filtros de fecha formateados correctamente
+            ...((fromArg && toArg) ? {
+              'order.date_created.from': fromArg,
+              'order.date_created.to': toArg
+            } : {})
           }
         },
         
@@ -189,19 +209,11 @@ export function useMeliData({
           }
         },
         
-        // Visitas por items
+        // Visitas por items (corregido para usar específicamente los IDs)
         {
           endpoint: `/visits/items`,
           params: {
-            user_id: meliUserId
-          }
-        },
-        
-        // Búsqueda de visitas
-        {
-          endpoint: `/visits/search`,
-          params: {
-            user_id: meliUserId
+            ids: productIds.length > 0 ? productIds.slice(0, 20).join(',') : undefined
           }
         },
         
@@ -216,17 +228,37 @@ export function useMeliData({
           endpoint: `/orders/search/recent`,
           params: {
             seller: meliUserId,
-            limit: 50
+            limit: 50,
+            // También aplicar filtros de fecha aquí
+            ...((fromArg && toArg) ? {
+              'order.date_created.from': fromArg,
+              'order.date_created.to': toArg
+            } : {})
           }
         }
       ];
+
+      // Batch adicional para visitas, separado en chunks de 20 IDs
+      if (productIds.length > 20) {
+        for (let i = 20; i < productIds.length; i += 20) {
+          const chunk = productIds.slice(i, i + 20);
+          if (chunk.length > 0) {
+            batchRequests.push({
+              endpoint: '/visits/items',
+              params: {
+                ids: chunk.join(',')
+              }
+            });
+          }
+        }
+      }
 
       const requestPayload = {
         user_id: userId,
         batch_requests: batchRequests,
         date_range: {
-          begin: dateBegin,
-          end: dateEnd
+          begin: dateFrom ? dateFrom.split('T')[0] : undefined,
+          end: dateTo ? dateTo.split('T')[0] : undefined
         },
         timezone: 'America/Argentina/Buenos_Aires',
         prev_period: true,
@@ -304,36 +336,6 @@ export function useMeliData({
       if (failedResults?.length > 0) {
         console.warn(`⚠️ ${failedResults.length} requests fallidos:`, 
           failedResults.map(r => `${r.endpoint}: ${r.error || r.status}`).join(', '));
-      }
-      
-      const ordersResult = batchData.batch_results?.find(r => r.endpoint.includes('/orders/search'));
-      const ordersData = ordersResult?.data?.results || [];
-      
-      const recentOrdersResult = batchData.batch_results?.find(r => r.endpoint.includes('/orders/search/recent'));
-      const recentOrdersData = recentOrdersResult?.data?.results || [];
-      
-      const allOrdersData = [...ordersData, ...recentOrdersData];
-      
-      console.log(`📊 Se encontraron ${allOrdersData.length} órdenes en la respuesta (${ordersData.length} normales + ${recentOrdersData.length} recientes)`);
-      
-      // Mostrar detalles de las primeras órdenes si hay
-      if (ordersData.length > 0) {
-        console.log(`📋 Ejemplo de primera orden normal: ${JSON.stringify(ordersData[0]).substring(0, 1000)}...`);
-      }
-      if (recentOrdersData.length > 0) {
-        console.log(`📋 Ejemplo de primera orden reciente: ${JSON.stringify(recentOrdersData[0]).substring(0, 1000)}...`);
-      }
-
-      if (allOrdersData.length === 0) {
-        console.log("⚠️ No se encontraron órdenes en el período seleccionado");
-        if (!batchData.dashboard_data?.summary?.gmv && !batchData.dashboard_data?.orders?.length && finalDisableTestData) {
-          console.log("🔍 No hay datos financieros para mostrar en este período y no se usarán datos de prueba");
-          toast({
-            title: "Sin datos para mostrar",
-            description: "No se encontraron órdenes o métricas reales para el período seleccionado",
-            variant: "destructive",
-          });
-        }
       }
       
       responseCache.set(cacheKey, {
@@ -414,11 +416,14 @@ export function useMeliData({
         } else {
           console.warn("⚠️ No se recibieron datos del dashboard");
           setError("No se recibieron datos para el período seleccionado");
+          
+          const errorMsg = batchData.is_test_data 
+            ? "No se encontraron órdenes reales - mostrando datos de prueba" 
+            : "No se encontraron órdenes reales para el período seleccionado";
+            
           toast({
             title: "Sin datos del dashboard",
-            description: batchData.is_test_data 
-              ? "No se encontraron órdenes reales - mostrando datos de prueba" 
-              : "No se encontraron órdenes reales para el período seleccionado",
+            description: errorMsg,
             variant: "destructive",
             duration: 5000
           });

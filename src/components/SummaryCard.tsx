@@ -34,7 +34,7 @@ const SummaryCard = ({
   
   // Improve validation for values
   const isEmptyValue = value === undefined || value === null || value === '' || value === 0;
-  const displayValue = isLoading ? "Cargando..." : (isEmptyValue ? "Sin datos reales" : `${value}${suffix}`);
+  const displayValue = isLoading ? "Cargando..." : (isEmptyValue ? "Sin datos" : `${value}${suffix}`);
   
   // Dynamic color by percentage
   const percentColor = isPositiveChange ? 'text-green-600' : 'text-red-600';

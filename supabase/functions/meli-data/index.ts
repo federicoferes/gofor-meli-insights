@@ -1,3 +1,4 @@
+
 // Supabase Edge function para interactuar con la API de Mercado Libre
 // sin dependencia de date-fns-tz
 
@@ -24,13 +25,6 @@ const isDateInRange = (dateStr: string, fromStr: string, toStr: string) => {
     console.error("Error validando rango de fechas:", error);
     return false;
   }
-};
-
-// Ajustar una fecha a la zona horaria de Argentina (UTC-3)
-const applyArgentinaOffset = (date: Date): Date => {
-  // No es necesario manipular la zona horaria en el servidor
-  // ya que las fechas ya vienen ajustadas desde el cliente
-  return date;
 };
 
 // Función para procesar órdenes y calcular métricas
@@ -119,23 +113,60 @@ const processOrders = (ordersData, dateFrom, dateTo) => {
   
   const soldItems = {};
   const salesByProvince = {};
+  const salesByMonth = {};
   
   validOrders.forEach(order => {
-    // Usar total_amount para el GMV
-    const orderAmount = Number(order.total_amount) || 0;
-    totalGMV += orderAmount;
+    // Calcular GMV sumando unit_price * quantity de cada item
+    let orderTotal = 0;
+    order.order_items?.forEach(item => {
+      const itemTotal = (Number(item.unit_price) || 0) * (Number(item.quantity) || 0);
+      orderTotal += itemTotal;
+    });
     
-    // Extraer comisiones, impuestos, envíos, etc.
-    const commission = Number(order.marketplace_fee) || 0;
+    // Si no hay items o el cálculo da cero, usar total_amount como fallback
+    if (orderTotal === 0) {
+      orderTotal = Number(order.total_amount) || 0;
+    }
+    
+    totalGMV += orderTotal;
+    
+    // Extraer comisiones correctamente de fee_details
+    let commission = 0;
+    if (order.fee_details && Array.isArray(order.fee_details)) {
+      order.fee_details.forEach(fee => {
+        if (fee.type === 'mercadopago_fee' || fee.type === 'marketplace_fee' || fee.type === 'sales_fee') {
+          commission += Number(fee.amount) || 0;
+        }
+      });
+    }
+    
+    // Fallback a marketplace_fee si fee_details no está disponible
+    if (commission === 0) {
+      commission = Number(order.marketplace_fee) || 0;
+    }
+    
     totalCommissions += commission;
     
     // Impuestos
-    const taxes = Number(order.taxes?.amount) || 0;
-    totalTaxes += taxes;
+    let taxAmount = 0;
+    if (order.taxes && Array.isArray(order.taxes)) {
+      order.taxes.forEach(tax => {
+        taxAmount += Number(tax.amount) || 0;
+      });
+    } else if (order.taxes?.amount) {
+      taxAmount = Number(order.taxes.amount) || 0;
+    }
+    totalTaxes += taxAmount;
     
-    // Envíos
-    const shipping = Number(order.shipping?.cost) || 0;
-    totalShipping += shipping;
+    // Envíos - usar shipping_option.cost según especificación
+    let shippingCost = 0;
+    if (order.shipping?.shipping_option?.cost) {
+      shippingCost = Number(order.shipping.shipping_option.cost) || 0;
+    } else if (order.shipping?.cost) {
+      // Fallback al campo cost directo
+      shippingCost = Number(order.shipping.cost) || 0;
+    }
+    totalShipping += shippingCost;
     
     // Descuentos
     const discount = Number(order.coupon?.amount) || 0;
@@ -169,8 +200,11 @@ const processOrders = (ordersData, dateFrom, dateTo) => {
       }
     });
     
-    // Procesar ventas por provincia
-    const province = order.shipping?.receiver_address?.state?.name || 'Desconocida';
+    // Procesar ventas por provincia según la especificación
+    const province = order.buyer?.address?.state?.name || 
+                    order.shipping?.receiver_address?.state?.name || 
+                    'Desconocida';
+    
     if (province) {
       if (!salesByProvince[province]) {
         salesByProvince[province] = {
@@ -178,17 +212,35 @@ const processOrders = (ordersData, dateFrom, dateTo) => {
           value: 0
         };
       }
-      salesByProvince[province].value += orderAmount;
+      salesByProvince[province].value += orderTotal;
+    }
+    
+    // Agrupar por mes para gráfico de ventas por mes
+    if (order.date_created) {
+      const orderDate = new Date(order.date_created);
+      const monthKey = `${orderDate.getFullYear()}-${String(orderDate.getMonth() + 1).padStart(2, '0')}`;
+      
+      if (!salesByMonth[monthKey]) {
+        salesByMonth[monthKey] = {
+          month: monthKey,
+          value: 0
+        };
+      }
+      
+      salesByMonth[monthKey].value += orderTotal;
     }
   });
   
   // Convertir objetos a arrays para los gráficos
   const topProductsArray = Object.values(soldItems)
-    .sort((a, b) => b.revenue - a.revenue)
+    .sort((a: any, b: any) => b.revenue - a.revenue)
     .slice(0, 10);
     
   const salesByProvinceArray = Object.values(salesByProvince)
-    .sort((a, b) => b.value - a.value);
+    .sort((a: any, b: any) => b.value - a.value);
+    
+  const salesByMonthArray = Object.values(salesByMonth)
+    .sort((a: any, b: any) => a.month.localeCompare(b.month));
     
   // Calcular distribución de costos
   const costDistribution = [
@@ -220,6 +272,7 @@ const processOrders = (ordersData, dateFrom, dateTo) => {
     summary,
     topProducts: topProductsArray,
     salesByProvince: salesByProvinceArray,
+    salesByMonth: salesByMonthArray,
     costDistribution
   };
 };
@@ -230,7 +283,13 @@ const processVisits = (visitsData) => {
   
   let totalVisits = 0;
   
-  if (visitsData && Array.isArray(visitsData.results)) {
+  if (visitsData && Array.isArray(visitsData)) {
+    // El formato esperado de visits/items con IDs
+    visitsData.forEach(item => {
+      totalVisits += Number(item.visits) || 0;
+    });
+  } else if (visitsData && Array.isArray(visitsData.results)) {
+    // Formato alternativo para visits/search
     visitsData.results.forEach(day => {
       totalVisits += Number(day.total) || 0;
     });
@@ -242,14 +301,13 @@ const processVisits = (visitsData) => {
 
 // Función para procesar datos de publicidad
 const processAdvertising = (campaignsData) => {
-  // Verificar que campaignsData sea válido antes de usar substring
   console.log("Procesando datos de publicidad:", campaignsData ? (JSON.stringify(campaignsData).substring(0, 500) + '...') : 'Sin datos');
   
   let totalSpend = 0;
   
   if (campaignsData && Array.isArray(campaignsData.results)) {
     campaignsData.results.forEach(campaign => {
-      totalSpend += Number(campaign.total_spend) || 0;
+      totalSpend += Number(campaign.total_spend) || Number(campaign.total) || 0;
     });
   }
   
@@ -260,106 +318,66 @@ const processAdvertising = (campaignsData) => {
 // Función para procesar todos los datos y generar el dashboard
 const processOrdersAndData = (batchResults, dateRange) => {
   // Encontrar los resultados relevantes
-  const ordersResult = batchResults.find(r => r.endpoint.includes('/orders/search'));
-  const visitsResult = batchResults.find(r => r.endpoint.includes('/items_visits'));
-  const visitsSearchResult = batchResults.find(r => r.endpoint.includes('/visits/search'));
+  const ordersResult = batchResults.find(r => r.endpoint.includes('/orders/search') && !r.endpoint.includes('/recent'));
+  const recentOrdersResult = batchResults.find(r => r.endpoint.includes('/orders/search/recent'));
   const campaignsResult = batchResults.find(r => r.endpoint.includes('/ads/campaigns'));
+  
+  // Resultados de visitas (pueden venir de múltiples endpoints)
+  const visitResults = batchResults.filter(r => r.endpoint.includes('/visits/items') && r.success);
   
   console.log(`Resultados encontrados: 
     - Órdenes: ${ordersResult ? 'Sí' : 'No'} ${ordersResult ? `(${ordersResult.endpoint})` : ''}
-    - Visitas (items): ${visitsResult ? 'Sí' : 'No'} ${visitsResult ? `(${visitsResult.endpoint})` : ''}
-    - Visitas (search): ${visitsSearchResult ? 'Sí' : 'No'} ${visitsSearchResult ? `(${visitsSearchResult.endpoint})` : ''}
+    - Órdenes recientes: ${recentOrdersResult ? 'Sí' : 'No'} ${recentOrdersResult ? `(${recentOrdersResult.endpoint})` : ''}
+    - Visitas (items): ${visitResults.length} resultados
     - Campañas: ${campaignsResult ? 'Sí' : 'No'} ${campaignsResult ? `(${campaignsResult.endpoint})` : ''}
   `);
 
-  if (ordersResult) {
-    console.log(`Estado de la respuesta de órdenes: ${ordersResult.success ? 'Éxito' : 'Error'}`);
-    if (ordersResult.data) {
-      console.log(`Datos de órdenes: ${ordersResult.data.results ? `${ordersResult.data.results.length} resultados` : 'Sin resultados'}`);
-      
-      if (ordersResult.data.results && ordersResult.data.results.length > 0) {
-        const firstOrder = ordersResult.data.results[0];
-        console.log(`Primera orden: ID=${firstOrder.id}, Estado=${firstOrder.status}, Fecha=${firstOrder.date_created}`);
-        console.log(`Total: ${firstOrder.total_amount}, Items: ${firstOrder.order_items?.length || 0}`);
-        console.log(`JSON completo de primera orden: ${JSON.stringify(firstOrder).substring(0, 2000)}...`);
-      } else {
-        console.log('No hay órdenes disponibles');
-      }
-    } else {
-      console.log('No hay datos en la respuesta de órdenes');
-    }
-  } else {
-    console.log('No se encontró resultado de órdenes');
+  // Compilar todas las órdenes de ambas fuentes
+  let allOrdersData = { results: [] };
+  let dateFrom, dateTo;
+  
+  if (dateRange?.begin && dateRange?.end) {
+    dateFrom = `${dateRange.begin}T00:00:00.000Z`;
+    dateTo = `${dateRange.end}T23:59:59.999Z`;
   }
   
-  // También buscar en órdenes recientes
-  const recentOrdersResult = batchResults.find(r => r.endpoint.includes('/orders/search/recent'));
-  if (recentOrdersResult) {
-    console.log(`Estado de la respuesta de órdenes recientes: ${recentOrdersResult.success ? 'Éxito' : 'Error'}`);
-    if (recentOrdersResult.data) {
-      console.log(`Datos de órdenes recientes: ${recentOrdersResult.data.results ? `${recentOrdersResult.data.results.length} resultados` : 'Sin resultados'}`);
-      
-      if (recentOrdersResult.data.results && recentOrdersResult.data.results.length > 0) {
-        const firstOrder = recentOrdersResult.data.results[0];
-        console.log(`Primera orden reciente: ID=${firstOrder.id}, Estado=${firstOrder.status}, Fecha=${firstOrder.date_created}`);
-      }
-    }
+  // Procesar resultados de órdenes normales
+  if (ordersResult?.success && ordersResult.data) {
+    console.log(`Añadiendo ${ordersResult.data.results?.length || 0} órdenes de búsqueda normal`);
+    allOrdersData.results = [...allOrdersData.results, ...(ordersResult.data.results || [])];
   }
+  
+  // Procesar resultados de órdenes recientes
+  if (recentOrdersResult?.success && recentOrdersResult.data) {
+    console.log(`Añadiendo ${recentOrdersResult.data.results?.length || 0} órdenes de búsqueda reciente`);
+    allOrdersData.results = [...allOrdersData.results, ...(recentOrdersResult.data.results || [])];
+  }
+  
+  console.log(`Total combinado: ${allOrdersData.results.length} órdenes`);
   
   // Procesar órdenes
-  const ordersData = ordersResult?.data;
-  const dateFrom = dateRange?.begin ? `${dateRange.begin}T00:00:00.000Z` : undefined;
-  const dateTo = dateRange?.end ? `${dateRange.end}T23:59:59.999Z` : undefined;
+  const processedOrders = processOrders(allOrdersData, dateFrom, dateTo);
   
-  console.log(`Procesando datos con rango: ${dateFrom || 'sin fecha inicio'} - ${dateTo || 'sin fecha fin'}`);
-  
-  const processedOrders = ordersData ? processOrders(ordersData, dateFrom, dateTo) : {
-    orders: [],
-    summary: {
-      gmv: 0, commissions: 0, taxes: 0, shipping: 0, discounts: 0,
-      refunds: 0, units: 0, orders: 0, avgTicket: 0
-    },
-    topProducts: [],
-    salesByProvince: [],
-    costDistribution: []
-  };
-  
-  // Procesar visitas desde ambas fuentes
+  // Procesar visitas desde todos los resultados de /visits/items
   let totalVisits = 0;
+  visitResults.forEach(result => {
+    if (result.data) {
+      const visits = processVisits(result.data);
+      totalVisits += visits;
+    }
+  });
   
-  // Primero intentar con el resultado de items_visits
-  if (visitsResult?.data) {
-    totalVisits += processVisits(visitsResult.data);
-  }
-  
-  // Luego sumar el resultado de visits/search si está disponible
-  if (visitsSearchResult?.data) {
-    totalVisits += processVisits(visitsSearchResult.data);
-  }
-  
-  // Si no hay datos de visitas, buscar en los resultados por otro tipo de endpoint
+  // Si no hay datos de visitas, intentar obtenerlos de otras fuentes
   if (totalVisits === 0) {
-    const alternativeVisitsResult = batchResults.find(r => r.endpoint.toLowerCase().includes('visit'));
+    const alternativeVisitsResult = batchResults.find(r => r.endpoint.toLowerCase().includes('visit') && r.success);
     if (alternativeVisitsResult?.data) {
       console.log("Intentando procesar visitas de un endpoint alternativo:", alternativeVisitsResult.endpoint);
-      
-      // Buscar cualquier array en la respuesta que pueda contener datos de visitas
-      if (alternativeVisitsResult.data.results) {
-        console.log(`Encontrados ${alternativeVisitsResult.data.results.length} resultados potenciales de visitas`);
-        // Intentar sumar cualquier campo que parezca una cuenta de visitas
-        alternativeVisitsResult.data.results.forEach(item => {
-          if (typeof item.total === 'number') totalVisits += item.total;
-          if (typeof item.visits === 'number') totalVisits += item.visits;
-          if (typeof item.view === 'number') totalVisits += item.view;
-          if (typeof item.views === 'number') totalVisits += item.views;
-        });
-      }
+      totalVisits += processVisits(alternativeVisitsResult.data);
     }
   }
   
   // Procesar publicidad
-  const campaignsData = campaignsResult?.data;
-  const totalAdvertising = processAdvertising(campaignsData);
+  const totalAdvertising = campaignsResult?.success ? processAdvertising(campaignsResult.data) : 0;
   
   // Agregar visitas y conversión al resumen
   processedOrders.summary.visits = totalVisits;
@@ -369,13 +387,43 @@ const processOrdersAndData = (batchResults, dateRange) => {
   // Agregar gastos de publicidad
   processedOrders.summary.advertising = totalAdvertising;
   
-  // Generar datos de ventas por mes para gráfico
-  const salesByMonth = [];
-  // Aquí iría la lógica para agrupar ventas por mes si se tienen datos históricos
+  // Si no hay datos de ventas por mes del procesamiento pero tenemos órdenes, generarlos
+  if ((!processedOrders.salesByMonth || processedOrders.salesByMonth.length === 0) && processedOrders.orders.length > 0) {
+    const salesByMonth = {};
+    
+    processedOrders.orders.forEach(order => {
+      if (order.date_created) {
+        const orderDate = new Date(order.date_created);
+        const monthKey = `${orderDate.getFullYear()}-${String(orderDate.getMonth() + 1).padStart(2, '0')}`;
+        
+        if (!salesByMonth[monthKey]) {
+          salesByMonth[monthKey] = {
+            month: monthKey,
+            value: 0
+          };
+        }
+        
+        // Calcular total de la orden
+        let orderTotal = 0;
+        order.order_items?.forEach(item => {
+          orderTotal += (Number(item.unit_price) || 0) * (Number(item.quantity) || 0);
+        });
+        
+        if (orderTotal === 0) {
+          orderTotal = Number(order.total_amount) || 0;
+        }
+        
+        salesByMonth[monthKey].value += orderTotal;
+      }
+    });
+    
+    processedOrders.salesByMonth = Object.values(salesByMonth)
+      .sort((a: any, b: any) => a.month.localeCompare(b.month));
+  }
   
   const result = {
     summary: processedOrders.summary,
-    salesByMonth,
+    salesByMonth: processedOrders.salesByMonth || [],
     topProducts: processedOrders.topProducts,
     salesByProvince: processedOrders.salesByProvince,
     costDistribution: processedOrders.costDistribution,
@@ -385,6 +433,7 @@ const processOrdersAndData = (batchResults, dateRange) => {
   
   console.log("Estructura de datos retornada:");
   console.log(`- Summary: ${JSON.stringify(result.summary)}`);
+  console.log(`- SalesByMonth: ${result.salesByMonth.length} meses`);
   console.log(`- TopProducts: ${result.topProducts.length} items`);
   console.log(`- SalesByProvince: ${result.salesByProvince.length} provincias`);
   console.log(`- CostDistribution: ${result.costDistribution.length} categorías`);
@@ -514,7 +563,7 @@ Deno.serve(async (req) => {
       timezone = 'America/Argentina/Buenos_Aires',
       prev_period,
       use_cache,
-      disable_test_data = true // Changed default to true
+      disable_test_data = true // Default a true para priorizar datos reales
     } = requestBody;
     
     console.log(`🔷 Solicitud recibida para user_id: ${user_id}, timezone: ${timezone}`);
@@ -533,7 +582,7 @@ Deno.serve(async (req) => {
     // Si no hay batch_requests, verificar la conexión con MeLi
     if (!batch_requests || batch_requests.length === 0) {
       const { data: connections, error } = await supabase
-        .from('meli_tokens')  // Changed from meli_connections to meli_tokens
+        .from('meli_tokens')
         .select('*')
         .eq('user_id', user_id)
         .single();
@@ -564,7 +613,7 @@ Deno.serve(async (req) => {
     // Obtener token de acceso para MeLi
     console.log(`🔑 Buscando token para user_id: ${user_id}`);
     const { data: connection, error: connectionError } = await supabase
-      .from('meli_tokens')  // Changed from meli_connections to meli_tokens
+      .from('meli_tokens')
       .select('*')
       .eq('user_id', user_id)
       .single();
@@ -632,7 +681,7 @@ Deno.serve(async (req) => {
       // Actualizar token en la base de datos
       const newExpiresAt = new Date(Date.now() + (refreshData.expires_in * 1000)).toISOString();
       const { error: updateError } = await supabase
-        .from('meli_tokens')  // Changed from meli_connections to meli_tokens
+        .from('meli_tokens')
         .update({
           access_token: refreshData.access_token,
           refresh_token: refreshData.refresh_token,
@@ -657,7 +706,7 @@ Deno.serve(async (req) => {
       const url = new URL(`https://api.mercadolibre.com${endpoint}`);
       if (params) {
         Object.entries(params).forEach(([key, value]) => {
-          if (value !== undefined && value !== null) {
+          if (value !== undefined && value !== null && value !== '') {
             url.searchParams.append(key, String(value));
           }
         });
@@ -677,7 +726,7 @@ Deno.serve(async (req) => {
       console.log(`🌐 Parámetros completos:`, JSON.stringify(params));
       
       try {
-        // Si es una búsqueda de órdenes, usar paginación
+        // Si es una búsqueda de órdenes, usar paginación para asegurar que obtenemos todas las órdenes
         if (endpoint.includes('/orders/search')) {
           console.log("📑 Aplicando paginación para búsqueda de órdenes");
           const paginatedData = await fetchAllOrders(url.toString(), accessToken);
@@ -712,17 +761,6 @@ Deno.serve(async (req) => {
         // Asegurándonos de que hay datos antes de usar substring
         const dataSummary = data ? JSON.stringify(data).substring(0, 500) + '...' : 'No data received';
         console.log(`✅ Response de ${endpoint}: ${dataSummary}`);
-        
-        // Imprimir respuesta completa para análisis
-        if (endpoint.includes('/orders/search')) {
-          console.log(`📊 Respuesta completa de ${endpoint}:`, JSON.stringify(data));
-          console.log(`📊 Array results contiene ${data.results?.length || 0} elementos`);
-          if (data.results?.length > 0) {
-            console.log(`📊 Primer elemento de results:`, JSON.stringify(data.results[0]).substring(0, 1000) + '...');
-          } else {
-            console.log(`📊 El array results está vacío`);
-          }
-        }
         
         return {
           endpoint,
@@ -793,18 +831,10 @@ Deno.serve(async (req) => {
         end: prevEndDate.toISOString().split('T')[0]
       };
       
-      // Buscar órdenes del período anterior
-      const prevFromDate = `${prevDateRange.begin}T00:00:00.000Z`;
-      const prevToDate = `${prevDateRange.end}T23:59:59.999Z`;
+      console.log(`📊 Calculando período anterior: ${prevDateRange.begin} - ${prevDateRange.end}`);
       
-      console.log(`📊 Calculando período anterior: ${prevFromDate} - ${prevToDate}`);
-      
-      // Podríamos hacer otra llamada a la API para obtener datos del período anterior
-      // pero por simplicidad vamos a usar los mismos datos y calcular un resumen
-      // Para un cálculo más preciso, se debería hacer otra llamada a la API
-      
-      // Crear un resumen simple para el período anterior (esto debería ser reemplazado
-      // por una llamada real a la API para obtener datos históricos más precisos)
+      // Para un cálculo más preciso, idealmente haríamos otra llamada a la API con las fechas anteriores
+      // Aquí simplemente calculamos valores aproximados basados en el período actual
       const prevSummary = {
         gmv: dashboardData.summary.gmv * 0.9,
         commissions: dashboardData.summary.commissions * 0.9,
@@ -823,29 +853,13 @@ Deno.serve(async (req) => {
       dashboardData.prev_summary = prevSummary;
     }
     
-    console.log(`📊 Resumen del dashboard generado: { 
-      gmv: ${dashboardData.summary.gmv}, 
-      orders: ${dashboardData.summary.orders}, 
-      units: ${dashboardData.summary.units}, 
-      visits: ${dashboardData.summary.visits}
-    }`);
-    
     // Verificar si hay datos reales o están vacíos
     const dashboardHasRealData = 
       dashboardData.summary.gmv > 0 || 
       dashboardData.summary.orders > 0 || 
       dashboardData.orders.length > 0;
       
-    // Registrar resultados detallados
-    console.log(`📑 Estructura final del objeto de respuesta: ${JSON.stringify({
-      success: true,
-      dashboard_data_exists: !!dashboardData,
-      date_range_exists: !!date_range,
-      summary_exists: !!dashboardData.summary,
-      orders_count: dashboardData.orders?.length || 0
-    })}`);
-    
-    // Si no hay datos y disable_test_data está activado, retornar datos vacíos
+    // Si no hay datos reales y disable_test_data está activado, retornar datos vacíos
     if (!dashboardHasRealData && disable_test_data) {
       console.warn("⚠️ No se encontraron órdenes y test data está desactivado. Mostrando datos vacíos.");
       return new Response(
@@ -859,6 +873,29 @@ Deno.serve(async (req) => {
             error: r.error || r.status,
             url: r.url // Incluir URL para debugging
           }))
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    // Si no hay datos reales y disable_test_data NO está activado, generar datos de prueba
+    if (!dashboardHasRealData && !disable_test_data) {
+      console.log("🔄 Generando datos de prueba para visualización");
+      
+      // Datos de ejemplo para visualización
+      const testData = generateTestData(date_range);
+      
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          dashboard_data: testData,
+          batch_results: batchResults.map(r => ({
+            endpoint: r.endpoint,
+            success: r.success,
+            error: r.error || r.status,
+            url: r.url
+          })),
+          is_test_data: true
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -889,3 +926,120 @@ Deno.serve(async (req) => {
     );
   }
 });
+
+// Función para generar datos de prueba visualización cuando no hay datos reales
+function generateTestData(dateRange) {
+  console.log("🎭 Generando datos de prueba para el dashboard");
+  
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const prevMonth = `${now.getFullYear()}-${String(now.getMonth()).padStart(2, '0')}`;
+  
+  const summary = {
+    gmv: 15839839.89,
+    commissions: 1267187.19,
+    taxes: 269276.88,
+    shipping: 956638.39,
+    discounts: 103756.57,
+    refunds: 52346.99,
+    units: 237,
+    orders: 236,
+    visits: 3980,
+    conversion: 5.95,
+    avgTicket: 67118.81,
+    advertising: 65487.23
+  };
+  
+  const salesByMonth = [
+    { month: prevMonth, value: 13255964.56 },
+    { month: currentMonth, value: 15839839.89 }
+  ];
+  
+  const topProducts = [
+    { id: "MLA1", name: "Smartphone Galaxy XYZ", units: 45, revenue: 4367500 },
+    { id: "MLA2", name: "Notebook Ultra i7", units: 23, revenue: 4140000 },
+    { id: "MLA3", name: "Smart TV 65 pulgadas", units: 18, revenue: 2700000 },
+    { id: "MLA4", name: "Auriculares Bluetooth", units: 56, revenue: 1680000 },
+    { id: "MLA5", name: "Zapatillas Deportivas", units: 37, revenue: 925000 }
+  ];
+  
+  const salesByProvince = [
+    { name: "Buenos Aires", value: 6335935.96 },
+    { name: "CABA", value: 3959959.97 },
+    { name: "Córdoba", value: 1583983.99 },
+    { name: "Santa Fe", value: 1267187.19 },
+    { name: "Mendoza", value: 791992 },
+    { name: "Tucumán", value: 633593.6 },
+    { name: "Entre Ríos", value: 475195.2 }
+  ];
+  
+  const costDistribution = [
+    { name: "Comisiones", value: 1267187.19 },
+    { name: "Impuestos", value: 269276.88 },
+    { name: "Envíos", value: 956638.39 },
+    { name: "Descuentos", value: 103756.57 },
+    { name: "Reembolsos", value: 52346.99 },
+    { name: "Publicidad", value: 65487.23 }
+  ];
+  
+  // Generar datos de órdenes de ejemplo
+  const orders = [];
+  for (let i = 1; i <= 10; i++) {
+    const orderDate = new Date(now);
+    orderDate.setDate(orderDate.getDate() - Math.floor(Math.random() * 10));
+    
+    orders.push({
+      id: `TEST-ORDER-${i}`,
+      status: "paid",
+      date_created: orderDate.toISOString(),
+      total_amount: Math.floor(Math.random() * 100000) + 50000,
+      fee_details: [{
+        type: "mercadopago_fee",
+        amount: Math.floor(Math.random() * 5000) + 1000
+      }],
+      order_items: [
+        {
+          item: {
+            id: `MLA${i}`,
+            title: `Producto ejemplo ${i}`
+          },
+          unit_price: Math.floor(Math.random() * 10000) + 5000,
+          quantity: Math.floor(Math.random() * 3) + 1
+        }
+      ],
+      buyer: {
+        address: {
+          state: {
+            name: salesByProvince[Math.floor(Math.random() * salesByProvince.length)].name
+          }
+        }
+      }
+    });
+  }
+  
+  const prevSummary = {
+    gmv: 13255964.56,
+    commissions: 1060474.76,
+    taxes: 225351.4,
+    shipping: 800514.58,
+    discounts: 86785.5,
+    refunds: 43812.68,
+    units: 198,
+    orders: 197,
+    visits: 3523,
+    conversion: 5.62,
+    avgTicket: 67289.16,
+    advertising: 54789.23
+  };
+  
+  return {
+    summary,
+    prev_summary: prevSummary,
+    salesByMonth,
+    topProducts,
+    salesByProvince,
+    costDistribution,
+    orders,
+    date_range: dateRange || { begin: null, end: null }
+  };
+}
