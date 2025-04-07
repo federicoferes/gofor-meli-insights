@@ -10,10 +10,11 @@ const ARG_OFFSET = -3;
  * @returns Objeto con fechas de inicio y fin ajustadas a UTC
  */
 export const getArgDateRange = (base: Date) => {
+  console.log(`Generando rango para fecha base: ${base.toISOString()}`);
   // Ajustamos a la zona horaria de Argentina (UTC-3)
   const from = addHours(startOfDay(base), -ARG_OFFSET);
   const to = addHours(endOfDay(base), -ARG_OFFSET);
-  
+  console.log(`Rango generado: ${from.toISOString()} - ${to.toISOString()}`);
   return { from, to };
 };
 
@@ -23,6 +24,7 @@ export const getArgDateRange = (base: Date) => {
  * @returns Objeto con fechas from y to
  */
 export const getPresetDateRange = (rangeType: string) => {
+  console.log(`Generando preset para: ${rangeType}`);
   const now = new Date();
   
   switch (rangeType) {
@@ -61,25 +63,6 @@ export const formatDateForApi = (date: Date, isEndOfDay = false): string => {
 };
 
 /**
- * Formatea una fecha para la API de MercadoLibre con zona horaria Argentina
- * Formato YYYY-MM-DDTHH:MM:SS (sin milisegundos ni timezone)
- */
-export const formatDateForMeLi = (date: Date, isEndOfDay = false): string => {
-  if (!date) return "";
-  
-  // Formato YYYY-MM-DDTHH:MM:SS para MeLi API (sin milisegundos ni timezone)
-  const year = date.getUTCFullYear();
-  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(date.getUTCDate()).padStart(2, '0');
-  
-  let hours = isEndOfDay ? '23' : '00';
-  let minutes = isEndOfDay ? '59' : '00';
-  let seconds = isEndOfDay ? '59' : '00';
-  
-  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
-};
-
-/**
  * Convierte una fecha ISO a una fecha local considerando la offset de Argentina
  */
 export const isoToArgDate = (isoString: string): Date => {
@@ -100,7 +83,9 @@ export const isDateInRange = (dateStr: string, fromStr: string, toStr: string): 
     const from = new Date(fromStr);
     const to = new Date(toStr);
     
+    console.log(`Verificando rango de fechas: ${dateStr} está entre ${fromStr} y ${toStr}?`);
     const result = date >= from && date <= to;
+    console.log(`Resultado de verificación: ${result ? 'SÍ' : 'NO'}`);
     
     return result;
   } catch (error) {
@@ -122,6 +107,7 @@ export const formatDateForDisplay = (date: Date): string => {
  */
 export const getIsoDateRange = (dateRange: { from?: Date; to?: Date }) => {
   if (!dateRange.from || !dateRange.to) {
+    console.log("⚠️ dateRange incompleto:", dateRange);
     return {
       fromISO: undefined,
       toISO: undefined
@@ -131,5 +117,6 @@ export const getIsoDateRange = (dateRange: { from?: Date; to?: Date }) => {
   const fromISO = formatDateForApi(dateRange.from);
   const toISO = formatDateForApi(dateRange.to, true);
   
+  console.log(`ISODateRange generado: ${fromISO} - ${toISO}`);
   return { fromISO, toISO };
 };
