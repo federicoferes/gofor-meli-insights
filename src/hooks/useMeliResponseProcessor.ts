@@ -27,7 +27,11 @@ export function useMeliResponseProcessor({
   const [salesData, setSalesData] = useState<any[]>([]);
   const [salesSummary, setSalesSummary] = useState<SalesSummary>(createEmptySalesSummary());
   const [topProducts, setTopProducts] = useState<any[]>([]);
-  const [costData, setCostData] = useState<any[]>([]);
+  const [costData, setCostData] = useState<any[]>([
+    { name: "Comisiones", value: 0 },
+    { name: "Impuestos", value: 0 },
+    { name: "Envíos", value: 0 }
+  ]);
   const [provinceData, setProvinceData] = useState<any[]>([]);
   const [ordersData, setOrdersData] = useState<any[]>([]);
   const [prevSalesSummary, setPrevSalesSummary] = useState<SalesSummary>(createEmptySalesSummary());
@@ -41,7 +45,11 @@ export function useMeliResponseProcessor({
     setSalesData([]);
     setSalesSummary(createEmptySalesSummary());
     setTopProducts([]);
-    setCostData([]);
+    setCostData([
+      { name: "Comisiones", value: 0 },
+      { name: "Impuestos", value: 0 },
+      { name: "Envíos", value: 0 }
+    ]);
     setProvinceData([]);
     setOrdersData([]);
     setPrevSalesSummary(createEmptySalesSummary());
@@ -59,6 +67,8 @@ export function useMeliResponseProcessor({
         setSalesData(batchData.dashboard_data.salesByMonth);
       } else {
         console.log("No salesByMonth data found or empty array");
+        // Set empty sales data to prevent showing old data
+        setSalesData([]);
       }
       
       if (batchData.dashboard_data.summary) {
@@ -69,6 +79,7 @@ export function useMeliResponseProcessor({
         logSalesSummaryToConsole(dateFilter, dateRange, processedSummary);
       } else {
         console.log("No summary data found");
+        setSalesSummary(createEmptySalesSummary());
       }
       
       if (batchData.dashboard_data.prev_summary) {
@@ -77,6 +88,7 @@ export function useMeliResponseProcessor({
         setPrevSalesSummary(prevProcessedSummary);
       } else {
         console.log("No prev_summary data found");
+        setPrevSalesSummary(createEmptySalesSummary());
       }
       
       if (batchData.dashboard_data.costDistribution?.length > 0) {
@@ -97,6 +109,7 @@ export function useMeliResponseProcessor({
         setTopProducts(batchData.dashboard_data.topProducts);
       } else {
         console.log("No topProducts data found or empty array");
+        setTopProducts([]);
       }
       
       if (batchData.dashboard_data.salesByProvince?.length > 0) {
@@ -104,6 +117,7 @@ export function useMeliResponseProcessor({
         setProvinceData(batchData.dashboard_data.salesByProvince);
       } else {
         console.log("No salesByProvince data found or empty array");
+        setProvinceData([]);
       }
       
       if (batchData.dashboard_data.orders) {
@@ -117,6 +131,7 @@ export function useMeliResponseProcessor({
         }
       } else {
         console.log("No orders data found");
+        setOrdersData([]);
       }
     } else if (!batchData.has_dashboard_data) {
       console.log("No dashboard_data found in response");
@@ -124,7 +139,11 @@ export function useMeliResponseProcessor({
       setSalesSummary(createEmptySalesSummary());
       setPrevSalesSummary(createEmptySalesSummary());
       setSalesData([]);
-      setCostData([]);
+      setCostData([
+        { name: "Comisiones", value: 0 },
+        { name: "Impuestos", value: 0 },
+        { name: "Envíos", value: 0 }
+      ]);
       setTopProducts([]);
       setProvinceData([]);
       setOrdersData([]);

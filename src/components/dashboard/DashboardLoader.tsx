@@ -6,12 +6,14 @@ interface DashboardLoaderProps {
   message?: string;
   loadingData?: boolean;
   showProgress?: boolean;
+  error?: string | null;
 }
 
 const DashboardLoader: React.FC<DashboardLoaderProps> = ({
   message = "Cargando datos de Mercado Libre...",
   loadingData = true,
-  showProgress = false
+  showProgress = false,
+  error = null
 }) => {
   const [dots, setDots] = React.useState('.');
   
@@ -30,6 +32,18 @@ const DashboardLoader: React.FC<DashboardLoaderProps> = ({
       return () => clearInterval(interval);
     }
   }, [loadingData]);
+  
+  if (error) {
+    return (
+      <div className="flex flex-col justify-center items-center py-20">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-xl">
+          <h3 className="text-red-700 font-semibold mb-2">Error al cargar datos</h3>
+          <p className="text-red-600">{error}</p>
+          <p className="text-sm text-gray-500 mt-4">Intenta recargar la página o cambiar el rango de fechas.</p>
+        </div>
+      </div>
+    );
+  }
   
   return (
     <div className="flex flex-col justify-center items-center py-20">

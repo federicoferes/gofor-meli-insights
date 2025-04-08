@@ -34,6 +34,7 @@ export function buildMeliDataPayload(
         seller: meliUserId,
         sort: 'date_desc',
         limit: 50,
+        // We don't add date params here, the edge function will handle them
       }
     }
   ];

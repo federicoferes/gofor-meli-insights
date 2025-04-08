@@ -2,7 +2,7 @@
 import React from 'react';
 import { SalesSummary } from '@/types/meli';
 import SummaryCard from '@/components/SummaryCard';
-import { DollarSign, ShoppingBag, BarChart3, CreditCard, Users, Percent, Truck, Calculator, Megaphone, Package } from "lucide-react";
+import { DollarSign, ShoppingBag, BarChart3, CreditCard, Users, Percent, Truck, Calculator, Package } from "lucide-react";
 import { formatCurrency, formatNumber } from '@/lib/formatters';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
@@ -38,10 +38,6 @@ const SalesSummaryCards: React.FC<SalesSummaryCardsProps> = ({
   ivaRate,
   onIvaRateChange
 }) => {
-  const advertisingGmvPercent = salesSummary.gmv > 0 && salesSummary.advertising > 0
-    ? ((salesSummary.advertising / salesSummary.gmv) * 100).toFixed(1)
-    : null;
-
   const productCostsGmvPercent = salesSummary.gmv > 0 && salesSummary.productCosts > 0
     ? ((salesSummary.productCosts / salesSummary.gmv) * 100).toFixed(1)
     : null;
@@ -77,7 +73,7 @@ const SalesSummaryCards: React.FC<SalesSummaryCardsProps> = ({
                       </div>
                       <p className="text-sm text-gray-500">
                         La tasa de IVA se usa para calcular el balance total:
-                        GMV - comisiones - envíos - impuestos - IVA({ivaRate}% del GMV) - publicidad - costo productos
+                        GMV - comisiones - envíos - impuestos - IVA({ivaRate}% del GMV) - costo productos
                       </p>
                     </div>
                   </PopoverContent>
@@ -89,7 +85,7 @@ const SalesSummaryCards: React.FC<SalesSummaryCardsProps> = ({
             icon={<DollarSign className="h-5 w-5" />}
             isLoading={isLoading}
             colorClass="bg-gradient-to-r from-gofor-purple/10 to-gofor-purple/5"
-            tooltip="Balance calculado como GMV - comisiones - envíos - impuestos - IVA - publicidad - costos de productos"
+            tooltip="Balance calculado como GMV - comisiones - envíos - impuestos - IVA - costos de productos"
             isTestData={isTestData}
           />
         </div>
@@ -183,20 +179,7 @@ const SalesSummaryCards: React.FC<SalesSummaryCardsProps> = ({
         />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-        <SummaryCard 
-          title="Gastos de Publicidad"
-          value={formatCurrency(salesSummary.advertising || 0)}
-          percentChange={calculatePercentChange(
-            salesSummary.advertising || 0, 
-            prevSalesSummary.advertising || 0
-          )}
-          icon={<Megaphone className="h-5 w-5" />}
-          isLoading={isLoading}
-          additionalInfo={advertisingGmvPercent ? `${advertisingGmvPercent}% del GMV` : null}
-          tooltip="Gastos de campañas desde /advertising/campaigns/search (0 si no hay datos)"
-          isTestData={isTestData}
-        />
+      <div className="grid grid-cols-1 md:grid-cols-1 gap-4 mb-8">
         <SummaryCard 
           title="Costo de Productos Vendidos"
           value={formatCurrency(salesSummary.productCosts || 0)}

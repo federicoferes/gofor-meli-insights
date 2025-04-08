@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -174,12 +175,26 @@ function generateTestData(dateRange?: { begin?: string; end?: string }) {
 // Process orders and extract metrics
 function processOrders(orders: any[]) {
   if (!orders || !orders.length) {
+    console.log("❌ No orders to process");
     return {
-      summary: {},
+      summary: {
+        gmv: 0,
+        orders: 0,
+        units: 0,
+        visits: 0,
+        conversion: 0,
+        commissions: 0,
+        shipping: 0,
+        taxes: 0
+      },
       salesByMonth: [],
       salesByProvince: [],
       topProducts: [],
-      costDistribution: []
+      costDistribution: [
+        { name: "Comisiones", value: 0 },
+        { name: "Impuestos", value: 0 },
+        { name: "Envíos", value: 0 }
+      ]
     };
   }
   
@@ -198,30 +213,43 @@ function processOrders(orders: any[]) {
   const provincesData: Record<string, any> = {};
   const productsData: Record<string, any> = {};
   
+  console.log(`⚙️ Processing ${orders.length} orders`);
+  
   // Process each order according to MeLi documentation
   orders.forEach((order: any) => {
     if (!order.order_items || order.status === "cancelled") return;
+    
+    console.log(`🧾 Processing order ${order.id}`);
     
     let orderTotal = 0;
     let orderUnits = 0;
     
     // Accumulate commission fees
     if (order.fee_details && Array.isArray(order.fee_details)) {
+      console.log(`Fee details for order ${order.id}:`, order.fee_details);
       order.fee_details.forEach((fee: any) => {
         if (fee && typeof fee.amount === 'number') {
           summary.commissions += fee.amount;
         }
       });
+    } else {
+      console.log(`No fee details found for order ${order.id}`);
     }
     
     // Accumulate shipping costs
     if (order.shipping?.shipping_option?.cost) {
+      console.log(`Shipping cost for order ${order.id}: ${order.shipping.shipping_option.cost}`);
       summary.shipping += order.shipping.shipping_option.cost;
+    } else {
+      console.log(`No shipping cost found for order ${order.id}`);
     }
     
     // Accumulate taxes
     if (order.taxes?.amount) {
+      console.log(`Taxes amount for order ${order.id}: ${order.taxes.amount}`);
       summary.taxes += order.taxes.amount;
+    } else {
+      console.log(`No taxes found for order ${order.id}`);
     }
     
     // Process order items according to MeLi documentation
@@ -300,6 +328,21 @@ function processOrders(orders: any[]) {
     { name: "Impuestos", value: summary.taxes || 0 },
     { name: "Envíos", value: summary.shipping || 0 },
   ];
+
+  console.log("✅ Summary final:", summary);
+  console.log("✅ Cost distribution:", costDistribution);
+  
+  if (topProducts.length > 0) {
+    console.log("✅ Top products:", topProducts.map(p => `${p.name}: $${(p as any).revenue}`));
+  } else {
+    console.log("❌ No top products data available");
+  }
+  
+  if (salesByProvince.length > 0) {
+    console.log("✅ Provincias:", salesByProvince.map(p => `${p.name}: $${p.value}`));
+  } else {
+    console.log("❌ No province data available");
+  }
 
   return {
     summary,
@@ -715,6 +758,30 @@ serve(async (req) => {
     }
     
     console.log(`Original batch_requests had ${batch_requests.length} items, filtered to ${filteredRequests.length} items`);
+    
+    // Expand pagination for orders/search to get more than 50 results
+    let expandedRequests = [];
+    for (const request of filteredRequests) {
+      if (request.endpoint === '/orders/search') {
+        const limit = 50;
+        const maxPages = 1; // Start with 1 page to avoid exceeding rate limits
+        
+        for (let page = 0; page < maxPages; page++) {
+          const offset = page * limit;
+          const paginatedRequest = JSON.parse(JSON.stringify(request)); // Deep copy
+          
+          if (!paginatedRequest.params) paginatedRequest.params = {};
+          paginatedRequest.params.limit = limit;
+          paginatedRequest.params.offset = offset;
+          
+          expandedRequests.push(paginatedRequest);
+        }
+      } else {
+        expandedRequests.push(request);
+      }
+    }
+    
+    filteredRequests = expandedRequests;
     
     // Make batch requests with only orders/search (not orders/search/recent)
     console.log("Making batch requests with filtered requests:", JSON.stringify(filteredRequests, null, 2));
