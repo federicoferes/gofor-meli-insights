@@ -1,7 +1,14 @@
 
 import { supabase } from '@/integrations/supabase/client';
-import { type Toast } from "@/hooks/use-toast";
 import { DateRange } from '@/types/meli';
+
+// Define the Toast type interface here to avoid import issues
+interface Toast {
+  variant?: "default" | "destructive";
+  title?: string;
+  description?: string;
+  duration?: number;
+}
 
 /**
  * Builds the request payload for the meli-data edge function
