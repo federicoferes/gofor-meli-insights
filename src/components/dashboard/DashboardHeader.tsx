@@ -3,6 +3,7 @@ import React from 'react';
 import DateRangePicker from '@/components/DateRangePicker';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import MeliConnect from '@/components/MeliConnect';
+import { Info, AlertCircle } from 'lucide-react';
 
 interface DashboardHeaderProps {
   userName: string | undefined;
@@ -51,12 +52,22 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
             </div>
           </AlertDescription>
         </Alert>
-      ) : null}
+      ) : (
+        <Alert className="mb-4 bg-green-50 border-green-200">
+          <AlertDescription>
+            <div className="flex items-center text-green-800">
+              <Info className="h-4 w-4 mr-2" />
+              <span className="text-sm">Cuenta de Mercado Libre conectada correctamente. Selecciona un rango de fechas para visualizar tus datos.</span>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {isTestData && (
         <Alert className="mb-4 bg-amber-50 border-amber-200">
           <AlertDescription>
             <div className="flex items-center text-amber-800">
+              <AlertCircle className="h-4 w-4 mr-2" />
               <span className="text-sm">⚠️ Mostrando datos de prueba porque no se encontraron órdenes reales para el período seleccionado</span>
             </div>
           </AlertDescription>
@@ -67,6 +78,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         <Alert className="mb-4 bg-red-50 border-red-200">
           <AlertDescription>
             <div className="flex items-center text-red-800">
+              <AlertCircle className="h-4 w-4 mr-2" />
               <span className="text-sm">❌ Error: {error}</span>
             </div>
           </AlertDescription>

@@ -23,6 +23,8 @@ export function buildMeliDataPayload(
   const dateFrom = dateRange.fromISO || null;
   const dateTo = dateRange.toISO || null;
 
+  console.log("Building payload with date range:", { dateFrom, dateTo });
+
   // Prepare simplified batch requests
   const batchRequests = [
     {
@@ -68,26 +70,34 @@ export async function fetchMeliData(
 
   try {
     // Call the edge function to fetch data from MeLi
+    console.time('meli-data-fetch');
     const { data: batchData, error: batchError } = await supabase.functions.invoke('meli-data', {
       body: payload
     });
+    console.timeEnd('meli-data-fetch');
     
     if (batchError) {
+      console.error('Error from edge function:', batchError);
       throw new Error(`Error al obtener datos: ${batchError.message}`);
     }
     
     if (!batchData) {
+      console.error('No data received from edge function');
       throw new Error("No se recibieron datos de la función meli-data");
     }
 
+    console.log('Received response from meli-data:', batchData);
+
     // Handle API errors
     if (!batchData.success) {
+      console.error('API request unsuccessful:', batchData);
       throw new Error(batchData?.message || batchData?.error || 'Error desconocido al obtener datos');
     }
     
     return { data: batchData, error: null };
   } catch (error: any) {
     const errorMessage = error.message || "No se pudieron cargar los datos de Mercado Libre.";
+    console.error('Error fetching MeLi data:', errorMessage);
     
     toastFn.toast({
       variant: "destructive",

@@ -44,22 +44,28 @@ export function useMeliDataFetcher({
   const fetchData = useCallback(async (retryCount = 0) => {
     // Early return if prerequisites aren't met
     if (!userId || !meliUserId) {
+      console.log("Missing prerequisites: userId or meliUserId is undefined", { userId, meliUserId });
       return { data: null, fromCache: false };
     }
     
     setError(null);
     
     const cacheKey = getCacheKey();
+    console.log("Generated cache key:", cacheKey);
     
     // Prevent duplicate requests
     if (requestInProgress.current === cacheKey) {
+      console.log("Request already in progress for this cache key, skipping");
       return { data: null, fromCache: false };
     }
 
     // Check cache first
     const cachedData = checkCache();
     if (cachedData) {
+      console.log("Found cached data for key:", cacheKey);
       return { data: cachedData, fromCache: true };
+    } else {
+      console.log("No cached data found for key:", cacheKey);
     }
 
     try {
@@ -80,6 +86,7 @@ export function useMeliDataFetcher({
       // Check for duplicate requests
       const payloadString = JSON.stringify(requestPayload);
       if (payloadString === lastRequestPayload.current && requestAttempts.current > 0) {
+        console.log("Duplicate request detected, skipping");
         if (isMounted.current) setIsLoading(false);
         requestInProgress.current = null;
         return { data: null, fromCache: false };
@@ -89,25 +96,32 @@ export function useMeliDataFetcher({
       requestAttempts.current++;
       
       // Fetch data
+      console.log("Fetching data with payload:", requestPayload);
       const { data: batchData, error: fetchError } = await fetchMeliData(
         requestPayload,
         { toast }
       );
       
       if (fetchError) {
+        console.error("Error fetching data:", fetchError);
         setError(fetchError);
         return { data: null, fromCache: false };
       }
       
       if (!batchData) {
+        console.error("No data received from API");
         throw new Error("No se recibieron datos");
       }
 
+      console.log("Received data from API:", batchData);
+
       // Handle rate limiting
       if (!batchData.success) {
+        console.error("API request unsuccessful:", batchData);
         if (batchData?.error?.includes('429') || batchData?.message?.includes('rate limit')) {
           if (retryCount < 3) {
             const delay = Math.pow(2, retryCount) * 1000;
+            console.log(`Rate limited, retrying in ${delay}ms (attempt ${retryCount + 1}/3)`);
             await new Promise(resolve => setTimeout(resolve, delay));
             return fetchData(retryCount + 1);
           }
@@ -116,10 +130,12 @@ export function useMeliDataFetcher({
       }
       
       // Save response to cache
+      console.log("Saving data to cache with key:", cacheKey);
       saveToCache(batchData);
       
       return { data: batchData, fromCache: false };
     } catch (error: any) {
+      console.error("Error in fetchData:", error);
       setError(error.message || "No se pudieron cargar los datos de Mercado Libre.");
       toast({
         variant: "destructive",
@@ -136,6 +152,7 @@ export function useMeliDataFetcher({
 
   // Public method to force refresh data
   const refreshData = useCallback(async () => {
+    console.log("Refreshing data (clearing cache)");
     clearCache();
     
     toast({
