@@ -1,4 +1,3 @@
-
 import { useState, useCallback } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { SalesSummary } from '@/types/meli';
@@ -35,11 +34,9 @@ export function useMeliResponseProcessor({
   const { toast } = useToast();
 
   const processResponseData = useCallback((batchData: any) => {
-    // Set test data flag based on response
     const isUsingTestData = !!batchData.is_test_data;
     setIsTestData(isUsingTestData);
     
-    // Log test data status
     console.log(`🧪 Using test data: ${isUsingTestData ? 'YES' : 'NO'}`);
     
     if (batchData.dashboard_data) {
@@ -48,16 +45,13 @@ export function useMeliResponseProcessor({
       }
       
       if (batchData.dashboard_data.summary) {
-        // Use the processSalesSummary utility to calculate additional metrics
         const processedSummary = processSalesSummary(batchData.dashboard_data.summary);
         setSalesSummary(processedSummary);
         
-        // Log the summary for the current date filter
         logSalesSummaryToConsole(dateFilter, dateRange, processedSummary);
       }
       
       if (batchData.dashboard_data.prev_summary) {
-        // Process previous period summary
         const prevProcessedSummary = processSalesSummary(batchData.dashboard_data.prev_summary);
         setPrevSalesSummary(prevProcessedSummary);
       }
@@ -83,7 +77,6 @@ export function useMeliResponseProcessor({
         }
       }
     } else if (!batchData.has_dashboard_data) {
-      // Reset all data when no dashboard data is available
       setSalesSummary(createEmptySalesSummary());
       setPrevSalesSummary(createEmptySalesSummary());
       setSalesData([]);
@@ -103,7 +96,7 @@ export function useMeliResponseProcessor({
         toast({
           title: "Mostrando datos de prueba",
           description: "No se encontraron órdenes reales para el período seleccionado",
-          variant: "warning",
+          variant: "default",
           duration: 5000
         });
       }
