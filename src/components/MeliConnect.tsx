@@ -3,18 +3,21 @@ import React, { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from "@/components/ui/use-toast";
-import { Loader2, Info, Check, RefreshCw } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Loader2, Info, Check, RefreshCw, LogOut, AlertCircle } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { TooltipProvider, Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const MeliConnect = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState<any>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isConnecting, setIsConnecting] = useState(false);
-  const [connectionDetails, setConnectionDetails] = useState(null);
-  const [tokenStatus, setTokenStatus] = useState(null);
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
+  const [connectionDetails, setConnectionDetails] = useState<any>(null);
+  const [tokenStatus, setTokenStatus] = useState<any>(null);
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const { toast } = useToast();
   
   useEffect(() => {
@@ -110,7 +113,7 @@ const MeliConnect = () => {
     });
     
     return () => subscription.unsubscribe();
-  }, []);
+  }, [toast]);
 
   // Function to handle MeLi OAuth connection
   const handleMeliConnect = () => {
@@ -124,7 +127,7 @@ const MeliConnect = () => {
       const REDIRECT_URI = 'https://melimetrics.app/oauth/callback';
       
       // Generate a state parameter that includes the user ID and a random string
-      const randomStateValue = Math.random().toString(36).substring(2, 15);
+      const randomStateValue = crypto.randomUUID();
       const STATE = `${user.id}:${randomStateValue}`;
       
       console.log("Generated OAuth state:", STATE);
@@ -212,6 +215,50 @@ const MeliConnect = () => {
       setIsConnecting(false);
     }
   };
+  
+  // Handle disconnecting from Mercado Libre
+  const handleDisconnect = async () => {
+    if (!user?.id) return;
+    
+    try {
+      setIsDisconnecting(true);
+      
+      // Llamar al edge function para revocar token
+      const { data, error } = await supabase.functions.invoke('meli-disconnect', {
+        body: { user_id: user.id }
+      });
+      
+      if (error) {
+        throw new Error(error.message);
+      }
+      
+      if (!data?.success) {
+        throw new Error(data?.message || 'Error al desconectar la cuenta');
+      }
+      
+      // Actualizar estado local
+      setIsConnected(false);
+      setConnectionDetails(null);
+      setTokenStatus(null);
+      
+      // Mostrar mensaje de éxito
+      toast({
+        title: "Cuenta desconectada",
+        description: "Tu cuenta de Mercado Libre ha sido desconectada correctamente.",
+      });
+      
+    } catch (error: any) {
+      console.error("Error disconnecting:", error);
+      toast({
+        variant: "destructive",
+        title: "Error al desconectar",
+        description: error.message || "No se pudo desconectar la cuenta de Mercado Libre."
+      });
+    } finally {
+      setIsDisconnecting(false);
+      setConfirmDisconnect(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -224,7 +271,7 @@ const MeliConnect = () => {
   if (isConnected) {
     return (
       <TooltipProvider>
-        <Dialog>
+        <Dialog open={confirmDisconnect} onOpenChange={setConfirmDisconnect}>
           <DialogTrigger asChild>
             <Button 
               className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-2 px-6 py-3"
@@ -241,7 +288,8 @@ const MeliConnect = () => {
               <Info className="h-4 w-4 ml-1 text-white opacity-70" />
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          
+          <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Cuenta de Mercado Libre conectada</DialogTitle>
               <DialogDescription>
@@ -269,31 +317,80 @@ const MeliConnect = () => {
                   <div>
                     <p className="text-sm">La aplicación tiene acceso a tus datos de ventas, productos y métricas de Mercado Libre.</p>
                   </div>
-                  
-                  <div className="pt-3 flex justify-between">
-                    <Button
-                      variant="outline"
-                      onClick={handleMeliConnect}
-                      disabled={isConnecting}
-                    >
-                      Reconectar cuenta
-                      {isConnecting && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
-                    </Button>
-                    
-                    <Button
-                      variant="default"
-                      onClick={handleManualRefresh}
-                      disabled={isConnecting}
-                      className="flex items-center gap-2"
-                    >
-                      <RefreshCw className="h-4 w-4" />
-                      Actualizar token
-                      {isConnecting && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
-                    </Button>
-                  </div>
                 </div>
               </DialogDescription>
             </DialogHeader>
+            
+            <div className="pt-3 flex justify-between gap-2">
+              <Button
+                variant="outline" 
+                onClick={() => setConfirmDisconnect(true)}
+                disabled={isDisconnecting}
+                className="flex items-center gap-2"
+              >
+                <LogOut className="h-4 w-4" />
+                Desconectar cuenta
+              </Button>
+              
+              <Button
+                variant="default"
+                onClick={handleManualRefresh}
+                disabled={isConnecting || isDisconnecting}
+                className="flex items-center gap-2"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Actualizar token
+                {isConnecting && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+        
+        {/* Confirmation dialog for disconnecting */}
+        <Dialog open={confirmDisconnect} onOpenChange={setConfirmDisconnect}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>¿Desconectar cuenta de Mercado Libre?</DialogTitle>
+              <DialogDescription>
+                Esta acción revocará el acceso de la aplicación a tu cuenta de Mercado Libre.
+                Tendrás que volver a autorizar la aplicación para acceder a tus datos.
+              </DialogDescription>
+            </DialogHeader>
+            
+            <Alert variant="destructive" className="mt-2">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                Al desconectar la cuenta, no podrás acceder a tus métricas de ventas hasta que vuelvas a conectarte.
+              </AlertDescription>
+            </Alert>
+            
+            <DialogFooter className="flex justify-end gap-2 sm:justify-end">
+              <Button 
+                variant="outline" 
+                onClick={() => setConfirmDisconnect(false)}
+                disabled={isDisconnecting}
+              >
+                Cancelar
+              </Button>
+              <Button 
+                variant="destructive" 
+                onClick={handleDisconnect}
+                disabled={isDisconnecting}
+                className="flex items-center gap-2"
+              >
+                {isDisconnecting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Desconectando...
+                  </>
+                ) : (
+                  <>
+                    <LogOut className="h-4 w-4" />
+                    Desconectar
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </TooltipProvider>

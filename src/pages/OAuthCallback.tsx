@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2 } from "lucide-react";
+import { Loader2, AlertCircle } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 
 const OAuthCallback = () => {
@@ -124,9 +124,12 @@ const OAuthCallback = () => {
               </div>
             </div>
           ) : error ? (
-            <div className="text-center text-red-500">
-              <p className="font-semibold">Error:</p>
-              <p>{error}</p>
+            <div className="text-center">
+              <div className="flex justify-center mb-4">
+                <AlertCircle className="h-12 w-12 text-red-500" />
+              </div>
+              <h3 className="font-semibold text-red-600 mb-2">Error:</h3>
+              <p className="mb-4">{error}</p>
               <button 
                 onClick={() => navigate('/dashboard')}
                 className="mt-4 text-gofor-purple hover:underline"

@@ -86,6 +86,17 @@ export async function fetchMeliData(
     // Handle API errors
     if (!batchData.success) {
       console.error('API request unsuccessful:', batchData);
+      
+      // Handle rate limiting specifically
+      if (batchData.error?.includes('429') || batchData.message?.includes('rate_limit')) {
+        throw new Error('Límite de solicitudes excedido. Por favor, inténtalo de nuevo en unos minutos.');
+      }
+      
+      // Handle authentication errors
+      if (batchData.error?.includes('401') || batchData.message?.includes('unauthorized') || batchData.message?.includes('authentication')) {
+        throw new Error('Error de autenticación con Mercado Libre. Por favor, reconecta tu cuenta.');
+      }
+      
       throw new Error(batchData?.message || batchData?.error || 'Error desconocido al obtener datos');
     }
     
@@ -102,5 +113,46 @@ export async function fetchMeliData(
     });
     
     return { data: null, error: errorMessage };
+  }
+}
+
+/**
+ * Disconnects a user's Mercado Libre account
+ */
+export async function disconnectMeliAccount(
+  userId: string,
+  toastFn: { toast: (props: Toast) => void }
+) {
+  try {
+    const { data, error } = await supabase.functions.invoke('meli-disconnect', {
+      body: { user_id: userId }
+    });
+    
+    if (error) {
+      throw new Error(`Error al desconectar: ${error.message}`);
+    }
+    
+    if (!data || !data.success) {
+      throw new Error(data?.message || 'Error al desconectar la cuenta');
+    }
+    
+    toastFn.toast({
+      title: "Cuenta desconectada",
+      description: "Tu cuenta de Mercado Libre ha sido desconectada correctamente.",
+      duration: 3000
+    });
+    
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error disconnecting MeLi account:', error);
+    
+    toastFn.toast({
+      variant: "destructive",
+      title: "Error al desconectar",
+      description: error.message || "No se pudo desconectar la cuenta de Mercado Libre.",
+      duration: 5000
+    });
+    
+    return { success: false, error: error.message };
   }
 }
