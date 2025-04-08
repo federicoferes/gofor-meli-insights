@@ -167,19 +167,19 @@ const Dashboard = () => {
 
   if (isLoading) {
     return (
-      <section id="dashboard" className="py-20 bg-gray-50">
+      <div id="dashboard" className="py-20 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col items-center justify-center py-20">
             <Loader2 className="h-10 w-10 text-gofor-purple animate-spin mb-4" />
             <p className="text-lg text-gray-600">Cargando datos del dashboard...</p>
           </div>
         </div>
-      </section>
+      </div>
     );
   }
 
   return (
-    <section id="dashboard" className="py-20 bg-gray-50">
+    <div id="dashboard" className="py-20 bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
           <h2 className="text-3xl md:text-4xl font-bold mb-4">Tu Dashboard en acción</h2>
@@ -610,7 +610,7 @@ const Dashboard = () => {
           </TabsContent>
         </Tabs>
       </div>
-    </section>
+    </div>
   );
 };
 
