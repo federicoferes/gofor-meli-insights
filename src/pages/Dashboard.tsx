@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { generateDemoData } from '@/utils/demoData';
@@ -146,25 +145,6 @@ const Dashboard = () => {
   const visits = isDemo ? demoData?.salesSummary?.visits : salesSummary?.visits || 115683;
   const ctr = 3.8; // Replace with real data when available
 
-  // Calculate percent changes
-  const gmvChange = isDemo
-    ? '+15.3'
-    : prevSalesSummary?.gmv
-      ? ((salesSummary?.gmv - prevSalesSummary?.gmv) / prevSalesSummary?.gmv * 100).toFixed(1)
-      : '+15.3';
-  
-  const ordersChange = isDemo
-    ? '+8.7'
-    : prevSalesSummary?.orders
-      ? ((salesSummary?.orders - prevSalesSummary?.orders) / prevSalesSummary?.orders * 100).toFixed(1)
-      : '+8.7';
-  
-  const ticketChange = isDemo
-    ? '+5.2'
-    : prevSalesSummary?.avgTicket
-      ? ((salesSummary?.avgTicket - prevSalesSummary?.avgTicket) / prevSalesSummary?.avgTicket * 100).toFixed(1)
-      : '+5.2';
-
   // Safe formatting helper functions to prevent undefined.toLocaleString() errors
   const safeFormatNumber = (value: number | undefined) => {
     return value !== undefined && value !== null ? value.toLocaleString() : '0';
@@ -172,6 +152,18 @@ const Dashboard = () => {
   
   const safeFormatCurrency = (value: number | undefined) => {
     return value !== undefined && value !== null ? `$${value.toLocaleString('es-AR')}` : '$0';
+  };
+
+  // Type-safe formatter for chart tooltips
+  const formatTooltipValue = (value: any, currency = false) => {
+    if (value === undefined || value === null) return currency ? '$0' : '0';
+    
+    const numValue = typeof value === 'string' ? parseFloat(value) : value;
+    if (isNaN(numValue)) return currency ? '$0' : '0';
+
+    return currency 
+      ? `$${numValue.toLocaleString()}` 
+      : numValue.toLocaleString();
   };
 
   if (isLoading) {
@@ -266,7 +258,7 @@ const Dashboard = () => {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" />
                     <YAxis />
-                    <Tooltip formatter={(value) => [`$${value ? value.toLocaleString() : '0'}`, 'GMV']} />
+                    <Tooltip formatter={(value) => [formatTooltipValue(value, true), 'GMV']} />
                     <Area type="monotone" dataKey="GMV" stroke="#8884d8" fillOpacity={1} fill="url(#colorGMV)" />
                   </AreaChart>
                 </ResponsiveContainer>
@@ -344,12 +336,12 @@ const Dashboard = () => {
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={displayCostData} cx="50%" cy="50%" labelLine={false} label={({
-                      name,
-                      percent
-                    }) => `${name}: ${(percent * 100).toFixed(0)}%`} outerRadius={120} fill="#8884d8" dataKey="value">
+                    name,
+                    percent
+                  }) => `${name}: ${(percent * 100).toFixed(0)}%`} outerRadius={120} fill="#8884d8" dataKey="value">
                       {displayCostData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
                     </Pie>
-                    <Tooltip formatter={value => [safeFormatCurrency(value), 'Monto']} />
+                    <Tooltip formatter={(value) => [formatTooltipValue(value, true), 'Monto']} />
                     <Legend />
                   </PieChart>
                 </ResponsiveContainer>
