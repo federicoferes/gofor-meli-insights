@@ -17,7 +17,6 @@ const Dashboard = () => {
   const isDemo = searchParams.get('demo') === 'true';
   const [demoData, setDemoData] = useState<any>(null);
 
-  // Get real data using the useMeliData hook
   const {
     isLoading,
     salesData,
@@ -35,7 +34,6 @@ const Dashboard = () => {
     meliUserId: ''
   });
 
-  // Fallback data for when real data isn't available
   const fallbackSalesData = [{
     name: 'Ene',
     value: 12400,
@@ -130,22 +128,37 @@ const Dashboard = () => {
     }
   }, [isDemo]);
 
-  // Use real data if available, otherwise use fallback data
   const displaySalesData = isDemo ? demoData?.salesData : salesData?.length > 0 ? salesData : fallbackSalesData;
-  const displayPerformanceData = isDemo ? demoData?.performanceData : fallbackPerformanceData; // Replace when real data is available
+  const displayPerformanceData = isDemo ? demoData?.performanceData : fallbackPerformanceData;
   const displayCostData = isDemo ? demoData?.costData : costData?.length > 0 ? costData : fallbackCostDistributionData;
   const displayTopProducts = isDemo ? demoData?.topProducts : topProducts?.length > 0 ? topProducts : fallbackTopProducts;
   const displayProvinceData = isDemo ? demoData?.provinceData : provinceData?.length > 0 ? provinceData : [];
-  
-  // Calculate metrics from salesSummary
+
   const gmv = isDemo ? demoData?.salesSummary?.gmv : salesSummary?.gmv || 1234567;
   const orders = isDemo ? demoData?.salesSummary?.orders : salesSummary?.orders || 4856;
   const avgTicket = isDemo ? demoData?.salesSummary?.avgTicket : salesSummary?.avgTicket || 254.23;
   const conversion = isDemo ? demoData?.salesSummary?.conversion : salesSummary?.conversion || 4.2;
   const visits = isDemo ? demoData?.salesSummary?.visits : salesSummary?.visits || 115683;
-  const ctr = 3.8; // Replace with real data when available
+  const ctr = 3.8;
 
-  // Safe formatting helper functions to prevent undefined.toLocaleString() errors
+  const gmvChange = isDemo
+    ? '+15.3'
+    : prevSalesSummary?.gmv && salesSummary?.gmv
+      ? ((salesSummary.gmv - prevSalesSummary.gmv) / prevSalesSummary.gmv * 100).toFixed(1)
+      : '+15.3';
+  
+  const ordersChange = isDemo
+    ? '+8.7'
+    : prevSalesSummary?.orders && salesSummary?.orders
+      ? ((salesSummary.orders - prevSalesSummary.orders) / prevSalesSummary.orders * 100).toFixed(1)
+      : '+8.7';
+  
+  const ticketChange = isDemo
+    ? '+5.2'
+    : prevSalesSummary?.avgTicket && salesSummary?.avgTicket
+      ? ((salesSummary.avgTicket - prevSalesSummary.avgTicket) / prevSalesSummary.avgTicket * 100).toFixed(1)
+      : '+5.2';
+
   const safeFormatNumber = (value: number | undefined) => {
     return value !== undefined && value !== null ? value.toLocaleString() : '0';
   };
@@ -154,7 +167,6 @@ const Dashboard = () => {
     return value !== undefined && value !== null ? `$${value.toLocaleString('es-AR')}` : '$0';
   };
 
-  // Type-safe formatter for chart tooltips
   const formatTooltipValue = (value: any, currency = false) => {
     if (value === undefined || value === null) return currency ? '$0' : '0';
     
@@ -424,7 +436,6 @@ const Dashboard = () => {
                   </TableHeader>
                   <TableBody>
                     {displayTopProducts.map(product => {
-                      // Calculate total revenue safely
                       const totalRevenue = displayTopProducts.reduce((sum, p) => sum + (p.revenue || 0), 0);
                       const percentage = totalRevenue > 0 && product.revenue 
                         ? ((product.revenue / totalRevenue) * 100).toFixed(1) 
