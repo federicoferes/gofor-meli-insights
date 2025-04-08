@@ -1,6 +1,6 @@
 
 import { SalesSummary } from "@/types/meli";
-import { formatDateLabelForDisplay } from "./dateFormatters";
+import { formatDateLabelForDisplay, formatCustomDateRange } from "./dateFormatters";
 
 /**
  * Centralized utility for logging date range selections
