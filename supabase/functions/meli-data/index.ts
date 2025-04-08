@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -790,13 +791,13 @@ serve(async (req) => {
     }
     
     // Filter out visits requests - we handle them separately
-    const filteredRequests = batch_requests.filter(req => !req.endpoint.includes('/visits/'));
+    const filteredRequests = batch_requests.filter(req => 
+      !req.endpoint.includes('/visits/') && 
+      !req.endpoint.includes('/users/') && // Remove product-related endpoints
+      !req.endpoint.includes('/items/')     // Remove item-related endpoints
+    );
     
-    // Extract product IDs for visits
-    const productIdsRequest = batch_requests.find(req => req.endpoint.includes('/visits/items'));
-    const productIds = productIdsRequest?.params?._productIds || product_ids || [];
-    
-    // Make batch requests (excluding visits)
+    // Make batch requests (excluding visits and products)
     console.log("Making batch requests with filtered requests:", JSON.stringify(filteredRequests, null, 2));
     const batchResults = await batchRequests(tokenResult.token, filteredRequests);
     console.log("Received batch results:", batchResults.map(r => ({ 
@@ -807,9 +808,6 @@ serve(async (req) => {
       hasResults: r.data?.results ? true : false,
       resultsCount: r.data?.results?.length || 0
     })));
-    
-    // Debug full batch results 
-    console.log("DEBUG batchResults full:", JSON.stringify(batchResults, null, 2));
     
     // Extract relevant data from responses
     const ordersResponses = batchResults.filter(res => 
@@ -855,24 +853,16 @@ serve(async (req) => {
       }
     });
     
-    // Extract product IDs from seller's products
-    const productsResponse = batchResults.find(res => 
-      res.success && res.endpoint.includes('/users/') && res.endpoint.includes('/items/search')
-    );
-    
-    let sellerProductIds: string[] = [];
-    
-    if (productsResponse && productsResponse.data && productsResponse.data.results) {
-      sellerProductIds = productsResponse.data.results.filter((id: string) => !orderProductIds.includes(id));
-    }
-    
-    // Combine both sets of IDs for visits and filter out any invalid values
-    const allProductIds = [...orderProductIds, ...sellerProductIds].filter(Boolean);
+    // Combine IDs for visits - SIMPLIFIED: only use orderProductIds
+    const allProductIds = orderProductIds.filter(Boolean);
     console.log("🧾 Product IDs for visits:", allProductIds);
     
     if (allOrders.length > 0) {
-      // Process visits individually - fixed to comply with MeLi API limitation
-      const visitsData = await getItemVisitsIndividually(tokenResult.token, allProductIds);
+      // Process visits only if we have orders and product IDs
+      let visitsData = { totalVisits: 0, itemVisits: {} };
+      if (allProductIds.length > 0) {
+        visitsData = await getItemVisitsIndividually(tokenResult.token, allProductIds);
+      }
       
       // Process advertising with the correct endpoint
       const advertisingSpent = await processAdvertising(tokenResult.token, tokenResult.meliUserId);
@@ -931,97 +921,14 @@ serve(async (req) => {
       });
     }
     
-    // Handle product details requests
-    if (productsResponse?.success && productsResponse?.data?.results?.length > 0) {
-      try {
-        const productDetailsResults = batchResults.filter(res => 
-          res.success && res.endpoint.includes('/items/') && !res.endpoint.includes('/search')
-        );
-        
-        console.log(`Processing ${productDetailsResults.length} product details results`);
-        
-        // Process all product details and update/insert to Supabase
-        let processedItems = 0;
-        let successfulUpserts = 0;
-        
-        for (const item of productDetailsResults) {
-          if (!item?.data) {
-            console.warn("Item without data:", item);
-            continue;
-          }
-          
-          processedItems++;
-          
-          try {
-            // Validar que el producto tiene los campos necesarios antes de proceder
-            if (!item.data.id || !item.data.title) {
-              console.warn("Producto incompleto, omitiendo:", {
-                id: item.data.id || 'missing',
-                title: item.data.title ? 'present' : 'missing'
-              });
-              continue;
-            }
-            
-            const product = {
-              item_id: item.data.id,
-              title: item.data.title,
-              price: item.data.price || 0,
-              available_quantity: item.data.available_quantity || 0,
-              sold_quantity: item.data.sold_quantity || 0,
-              thumbnail: item.data.thumbnail || null,
-              permalink: item.data.permalink || null,
-              cost: null,
-              user_id: userId
-            };
-            
-            // Find if we already have this product with a cost
-            const { data: existingProduct, error: findError } = await supabaseClient
-              .from('products')
-              .select('id, cost')
-              .eq('item_id', item.data.id)
-              .eq('user_id', userId)
-              .maybeSingle();
-            
-            if (findError) {
-              console.warn("Error buscando producto existente:", findError);
-            }
-            
-            if (existingProduct) {
-              product.cost = existingProduct.cost;
-            }
-            
-            // Debugging log usando acceso seguro a las propiedades
-            const titleForLog = product.title ? product.title.substring(0, 20) + '...' : 'undefined';
-            console.log("Upserting product:", {
-              item_id: product.item_id || 'undefined',
-              title: titleForLog,
-              user_id: product.user_id,
-              id: existingProduct?.id || 'new'
-            });
-            
-            // Upsert to database - use onConflict to avoid duplicates
-            const { error } = await supabaseClient
-              .from('products')
-              .upsert([product], { 
-                onConflict: 'user_id,item_id' 
-              });
-              
-            if (error) {
-              console.error("Failed to upsert product", product.item_id, error);
-            } else {
-              successfulUpserts++;
-            }
-          } catch (upsertError) {
-            console.error("Exception during product upsert:", upsertError);
-          }
-        }
-        
-        console.log(`Processed ${processedItems} items, successfully upserted ${successfulUpserts} products`);
-      } catch (productProcessingError) {
-        // Este error no debe romper la función completa
-        console.error("Error processing products:", productProcessingError);
-      }
-    }
+    /* REMOVED: Product processing logic was here
+       Code previously handled:
+       1. Processing product details requests
+       2. Upserting products to the database
+       3. Handling product errors
+       
+       This functionality has been intentionally removed as requested
+    */
     
     return responseWithCors({
       success: true,
