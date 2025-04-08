@@ -3,7 +3,6 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import UserRegistrationForm from '@/components/UserRegistrationForm';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 
 const Register = () => {
   return (
@@ -25,7 +24,7 @@ const Register = () => {
           <CardHeader>
             <CardTitle>Registro</CardTitle>
             <CardDescription>
-              Ingresa tus datos para comenzar a usar Go For MeLi Insights
+              Ingresa tus datos para unirte a la lista de espera de Go For MeLi Insights
             </CardDescription>
           </CardHeader>
           <CardContent>
