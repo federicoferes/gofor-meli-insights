@@ -328,6 +328,11 @@ function processOrders(orders: any[]) {
 
 // Process visit data individually - following MeLi API docs
 async function getItemVisitsIndividually(token: string, itemIds: string[]) {
+  if (!Array.isArray(itemIds)) {
+    console.error("❌ itemIds is not an array:", itemIds);
+    return { totalVisits: 0, itemVisits: {} };
+  }
+  
   if (!itemIds || !itemIds.length) {
     return { totalVisits: 0, itemVisits: {} };
   }
@@ -861,8 +866,9 @@ serve(async (req) => {
       sellerProductIds = productsResponse.data.results.filter((id: string) => !orderProductIds.includes(id));
     }
     
-    // Combine both sets of IDs for visits
-    const allProductIds = [...orderProductIds, ...sellerProductIds];
+    // Combine both sets of IDs for visits and filter out any invalid values
+    const allProductIds = [...orderProductIds, ...sellerProductIds].filter(Boolean);
+    console.log("🧾 Product IDs for visits:", allProductIds);
     
     if (allOrders.length > 0) {
       // Process visits individually - fixed to comply with MeLi API limitation
