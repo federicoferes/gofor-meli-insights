@@ -1,6 +1,6 @@
 
 import { supabase } from '@/integrations/supabase/client';
-import { ToastOptions } from '@/components/ui/use-toast';
+import { toast } from "@/hooks/use-toast";
 import { DateRange } from '@/types/meli';
 
 /**
@@ -55,7 +55,7 @@ export function buildMeliDataPayload(
  */
 export async function fetchMeliData(
   payload: any, 
-  handleToast: (options: ToastOptions) => void
+  handleToast: typeof toast
 ) {
   console.log('🛰 Enviando payload a meli-data:', JSON.stringify(payload, null, 2));
 
