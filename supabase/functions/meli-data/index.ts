@@ -928,6 +928,98 @@ serve(async (req) => {
       });
     }
     
+    // Handle product details requests
+    if (productsResponse?.success && productsResponse?.data?.results?.length > 0) {
+      try {
+        const productDetailsResults = batchResults.filter(res => 
+          res.success && res.endpoint.includes('/items/') && !res.endpoint.includes('/search')
+        );
+        
+        console.log(`Processing ${productDetailsResults.length} product details results`);
+        
+        // Process all product details and update/insert to Supabase
+        let processedItems = 0;
+        let successfulUpserts = 0;
+        
+        for (const item of productDetailsResults) {
+          if (!item?.data) {
+            console.warn("Item without data:", item);
+            continue;
+          }
+          
+          processedItems++;
+          
+          try {
+            // Validar que el producto tiene los campos necesarios antes de proceder
+            if (!item.data.id || !item.data.title) {
+              console.warn("Producto incompleto, omitiendo:", {
+                id: item.data.id || 'missing',
+                title: item.data.title ? 'present' : 'missing'
+              });
+              continue;
+            }
+            
+            const product = {
+              item_id: item.data.id,
+              title: item.data.title,
+              price: item.data.price || 0,
+              available_quantity: item.data.available_quantity || 0,
+              sold_quantity: item.data.sold_quantity || 0,
+              thumbnail: item.data.thumbnail || null,
+              permalink: item.data.permalink || null,
+              cost: null,
+              user_id: userId
+            };
+            
+            // Find if we already have this product with a cost
+            const { data: existingProduct, error: findError } = await supabaseClient
+              .from('products')
+              .select('id, cost')
+              .eq('item_id', item.data.id)
+              .eq('user_id', userId)
+              .maybeSingle();
+            
+            if (findError) {
+              console.warn("Error buscando producto existente:", findError);
+            }
+            
+            if (existingProduct) {
+              product.cost = existingProduct.cost;
+            }
+            
+            // Debugging log usando acceso seguro a las propiedades
+            const titleForLog = product.title ? product.title.substring(0, 20) + '...' : 'undefined';
+            console.log("Upserting product:", {
+              item_id: product.item_id || 'undefined',
+              title: titleForLog,
+              user_id: product.user_id,
+              id: existingProduct?.id || 'new'
+            });
+            
+            // Upsert to database - use onConflict to avoid duplicates
+            const { error } = await supabaseClient
+              .from('products')
+              .upsert([product], { 
+                onConflict: 'user_id,item_id' 
+              });
+              
+            if (error) {
+              console.error("Failed to upsert product", product.item_id, error);
+            } else {
+              successfulUpserts++;
+            }
+          } catch (upsertError) {
+            console.error("Exception during product upsert:", upsertError);
+          }
+        }
+        
+        console.log(`Processed ${processedItems} items, successfully upserted ${successfulUpserts} products`);
+      } catch (productProcessingError) {
+        // Este error no debe romper la función completa
+        console.error("Error processing products:", productProcessingError);
+      }
+    }
+    
     return responseWithCors({
       success: true,
       batch_results: allResults,

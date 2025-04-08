@@ -148,56 +148,75 @@ export function useProducts({
           for (const item of response.data.batch_results) {
             if (item?.data) {
               processedItems++;
-              const product: Product = {
-                item_id: item.data.id,
-                title: item.data.title,
-                price: item.data.price,
-                available_quantity: item.data.available_quantity,
-                sold_quantity: item.data.sold_quantity || 0,
-                thumbnail: item.data.thumbnail,
-                permalink: item.data.permalink,
-                // Find cost from stored products or default to null
-                cost: null
-              };
-
-              // Find if we already have this product with a cost
-              const existingProduct = storedProducts?.find(p => p.item_id === item.data.id);
-              if (existingProduct) {
-                product.id = existingProduct.id;
-                product.cost = existingProduct.cost;
-              }
-
-              productItems.push(product);
-              
-              // Upsert to database - use onConflict to avoid duplicates
-              console.log(`Upserting product ${product.item_id} (${product.title}) with userId: ${userId}`);
               
               try {
-                const upsertProduct: ProductUpsert = {
-                  ...product,
-                  user_id: userId // Explicitly set user_id to ensure it's defined
+                // Validar que el producto tenga los datos necesarios
+                if (!item.data.id || !item.data.title) {
+                  console.warn("Producto incompleto, omitiendo:", {
+                    id: item.data.id || 'missing',
+                    hasTitle: !!item.data.title
+                  });
+                  continue;
+                }
+                
+                const product: Product = {
+                  item_id: item.data.id,
+                  title: item.data.title,
+                  price: item.data.price || 0,
+                  available_quantity: item.data.available_quantity || 0,
+                  sold_quantity: item.data.sold_quantity || 0,
+                  thumbnail: item.data.thumbnail || null,
+                  permalink: item.data.permalink || null,
+                  // Find cost from stored products or default to null
+                  cost: null
                 };
+
+                // Find if we already have this product with a cost
+                const existingProduct = storedProducts?.find(p => p.item_id === item.data.id);
+                if (existingProduct) {
+                  product.id = existingProduct.id;
+                  product.cost = existingProduct.cost;
+                }
+
+                productItems.push(product);
                 
-                console.log("Upserting product:", {
-                  item_id: upsertProduct.item_id,
-                  title: upsertProduct.title.substring(0, 20) + '...',
-                  user_id: upsertProduct.user_id,
-                  id: upsertProduct.id || 'new'
-                });
+                // Upsert to database - use onConflict to avoid duplicates
+                console.log(`Upserting product ${product.item_id} (${product.title}) with userId: ${userId}`);
                 
-                const { error } = await supabase
-                  .from('products')
-                  .upsert([upsertProduct], { 
-                    onConflict: 'user_id,item_id' 
+                try {
+                  const upsertProduct: ProductUpsert = {
+                    ...product,
+                    user_id: userId // Explicitly set user_id to ensure it's defined
+                  };
+                  
+                  // Usar optional chaining y proporcionar un valor predeterminado para la seguridad
+                  const titleForLog = upsertProduct.title ? 
+                    upsertProduct.title.substring(0, 20) + '...' : 
+                    'undefined';
+                  
+                  console.log("Upserting product:", {
+                    item_id: upsertProduct.item_id || 'undefined',
+                    title: titleForLog,
+                    user_id: upsertProduct.user_id,
+                    id: upsertProduct.id || 'new'
                   });
                   
-                if (error) {
-                  console.error("Failed to upsert product", product.item_id, error);
-                } else {
-                  successfulUpserts++;
+                  const { error } = await supabase
+                    .from('products')
+                    .upsert([upsertProduct], { 
+                      onConflict: 'user_id,item_id' 
+                    });
+                    
+                  if (error) {
+                    console.error("Failed to upsert product", product.item_id, error);
+                  } else {
+                    successfulUpserts++;
+                  }
+                } catch (upsertError) {
+                  console.error("Exception during product upsert:", upsertError);
                 }
-              } catch (upsertError) {
-                console.error("Exception during product upsert:", upsertError);
+              } catch (productProcessError) {
+                console.error("Error processing product data:", productProcessError);
               }
             } else if (item.error) {
               console.warn("Error fetching item details:", item.error);
