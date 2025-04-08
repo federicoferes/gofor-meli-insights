@@ -23,11 +23,15 @@ serve(async (req) => {
       throw new Error("Missing MELI_APP_ID or MELI_CLIENT_SECRET environment variables");
     }
 
+    console.log("Initializing meli-auth function");
+
     // Create a Supabase client with the service role key
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     const body = await req.json();
     const { code, redirect_uri, user_id } = body;
+
+    console.log("Received auth request:", { code: code ? "present" : "missing", redirect_uri, user_id });
 
     if (!code) {
       throw new Error("Missing code parameter");
@@ -44,6 +48,17 @@ serve(async (req) => {
     console.log(`Exchanging code for access token for user ${user_id}`);
     console.log(`Using redirect_uri: ${redirect_uri}`);
     
+    // Build the request body for token exchange
+    const tokenRequestBody = new URLSearchParams({
+      grant_type: "authorization_code",
+      client_id: MELI_APP_ID,
+      client_secret: MELI_CLIENT_SECRET,
+      code: code,
+      redirect_uri: redirect_uri,
+    });
+
+    console.log("Token request body prepared:", tokenRequestBody.toString());
+    
     // Exchange code for access token with Mercado Libre
     const tokenResponse = await fetch("https://api.mercadolibre.com/oauth/token", {
       method: "POST",
@@ -51,18 +66,13 @@ serve(async (req) => {
         "Content-Type": "application/x-www-form-urlencoded",
         "Accept": "application/json",
       },
-      body: new URLSearchParams({
-        grant_type: "authorization_code",
-        client_id: MELI_APP_ID,
-        client_secret: MELI_CLIENT_SECRET,
-        code: code,
-        redirect_uri: redirect_uri,
-      }),
+      body: tokenRequestBody,
     });
 
     const tokenResponseText = await tokenResponse.text();
-    console.log("Token response:", tokenResponseText);
-
+    console.log("Token response status:", tokenResponse.status);
+    console.log("Token response headers:", JSON.stringify(Object.fromEntries(tokenResponse.headers)));
+    
     if (!tokenResponse.ok) {
       let errorMessage = "Error exchanging code for token";
       try {
@@ -75,11 +85,23 @@ serve(async (req) => {
       throw new Error(errorMessage);
     }
 
-    const tokenData = JSON.parse(tokenResponseText);
-    console.log("Successfully obtained access token");
+    let tokenData;
+    try {
+      tokenData = JSON.parse(tokenResponseText);
+      console.log("Successfully obtained access token");
+    } catch (e) {
+      console.error("Failed to parse token response:", e);
+      throw new Error("Failed to parse token response");
+    }
+
+    if (!tokenData.access_token || !tokenData.refresh_token) {
+      console.error("Invalid token data received:", tokenData);
+      throw new Error("Invalid token data received from Mercado Libre");
+    }
 
     // Store the tokens in the database
     // First check if the user already has tokens stored
+    console.log("Checking for existing tokens for user:", user_id);
     const { data: existingTokens, error: checkError } = await supabase
       .from('meli_tokens')
       .select('*')
@@ -92,8 +114,11 @@ serve(async (req) => {
     }
 
     let dbOperation;
+    const expiresAt = new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString();
+    console.log(`Token expires at: ${expiresAt}`);
     
     if (existingTokens) {
+      console.log("Updating existing tokens for user:", user_id);
       // Update existing tokens
       dbOperation = supabase
         .from('meli_tokens')
@@ -101,11 +126,12 @@ serve(async (req) => {
           access_token: tokenData.access_token,
           refresh_token: tokenData.refresh_token,
           meli_user_id: tokenData.user_id,
-          expires_at: new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString(),
+          expires_at: expiresAt,
           updated_at: new Date().toISOString()
         })
         .eq('user_id', user_id);
     } else {
+      console.log("Inserting new tokens for user:", user_id);
       // Insert new tokens
       dbOperation = supabase
         .from('meli_tokens')
@@ -114,7 +140,7 @@ serve(async (req) => {
           access_token: tokenData.access_token,
           refresh_token: tokenData.refresh_token,
           meli_user_id: tokenData.user_id,
-          expires_at: new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString(),
+          expires_at: expiresAt,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         });

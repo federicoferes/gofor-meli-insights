@@ -118,19 +118,35 @@ const MeliConnect = () => {
     
     setIsConnecting(true);
     
-    // Using the actual Mercado Libre app ID
-    const MELI_APP_ID = '8830083472538103';
-    const REDIRECT_URI = 'https://melimetrics.app/oauth/callback';
-    const STATE = `${user.id}:${Math.random().toString(36).substring(2)}`;
-    
-    // Save state to validate later
-    localStorage.setItem('meli_oauth_state', STATE);
-    
-    // Construct the authorization URL
-    const authUrl = `https://auth.mercadolibre.com.ar/authorization?response_type=code&client_id=${MELI_APP_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&state=${STATE}`;
-    
-    // Redirect to MeLi auth page
-    window.location.href = authUrl;
+    try {
+      // Using the actual Mercado Libre app ID
+      const MELI_APP_ID = '8830083472538103';
+      const REDIRECT_URI = 'https://melimetrics.app/oauth/callback';
+      
+      // Generate a state parameter that includes the user ID and a random string
+      const randomStateValue = Math.random().toString(36).substring(2, 15);
+      const STATE = `${user.id}:${randomStateValue}`;
+      
+      console.log("Generated OAuth state:", STATE);
+      
+      // Save state to localStorage to validate later
+      localStorage.setItem('meli_oauth_state', STATE);
+      
+      // Construct the authorization URL
+      const authUrl = `https://auth.mercadolibre.com.ar/authorization?response_type=code&client_id=${MELI_APP_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&state=${STATE}`;
+      
+      // Redirect to MeLi auth page
+      window.location.href = authUrl;
+    } catch (error) {
+      console.error("Error initiating MeLi OAuth flow:", error);
+      setIsConnecting(false);
+      
+      toast({
+        variant: "destructive",
+        title: "Error de conexión",
+        description: "No se pudo iniciar el proceso de conexión con Mercado Libre."
+      });
+    }
   };
 
   // Manual token refresh function
@@ -280,8 +296,6 @@ const MeliConnect = () => {
             </DialogHeader>
           </DialogContent>
         </Dialog>
-        
-        {/* Remove this Tooltip section to eliminate the duplicate indicator */}
       </TooltipProvider>
     );
   }

@@ -9,6 +9,7 @@ import { useToast } from "@/components/ui/use-toast";
 const OAuthCallback = () => {
   const [isProcessing, setIsProcessing] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [processingStep, setProcessingStep] = useState('Iniciando autenticación...');
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
@@ -20,28 +21,37 @@ const OAuthCallback = () => {
         const params = new URLSearchParams(location.search);
         const code = params.get('code');
         const state = params.get('state');
+        
+        setProcessingStep('Verificando parámetros...');
+        
+        // Get stored state from localStorage
         const storedState = localStorage.getItem('meli_oauth_state');
         
         // Clean up localStorage
         localStorage.removeItem('meli_oauth_state');
         
+        console.log("Received state:", state);
+        console.log("Stored state:", storedState);
+        
         // Validate state to prevent CSRF attacks
         if (!state || !storedState || state !== storedState) {
-          throw new Error('Invalid state parameter. Authentication attempt may have been compromised.');
+          console.error("State validation failed", { received: state, stored: storedState });
+          throw new Error('Error de validación: el parámetro state no coincide. Intente nuevamente.');
         }
         
         // Extract user ID from state (format: userId:randomString)
         const userId = state.split(':')[0];
         if (!userId) {
-          throw new Error('Could not determine user ID from state.');
+          throw new Error('No se pudo determinar el ID de usuario desde el estado.');
         }
         
         // Ensure code is present
         if (!code) {
-          throw new Error('Authentication code not provided by Mercado Libre.');
+          throw new Error('Mercado Libre no proporcionó el código de autenticación.');
         }
         
         console.log("Processing OAuth callback with code:", code);
+        setProcessingStep('Procesando código de autorización...');
         
         // Use the production domain for redirect URI
         const redirectUri = 'https://melimetrics.app/oauth/callback';
@@ -49,6 +59,7 @@ const OAuthCallback = () => {
         console.log("Using redirect URI:", redirectUri);
         
         // Call Supabase edge function to exchange code for access token
+        setProcessingStep('Intercambiando código por token...');
         const { data, error } = await supabase.functions.invoke('meli-auth', {
           body: {
             code,
@@ -59,15 +70,16 @@ const OAuthCallback = () => {
         
         if (error) {
           console.error("Edge function error:", error);
-          throw new Error(error.message);
+          throw new Error(`Error en el servidor: ${error.message}`);
         }
         
         if (!data || !data.success) {
           console.error("Authentication failed:", data);
-          throw new Error(data?.message || 'Failed to authenticate with Mercado Libre.');
+          throw new Error(data?.message || 'Error al autenticar con Mercado Libre.');
         }
         
         console.log("Authentication successful:", data);
+        setProcessingStep('Autenticación exitosa');
         
         toast({
           title: "Conexión exitosa",
@@ -105,8 +117,11 @@ const OAuthCallback = () => {
             <div className="flex flex-col items-center space-y-4">
               <Loader2 className="h-12 w-12 text-gofor-purple animate-spin" />
               <p className="text-gray-600">
-                Procesando la autenticación, por favor espere...
+                {processingStep}
               </p>
+              <div className="w-full bg-gray-200 rounded-full h-2.5">
+                <div className="bg-gofor-purple h-2.5 rounded-full animate-pulse w-full"></div>
+              </div>
             </div>
           ) : error ? (
             <div className="text-center text-red-500">
