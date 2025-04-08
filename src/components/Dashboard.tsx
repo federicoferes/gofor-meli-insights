@@ -1,17 +1,22 @@
-
-import React from 'react';
+import React, { useEffect, useState, useContext } from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, AreaChart, Area } from 'recharts';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { useMeliData } from '@/hooks/useMeliData';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertCircle } from 'lucide-react';
 import { formatCurrency } from '@/lib/formatters';
+import { AppSettingsContext } from '@/App';
+import { useToast } from '@/components/ui/use-toast';
 
 const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#8dd1e1', '#a4de6c'];
 
 const Dashboard = () => {
+  const { userId, meliUserId, isConnected } = useContext(AppSettingsContext); 
+  const { toast } = useToast();
+  const [isFirstLoaded, setIsFirstLoaded] = useState(false);
+
   // Get real data using the useMeliData hook
   const {
     isLoading,
@@ -21,14 +26,32 @@ const Dashboard = () => {
     costData,
     provinceData,
     prevSalesSummary,
-    isTestData
+    ordersData,
+    isTestData,
+    error
   } = useMeliData({
-    userId: '', // Will be populated in the page component
+    userId: userId || '',
+    meliUserId: meliUserId || null,
     dateFilter: '30d', // Default to last 30 days
     dateRange: {},
-    isConnected: true,
-    meliUserId: ''
+    isConnected: !!isConnected,
+    disableTestData: false
   });
+
+  useEffect(() => {
+    if (error && !isFirstLoaded) {
+      toast({
+        variant: "destructive",
+        title: "Error al cargar datos",
+        description: error || "No se pudieron cargar los datos del dashboard",
+        duration: 5000
+      });
+    }
+    
+    if (!isLoading && !isFirstLoaded) {
+      setIsFirstLoaded(true);
+    }
+  }, [isLoading, error, toast, isFirstLoaded]);
 
   // Fallback data for when real data isn't available
   const fallbackSalesData = [{
@@ -144,6 +167,18 @@ const Dashboard = () => {
     ? ((salesSummary?.avgTicket - prevSalesSummary?.avgTicket) / prevSalesSummary?.avgTicket * 100).toFixed(1)
     : '+5.2';
 
+  // Format functions to prevent errors
+  const formatTooltipValue = (value: any, currency = false) => {
+    if (value === undefined || value === null) return currency ? '$0' : '0';
+    
+    const numValue = typeof value === 'string' ? parseFloat(value) : value;
+    if (isNaN(numValue)) return currency ? '$0' : '0';
+
+    return currency 
+      ? `$${numValue.toLocaleString()}` 
+      : numValue.toLocaleString();
+  };
+
   if (isLoading) {
     return (
       <section id="dashboard" className="py-20 bg-gray-50">
@@ -151,6 +186,32 @@ const Dashboard = () => {
           <div className="flex flex-col items-center justify-center py-20">
             <Loader2 className="h-10 w-10 text-gofor-purple animate-spin mb-4" />
             <p className="text-lg text-gray-600">Cargando datos del dashboard...</p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (error && !salesData?.length && !isTestData) {
+    return (
+      <section id="dashboard" className="py-20 bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-8">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">Dashboard</h2>
+          </div>
+          
+          <div className="bg-white rounded-xl shadow-lg p-8 text-center">
+            <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+            <h3 className="text-xl font-bold mb-2">Error al cargar datos</h3>
+            <p className="text-gray-600 mb-4">{error || "No se pudieron cargar los datos del dashboard"}</p>
+            <div className="text-sm text-gray-500">
+              <p>Verifica tu conexión a Mercado Libre e intenta nuevamente.</p>
+              {(!userId || !meliUserId || !isConnected) && (
+                <p className="mt-2 text-amber-600">
+                  No se encontró una cuenta conectada a Mercado Libre.
+                </p>
+              )}
+            </div>
           </div>
         </div>
       </section>

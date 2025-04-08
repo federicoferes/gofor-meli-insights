@@ -15,7 +15,7 @@ export function useMeliData({
   meliUserId,
   dateFilter,
   dateRange,
-  isConnected,
+  isConnected = false,
   productCostsCalculator,
   disableTestData
 }: MeliDataOptions): UseMeliDataReturn {
@@ -73,21 +73,37 @@ export function useMeliData({
                           (dateRange.fromISO && dateRange.toISO);
     
     if (validDateRange && userId && isConnected && meliUserId) {
+      console.log('Fetching data with params:', { userId, meliUserId, dateFilter, dateRange });
       fetchData().then(({ data, fromCache }) => {
         if (data && isMounted.current) {
+          console.log('Processing fetched data', { fromCache });
           processResponseData(data);
+        } else {
+          console.log('No data returned from fetchData or component unmounted');
         }
+      }).catch(err => {
+        console.error('Error fetching data:', err);
+      });
+    } else {
+      console.log('Skipping data fetch, missing required parameters:', {
+        validDateRange,
+        userId: !!userId,
+        isConnected,
+        meliUserId: !!meliUserId
       });
     }
   }, [userId, meliUserId, dateFilter, dateRange.fromISO, dateRange.toISO, isConnected, fetchData, processResponseData]);
 
   // Public method to force refresh data
   const refresh = async () => {
+    console.log('Manual refresh requested');
     const { data } = await refreshData();
     
     if (data && isMounted.current) {
       processResponseData(data);
+      return true;
     }
+    return false;
   };
 
   return {

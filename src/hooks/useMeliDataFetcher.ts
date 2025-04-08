@@ -44,7 +44,10 @@ export function useMeliDataFetcher({
   const fetchData = useCallback(async (retryCount = 0) => {
     // Early return if prerequisites aren't met
     if (!userId || !meliUserId) {
-      console.log("Missing prerequisites: userId or meliUserId is undefined", { userId, meliUserId });
+      console.log("Missing prerequisites: userId or meliUserId is undefined", { 
+        userId: userId || "(undefined)",
+        meliUserId: meliUserId || "(null)"
+      });
       return { data: null, fromCache: false };
     }
     
