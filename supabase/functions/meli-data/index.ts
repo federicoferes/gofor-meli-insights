@@ -529,7 +529,7 @@ async function batchRequests(token: string, requests: any[]) {
         }
       }
       
-      console.log(`Making request to: ${url.toString()}`);
+      console.log(`✅ Final request URL: ${url.toString()}`);
       
       // Make request
       const response = await fetch(url, {
@@ -740,6 +740,12 @@ serve(async (req) => {
       if (request.endpoint === '/orders/search') {
         if (!request.params) {
           request.params = {};
+        }
+        
+        // ✅ FIX CRÍTICO: agregar seller (meli_user_id)
+        if (tokenResult.meliUserId) {
+          request.params['seller'] = tokenResult.meliUserId;
+          console.log(`Setting seller for ${request.endpoint}:`, tokenResult.meliUserId);
         }
         
         if (formattedFromDate) {

@@ -31,7 +31,7 @@ export function buildMeliDataPayload(
     {
       endpoint: '/orders/search',
       params: {
-        seller: meliUserId,
+        seller: meliUserId,  // Ya incluimos el seller ID aquí también por seguridad
         sort: 'date_desc',
         limit: 50,
         // We explicitly do NOT add date params here, the edge function will handle them
