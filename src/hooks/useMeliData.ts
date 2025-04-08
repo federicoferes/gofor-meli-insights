@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useEffect, useRef, useContext } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
@@ -275,8 +276,7 @@ export function useMeliData({
       if (isMounted.current) setIsLoading(true);
       requestInProgress.current = cacheKey;
       
-      // Prepare date parameters - CORRIGIENDO ESTA SECCIÓN
-      // Asegurarnos que siempre tenemos strings ISO válidos, aunque no sean custom dates
+      // Prepare date parameters
       let dateFrom = dateRange.fromISO || null;
       let dateTo = dateRange.toISO || null;
       
@@ -285,15 +285,7 @@ export function useMeliData({
       console.log('useMeliData - dateFrom (sin procesar):', dateFrom);
       console.log('useMeliData - dateTo (sin procesar):', dateTo);
 
-      // Obtener IDs de productos para datos de visitas
-      const { data: productsData, error: productsError } = await supabase
-        .from('products')
-        .select('item_id')
-        .eq('user_id', userId);
-      
-      const productIds = productsData?.map(p => p.item_id) || [];
-
-      // Preparar batch requests siguiendo la estructura de la API de MeLi
+      // Preparar batch requests simplificados
       const batchRequests = [
         {
           endpoint: '/orders/search',
@@ -304,21 +296,6 @@ export function useMeliData({
             // Date parameters will be processed on the server
           }
         },
-        
-        {
-          endpoint: `/users/${meliUserId}/items/search`,
-          params: {
-            limit: 100
-          }
-        },
-        
-        {
-          endpoint: `/advertising/campaigns/search`,
-          params: {
-            seller_id: meliUserId
-          }
-        },
-        
         {
           endpoint: `/orders/search/recent`,
           params: {
@@ -327,19 +304,15 @@ export function useMeliData({
             // Date parameters will be processed on the server
           }
         },
-        
-        // Note: We now handle visits individually in the backend
-        // to comply with MeLi's API restriction of 1 item per request
         {
-          endpoint: `/visits/items`,
+          endpoint: `/advertising/campaigns/search`,
           params: {
-            _productIds: productIds
+            seller_id: meliUserId
           }
         }
       ];
 
-      // Preparar payload para la función edge - CORRIGIENDO ESTA SECCIÓN
-      // Asegurar que nunca enviamos un objeto date_range vacío
+      // Preparar payload para la función edge - SIMPLIFICADO
       const requestPayload = {
         user_id: userId,
         batch_requests: batchRequests,
@@ -350,8 +323,7 @@ export function useMeliData({
         timezone: 'America/Argentina/Buenos_Aires',
         prev_period: true,
         use_cache: false,
-        disable_test_data: finalDisableTestData,
-        product_ids: productIds
+        disable_test_data: finalDisableTestData
       };
 
       console.log('useMeliData - Payload date_range:', JSON.stringify(requestPayload.date_range, null, 2));
