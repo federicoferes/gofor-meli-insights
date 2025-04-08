@@ -45,6 +45,13 @@ serve(async (req) => {
       throw new Error("Missing user_id parameter");
     }
 
+    // Validate that redirect_uri matches the expected value
+    const expectedRedirectUri = "https://melimetrics.app/oauth/callback";
+    if (redirect_uri !== expectedRedirectUri) {
+      console.error(`Invalid redirect_uri: ${redirect_uri}, expected: ${expectedRedirectUri}`);
+      throw new Error("Invalid redirect_uri parameter");
+    }
+
     console.log(`Exchanging code for access token for user ${user_id}`);
     console.log(`Using redirect_uri: ${redirect_uri}`);
     
@@ -89,6 +96,7 @@ serve(async (req) => {
     try {
       tokenData = JSON.parse(tokenResponseText);
       console.log("Successfully obtained access token");
+      console.log("Token data structure:", Object.keys(tokenData).join(", "));
     } catch (e) {
       console.error("Failed to parse token response:", e);
       throw new Error("Failed to parse token response");
@@ -97,6 +105,16 @@ serve(async (req) => {
     if (!tokenData.access_token || !tokenData.refresh_token) {
       console.error("Invalid token data received:", tokenData);
       throw new Error("Invalid token data received from Mercado Libre");
+    }
+
+    if (!tokenData.user_id) {
+      console.error("Missing user_id in token response:", tokenData);
+      throw new Error("Missing user_id in token response from Mercado Libre");
+    }
+
+    if (!tokenData.expires_in) {
+      console.error("Missing expires_in in token response:", tokenData);
+      throw new Error("Missing expires_in in token response from Mercado Libre");
     }
 
     // Store the tokens in the database
