@@ -1,7 +1,8 @@
+
 import { useState, useCallback } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { SalesSummary } from '@/types/meli';
-import { createEmptySalesSummary } from '@/utils/meliDataProcessor';
+import { createEmptySalesSummary, processSalesSummary } from '@/utils/meliDataProcessor';
 import { logSalesSummaryToConsole } from '@/utils/consoleLogger';
 
 interface UseMeliResponseProcessorProps {
@@ -9,6 +10,8 @@ interface UseMeliResponseProcessorProps {
   dateRange: {
     from?: Date;
     to?: Date;
+    fromISO?: string;
+    toISO?: string;
   };
   finalDisableTestData: boolean;
   productCostsCalculator?: (orders: any[]) => number;
@@ -32,7 +35,12 @@ export function useMeliResponseProcessor({
   const { toast } = useToast();
 
   const processResponseData = useCallback((batchData: any) => {
-    setIsTestData(!!batchData.is_test_data);
+    // Set test data flag based on response
+    const isUsingTestData = !!batchData.is_test_data;
+    setIsTestData(isUsingTestData);
+    
+    // Log test data status
+    console.log(`🧪 Using test data: ${isUsingTestData ? 'YES' : 'NO'}`);
     
     if (batchData.dashboard_data) {
       if (batchData.dashboard_data.salesByMonth?.length > 0) {
@@ -40,41 +48,18 @@ export function useMeliResponseProcessor({
       }
       
       if (batchData.dashboard_data.summary) {
-        const summary = batchData.dashboard_data.summary;
+        // Use the processSalesSummary utility to calculate additional metrics
+        const processedSummary = processSalesSummary(batchData.dashboard_data.summary);
+        setSalesSummary(processedSummary);
         
-        if (summary.visits > 0 && summary.units > 0) {
-          summary.conversion = (summary.units / summary.visits) * 100;
-        } else {
-          summary.conversion = 0;
-        }
-        
-        if (summary.gmv > 0 && summary.orders > 0) {
-          summary.avgTicket = summary.gmv / summary.orders;
-        } else {
-          summary.avgTicket = 0;
-        }
-        
-        setSalesSummary(summary);
-
-        logSalesSummaryToConsole(dateFilter, dateRange, summary);
+        // Log the summary for the current date filter
+        logSalesSummaryToConsole(dateFilter, dateRange, processedSummary);
       }
       
       if (batchData.dashboard_data.prev_summary) {
-        const prevSummary = batchData.dashboard_data.prev_summary;
-        
-        if (prevSummary.visits > 0 && prevSummary.units > 0) {
-          prevSummary.conversion = (prevSummary.units / prevSummary.visits) * 100;
-        } else {
-          prevSummary.conversion = 0;
-        }
-        
-        if (prevSummary.gmv > 0 && prevSummary.orders > 0) {
-          prevSummary.avgTicket = prevSummary.gmv / prevSummary.orders;
-        } else {
-          prevSummary.avgTicket = 0;
-        }
-        
-        setPrevSalesSummary(prevSummary);
+        // Process previous period summary
+        const prevProcessedSummary = processSalesSummary(batchData.dashboard_data.prev_summary);
+        setPrevSalesSummary(prevProcessedSummary);
       }
       
       if (batchData.dashboard_data.costDistribution?.length > 0) {
@@ -98,6 +83,7 @@ export function useMeliResponseProcessor({
         }
       }
     } else if (!batchData.has_dashboard_data) {
+      // Reset all data when no dashboard data is available
       setSalesSummary(createEmptySalesSummary());
       setPrevSalesSummary(createEmptySalesSummary());
       setSalesData([]);
@@ -113,12 +99,11 @@ export function useMeliResponseProcessor({
           variant: "destructive",
           duration: 5000
         });
-      } else if (batchData.is_test_data) {
-        setIsTestData(true);
-        
+      } else if (isUsingTestData) {
         toast({
           title: "Mostrando datos de prueba",
           description: "No se encontraron órdenes reales para el período seleccionado",
+          variant: "warning",
           duration: 5000
         });
       }

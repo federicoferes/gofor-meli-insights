@@ -5,7 +5,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { AppSettingsContext } from '@/App';
 
 import { MeliDataOptions, UseMeliDataReturn } from '@/types/meli';
-import { createEmptySalesSummary } from '@/utils/meliDataProcessor';
+import { createEmptySalesSummary, clearDataCache } from '@/utils/meliDataProcessor';
 import { getCachedResponse, setCachedResponse, removeCachedResponse } from '@/utils/apiCache';
 import { buildMeliDataPayload, fetchMeliData } from '@/utils/meliApiRequests';
 import { useMeliResponseProcessor } from './useMeliResponseProcessor';

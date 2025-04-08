@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Navigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -227,7 +226,6 @@ const Dashboard = () => {
     ? ((salesSummary.productCosts / salesSummary.gmv) * 100).toFixed(1)
     : null;
 
-  // FIX: Asegurar que costDistributionData siempre tenga datos válidos
   const costDistributionData = [
     { name: 'Comisiones', value: salesSummary.commissions || 0 },
     { name: 'Impuestos', value: salesSummary.taxes || 0 },
@@ -237,7 +235,6 @@ const Dashboard = () => {
     ...(salesSummary.productCosts > 0 ? [{ name: 'Costo de productos', value: salesSummary.productCosts }] : [])
   ];
 
-  // Mostrar mensaje de datos de prueba si corresponde
   const showTestDataNotice = isTestData ? (
     <Alert className="mb-4 bg-amber-50 border-amber-200">
       <AlertDescription>
@@ -248,7 +245,6 @@ const Dashboard = () => {
     </Alert>
   ) : null;
 
-  // Mostrar mensaje de error si hubo un problema
   const showErrorNotice = dataError ? (
     <Alert className="mb-4 bg-red-50 border-red-200">
       <AlertDescription>
@@ -670,7 +666,6 @@ const Dashboard = () => {
                   </TabsContent>
                 </Tabs>
                 
-                {/* Añadir botón para forzar actualización de datos */}
                 <div className="flex justify-end mb-8">
                   <Button 
                     onClick={refreshData}

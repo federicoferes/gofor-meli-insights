@@ -48,5 +48,20 @@ export const processSalesSummary = (summary: SalesSummary): SalesSummary => {
     result.avgTicket = result.gmv / result.orders;
   }
   
+  // Log processed summary to console for debugging
+  logSalesSummaryToConsole("processed", { from: undefined, to: undefined }, result);
+  
   return result;
+};
+
+/**
+ * Clears any cached data to force a fresh fetch
+ * @param cacheKey Key to identify cached data
+ */
+export const clearDataCache = (cacheKey: string): void => {
+  if (typeof window !== 'undefined') {
+    // Remove any cached data for this key
+    localStorage.removeItem(`meli-data-${cacheKey}`);
+    console.log(`🧹 Cache cleared for key: ${cacheKey}`);
+  }
 };
