@@ -3,7 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
 const MELI_APP_ID = "8830083472538103";
-const MELI_CLIENT_SECRET = "Wqfg0W6BDmK690ceKfiidQmuHposiCfg";
+const MELI_CLIENT_SECRET = "pQNXwe5JwSzz5Hmc5p8zYfcFdlbHKAjC";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
