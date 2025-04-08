@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { format, startOfDay, endOfDay, subDays, isEqual } from "date-fns";
 import { es } from "date-fns/locale";
@@ -67,6 +68,7 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
     if (value !== "custom") {
       setDate(dateRange);
       
+      // Siempre calculamos fromISO y toISO para cualquier tipo de rango
       const { fromISO, toISO } = getIsoDateRange(dateRange);
       
       if (fromISO === lastFromISO.current && toISO === lastToISO.current) {
@@ -84,6 +86,7 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
         toISO 
       });
       
+      // Siempre incluimos fromISO y toISO
       onDateRangeChange(value, { ...dateRange, fromISO, toISO });
     } else {
       if (!date.from || !date.to) {

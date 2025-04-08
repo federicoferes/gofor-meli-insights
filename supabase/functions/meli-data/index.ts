@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -678,12 +679,26 @@ serve(async (req) => {
       product_ids_count: product_ids?.length
     }, null, 2));
     
+    // Mejorado el logging para date_range
     if (date_range) {
       console.log("Received date_range:", JSON.stringify(date_range, null, 2));
       console.log("Type of date_range:", typeof date_range);
       console.log("Date range has properties:", Object.keys(date_range));
+      
+      // Verificación explícita de los valores dentro de date_range
+      if (date_range.begin) {
+        console.log("date_range.begin:", date_range.begin);
+      } else {
+        console.log("date_range.begin is missing or null");
+      }
+      
+      if (date_range.end) {
+        console.log("date_range.end:", date_range.end);
+      } else {
+        console.log("date_range.end is missing or null");
+      }
     } else {
-      console.log("date_range object is completely missing");
+      console.log("date_range object is completely missing (null or undefined)");
     }
     
     // If no user_id, just check connection
@@ -729,7 +744,8 @@ serve(async (req) => {
     let formattedFromDate = "";
     let formattedToDate = "";
     
-    if (date_range) {
+    // Mejorado el manejo de date_range para evitar objetos vacíos
+    if (date_range && Object.keys(date_range).length > 0) {
       console.log("Date range begin:", date_range.begin);
       console.log("Date range end:", date_range.end);
       
@@ -747,7 +763,7 @@ serve(async (req) => {
         console.log("Missing date_range.end");
       }
     } else {
-      console.log("date_range object is completely missing");
+      console.log("date_range object is completely missing or empty");
     }
     
     // Ensure date parameters are properly added to each request with correct format

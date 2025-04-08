@@ -275,17 +275,11 @@ export function useMeliData({
       if (isMounted.current) setIsLoading(true);
       requestInProgress.current = cacheKey;
       
-      // Prepare date parameters
-      let dateFrom, dateTo;
+      // Prepare date parameters - CORRIGIENDO ESTA SECCIÓN
+      // Asegurarnos que siempre tenemos strings ISO válidos, aunque no sean custom dates
+      let dateFrom = dateRange.fromISO || null;
+      let dateTo = dateRange.toISO || null;
       
-      if (dateFilter === 'custom' && dateRange.fromISO && dateRange.toISO) {
-        dateFrom = dateRange.fromISO;
-        dateTo = dateRange.toISO;
-      } else {
-        dateFrom = dateRange.fromISO;
-        dateTo = dateRange.toISO;
-      }
-
       console.log('useMeliData - dateFilter:', dateFilter);
       console.log('useMeliData - dateRange completo:', JSON.stringify(dateRange, null, 2));
       console.log('useMeliData - dateFrom (sin procesar):', dateFrom);
@@ -344,14 +338,15 @@ export function useMeliData({
         }
       ];
 
-      // Preparar payload para la función edge
+      // Preparar payload para la función edge - CORRIGIENDO ESTA SECCIÓN
+      // Asegurar que nunca enviamos un objeto date_range vacío
       const requestPayload = {
         user_id: userId,
         batch_requests: batchRequests,
-        date_range: {
-          begin: dateFrom ?? undefined,
-          end: dateTo ?? undefined
-        },
+        date_range: dateFrom && dateTo ? {
+          begin: dateFrom,
+          end: dateTo
+        } : null, // Si no hay fechas, enviamos null explícitamente en lugar de objeto vacío
         timezone: 'America/Argentina/Buenos_Aires',
         prev_period: true,
         use_cache: false,
