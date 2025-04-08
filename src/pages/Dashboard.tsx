@@ -165,6 +165,15 @@ const Dashboard = () => {
       ? ((salesSummary?.avgTicket - prevSalesSummary?.avgTicket) / prevSalesSummary?.avgTicket * 100).toFixed(1)
       : '+5.2';
 
+  // Safe formatting helper functions to prevent undefined.toLocaleString() errors
+  const safeFormatNumber = (value: number | undefined) => {
+    return value !== undefined && value !== null ? value.toLocaleString() : '0';
+  };
+  
+  const safeFormatCurrency = (value: number | undefined) => {
+    return value !== undefined && value !== null ? `$${value.toLocaleString('es-AR')}` : '$0';
+  };
+
   if (isLoading) {
     return (
       <div id="dashboard" className="py-20 bg-gray-50">
@@ -219,7 +228,7 @@ const Dashboard = () => {
               <Card className="bg-gradient-to-br from-purple-500 to-purple-600 text-white">
                 <CardContent className="p-6">
                   <div className="text-sm opacity-80 mb-1">Órdenes</div>
-                  <div className="text-3xl font-bold">{orders.toLocaleString()}</div>
+                  <div className="text-3xl font-bold">{safeFormatNumber(orders)}</div>
                   <div className="text-sm font-medium mt-2 flex items-center">
                     <svg className="w-5 h-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M12 7a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0V8.414l-4.293 4.293a1 1 0 01-1.414 0L8 10.414l-4.293 4.293a1 1 0 01-1.414-1.414l5-5a1 1 0 011.414 0L11 10.586l3.293-3.293A1 1 0 0112 7z" clipRule="evenodd" />
@@ -257,7 +266,7 @@ const Dashboard = () => {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" />
                     <YAxis />
-                    <Tooltip formatter={(value) => [`$${value.toLocaleString()}`, 'GMV']} />
+                    <Tooltip formatter={(value) => [`$${value ? value.toLocaleString() : '0'}`, 'GMV']} />
                     <Area type="monotone" dataKey="GMV" stroke="#8884d8" fillOpacity={1} fill="url(#colorGMV)" />
                   </AreaChart>
                 </ResponsiveContainer>
@@ -335,12 +344,12 @@ const Dashboard = () => {
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={displayCostData} cx="50%" cy="50%" labelLine={false} label={({
-                    name,
-                    percent
-                  }) => `${name}: ${(percent * 100).toFixed(0)}%`} outerRadius={120} fill="#8884d8" dataKey="value">
+                      name,
+                      percent
+                    }) => `${name}: ${(percent * 100).toFixed(0)}%`} outerRadius={120} fill="#8884d8" dataKey="value">
                       {displayCostData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
                     </Pie>
-                    <Tooltip formatter={value => [`$${value.toLocaleString('es-AR')}`, 'Monto']} />
+                    <Tooltip formatter={value => [safeFormatCurrency(value), 'Monto']} />
                     <Legend />
                   </PieChart>
                 </ResponsiveContainer>
@@ -422,16 +431,22 @@ const Dashboard = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {displayTopProducts.map(product => (
-                      <TableRow key={product.id}>
-                        <TableCell className="font-medium">{product.name}</TableCell>
-                        <TableCell className="text-right">{product.units}</TableCell>
-                        <TableCell className="text-right">${product.revenue.toLocaleString('es-AR')}</TableCell>
-                        <TableCell className="text-right">
-                          {(product.revenue / displayTopProducts.reduce((sum, p) => sum + p.revenue, 0) * 100).toFixed(1)}%
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {displayTopProducts.map(product => {
+                      // Calculate total revenue safely
+                      const totalRevenue = displayTopProducts.reduce((sum, p) => sum + (p.revenue || 0), 0);
+                      const percentage = totalRevenue > 0 && product.revenue 
+                        ? ((product.revenue / totalRevenue) * 100).toFixed(1) 
+                        : '0.0';
+                      
+                      return (
+                        <TableRow key={product.id}>
+                          <TableCell className="font-medium">{product.name || 'Sin nombre'}</TableCell>
+                          <TableCell className="text-right">{product.units || 0}</TableCell>
+                          <TableCell className="text-right">{safeFormatCurrency(product.revenue)}</TableCell>
+                          <TableCell className="text-right">{percentage}%</TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
@@ -494,7 +509,7 @@ const Dashboard = () => {
               <Card className="bg-gradient-to-br from-green-500 to-green-600 text-white">
                 <CardContent className="p-6">
                   <div className="text-sm opacity-80 mb-1">Conversión</div>
-                  <div className="text-3xl font-bold">{conversion.toFixed(1)}%</div>
+                  <div className="text-3xl font-bold">{conversion ? conversion.toFixed(1) : '0.0'}%</div>
                   <div className="text-sm font-medium mt-2 flex items-center">
                     <svg className="w-5 h-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M12 7a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0V8.414l-4.293 4.293a1 1 0 01-1.414 0L8 10.414l-4.293 4.293a1 1 0 01-1.414-1.414l5-5a1 1 0 011.414 0L11 10.586l3.293-3.293A1 1 0 0112 7z" clipRule="evenodd" />
@@ -507,7 +522,7 @@ const Dashboard = () => {
               <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white">
                 <CardContent className="p-6">
                   <div className="text-sm opacity-80 mb-1">Visitantes</div>
-                  <div className="text-3xl font-bold">{visits.toLocaleString()}</div>
+                  <div className="text-3xl font-bold">{safeFormatNumber(visits)}</div>
                   <div className="text-sm font-medium mt-2 flex items-center">
                     <svg className="w-5 h-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M12 7a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0V8.414l-4.293 4.293a1 1 0 01-1.414 0L8 10.414l-4.293 4.293a1 1 0 01-1.414-1.414l5-5a1 1 0 011.414 0L11 10.586l3.293-3.293A1 1 0 0112 7z" clipRule="evenodd" />
@@ -520,7 +535,7 @@ const Dashboard = () => {
               <Card className="bg-gradient-to-br from-purple-500 to-purple-600 text-white">
                 <CardContent className="p-6">
                   <div className="text-sm opacity-80 mb-1">CTR</div>
-                  <div className="text-3xl font-bold">{ctr}%</div>
+                  <div className="text-3xl font-bold">{ctr ? ctr.toString() : '0'}%</div>
                   <div className="text-sm font-medium mt-2 flex items-center">
                     <svg className="w-5 h-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M12 7a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0V8.414l-4.293 4.293a1 1 0 01-1.414 0L8 10.414l-4.293 4.293a1 1 0 01-1.414-1.414l5-5a1 1 0 011.414 0L11 10.586l3.293-3.293A1 1 0 0112 7z" clipRule="evenodd" />
@@ -542,7 +557,7 @@ const Dashboard = () => {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" />
                     <YAxis tickFormatter={(value) => `${value}%`} />
-                    <Tooltip formatter={(value) => [`${value}%`, 'Conversión']} />
+                    <Tooltip formatter={(value) => [`${value !== undefined ? value : 0}%`, 'Conversión']} />
                     <Legend />
                     <Line type="monotone" dataKey="Conversion" stroke="#8884d8" activeDot={{ r: 8 }} />
                   </LineChart>
