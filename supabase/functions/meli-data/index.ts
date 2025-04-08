@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -389,42 +388,40 @@ async function getItemVisitsIndividually(token: string, itemIds: string[]) {
   return { totalVisits, itemVisits };
 }
 
-// Process advertising data using correct endpoint
+// Process advertising data using correct endpoint, with full error handling
 async function processAdvertising(token: string, meliUserId: string) {
-  let totalSpent = 0;
-  
   try {
-    if (!token || !meliUserId) {
-      return 0;
-    }
-    
-    // Use correct advertising endpoint as per MeLi documentation
-    const url = new URL(`https://api.mercadolibre.com/advertising/campaigns/search`);
-    url.searchParams.append('seller_id', meliUserId);
-    
-    const response = await fetch(url, {
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "Accept": "application/json"
-      }
+    const url = `https://api.mercadolibre.com/advertising/campaigns/search?seller_id=${meliUserId}`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
     });
-    
-    if (!response.ok) {
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.error("🛑 Error en /advertising/campaigns/search", {
+        status: res.status,
+        body: text
+      });
       return 0;
     }
-    
-    const campaignData = await response.json();
-    
-    if (campaignData && campaignData.results) {
-      campaignData.results.forEach((campaign: any) => {
-        if (campaign && campaign.status === 'ACTIVE' && campaign.spent) {
-          totalSpent += campaign.spent;
-        }
-      });
+
+    const data = await res.json();
+
+    if (!data || !Array.isArray(data.campaigns)) {
+      console.warn("⚠️ No campaigns found or unexpected format in advertising response", { data });
+      return 0;
     }
-    
+
+    const totalSpent = data.campaigns.reduce(
+      (acc: number, campaign: any) => acc + (campaign.total_spent || 0),
+      0
+    );
+
+    console.log(`✅ Total advertising spent: $${totalSpent}`);
     return totalSpent;
-  } catch (error: any) {
+
+  } catch (error) {
+    console.error("🔥 Exception in processAdvertising:", error);
     return 0;
   }
 }
