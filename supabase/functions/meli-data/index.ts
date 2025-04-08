@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -327,10 +326,10 @@ function processOrders(orders: any[]) {
   };
 }
 
-// Process visit data individually - following MeLi API docs
+// Process visit data individually - following MeLi API docs - UPDATED FUNCTION
 async function getItemVisitsIndividually(token: string, itemIds: string[]) {
   if (!Array.isArray(itemIds)) {
-    console.error("❌ itemIds is not an array:", itemIds);
+    console.error("❌ itemIds no es un array válido:", itemIds);
     return { totalVisits: 0, itemVisits: {} };
   }
   
@@ -340,56 +339,23 @@ async function getItemVisitsIndividually(token: string, itemIds: string[]) {
   
   let totalVisits = 0;
   const itemVisits: Record<string, number> = {};
-  const promises = [];
-  let completedRequests = 0;
   
-  // Process max 50 items to avoid rate limiting
-  for (let i = 0; i < Math.min(itemIds.length, 50); i++) {
-    const itemId = itemIds[i];
-    
-    // Create promises for each item
-    const promise = async (itemId: string) => {
-      try {
-        // Use correct format for item_id parameter as per MeLi documentation
-        const url = new URL(`https://api.mercadolibre.com/visits/items`);
-        url.searchParams.append('item_id', itemId);
-        
-        const response = await fetch(url, {
-          headers: {
-            "Authorization": `Bearer ${token}`,
-            "Accept": "application/json"
-          }
-        });
-        
-        if (!response.ok) {
-          return;
-        }
-        
-        const visitData = await response.json();
-        completedRequests++;
-        
-        if (visitData && Array.isArray(visitData) && visitData.length > 0 && visitData[0].total_visits) {
-          const visits = visitData[0].total_visits;
-          itemVisits[itemId] = visits;
-          totalVisits += visits;
-        }
-      } catch (error: any) {
-        // Silent error handling
+  for (const id of itemIds) {
+    try {
+      const res = await fetch(`https://api.mercadolibre.com/visits/items?ids=${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const data = await res.json();
+      if (data?.[0]?.total_visits) {
+        const visits = data[0].total_visits;
+        itemVisits[id] = visits;
+        totalVisits += visits;
       }
-    };
-    
-    promises.push(promise(itemId));
-    
-    // Small pause between batches to avoid rate limiting
-    if (i % 5 === 0 && i > 0) {
-      await Promise.allSettled(promises);
-      // Wait a moment between batches
-      await new Promise(resolve => setTimeout(resolve, 200));
+    } catch (error) {
+      console.error("Error fetching visits for", id, error);
     }
   }
-  
-  // Wait for all remaining promises
-  await Promise.allSettled(promises.map(p => p()));
   
   return { totalVisits, itemVisits };
 }
@@ -669,7 +635,7 @@ serve(async (req) => {
     
     // Parse request body
     const body = await req.json();
-    const { user_id, batch_requests: originalBatchRequests, date_range, timezone, prev_period, use_cache, disable_test_data, product_ids } = body;
+    const { user_id, batch_requests: originalBatchRequests, date_range, timezone, prev_period, use_cache, disable_test_data } = body;
     
     console.log("Received request with body:", JSON.stringify({
       user_id,
@@ -678,8 +644,7 @@ serve(async (req) => {
       timezone,
       prev_period,
       use_cache,
-      disable_test_data,
-      product_ids_count: product_ids?.length
+      disable_test_data
     }, null, 2));
     
     // Mejorado el logging para date_range
@@ -853,8 +818,8 @@ serve(async (req) => {
       }
     });
     
-    // Combine IDs for visits - SIMPLIFIED: only use orderProductIds
-    const allProductIds = orderProductIds.filter(Boolean);
+    // Combine IDs for visits - SIMPLIFIED: only use orderProductIds and ensure it's a valid array
+    const allProductIds = (orderProductIds || []).filter(Boolean);
     console.log("🧾 Product IDs for visits:", allProductIds);
     
     if (allOrders.length > 0) {
@@ -920,15 +885,6 @@ serve(async (req) => {
         data: { spent: dashboardData.summary.advertising }
       });
     }
-    
-    /* REMOVED: Product processing logic was here
-       Code previously handled:
-       1. Processing product details requests
-       2. Upserting products to the database
-       3. Handling product errors
-       
-       This functionality has been intentionally removed as requested
-    */
     
     return responseWithCors({
       success: true,
