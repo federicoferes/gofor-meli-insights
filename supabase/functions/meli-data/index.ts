@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -24,6 +23,12 @@ function formatDateForMeLiApi(dateString: string): string {
   console.log(`Original date string: ${dateString}`);
   
   try {
+    // If the date already includes timezone info, return it as is
+    if (dateString.includes('+') || dateString.includes('-') && dateString.length > 20) {
+      console.log(`Date already has timezone, using as is: ${dateString}`);
+      return dateString;
+    }
+    
     // Parse the string into a Date object
     const date = new Date(dateString);
     
@@ -673,9 +678,13 @@ serve(async (req) => {
       product_ids_count: product_ids?.length
     }, null, 2));
     
-    console.log("Received date_range:", JSON.stringify(date_range, null, 2));
-    console.log("Type of date_range:", typeof date_range);
-    console.log("Date range has properties:", date_range ? Object.keys(date_range) : "undefined");
+    if (date_range) {
+      console.log("Received date_range:", JSON.stringify(date_range, null, 2));
+      console.log("Type of date_range:", typeof date_range);
+      console.log("Date range has properties:", Object.keys(date_range));
+    } else {
+      console.log("date_range object is completely missing");
+    }
     
     // If no user_id, just check connection
     if (!user_id && !originalBatchRequests) {
@@ -738,7 +747,7 @@ serve(async (req) => {
         console.log("Missing date_range.end");
       }
     } else {
-      console.log("date_range is undefined or null");
+      console.log("date_range object is completely missing");
     }
     
     // Ensure date parameters are properly added to each request with correct format
@@ -780,6 +789,9 @@ serve(async (req) => {
       hasResults: r.data?.results ? true : false,
       resultsCount: r.data?.results?.length || 0
     })));
+    
+    // Debug full batch results 
+    console.log("DEBUG batchResults full:", JSON.stringify(batchResults, null, 2));
     
     // Extract relevant data from responses
     const ordersResponses = batchResults.filter(res => 

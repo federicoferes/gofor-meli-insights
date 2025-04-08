@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useEffect, useRef, useContext } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
@@ -246,7 +245,7 @@ export function useMeliData({
     }
   }, [finalDisableTestData, productCostsCalculator, toast]);
 
-  // Main function to load data - DEFINIENDO AQUÍ loadData antes de usarlo
+  // Main function to load data
   const loadData = useCallback(async (retryCount = 0) => {
     // Early return if prerequisites aren't met
     if (!userId || !isConnected || !meliUserId) {
@@ -350,8 +349,8 @@ export function useMeliData({
         user_id: userId,
         batch_requests: batchRequests,
         date_range: {
-          begin: dateFrom ? new Date(dateFrom).toISOString() : undefined,
-          end: dateTo ? new Date(dateTo).toISOString() : undefined
+          begin: dateFrom ?? undefined,
+          end: dateTo ?? undefined
         },
         timezone: 'America/Argentina/Buenos_Aires',
         prev_period: true,
@@ -361,8 +360,7 @@ export function useMeliData({
       };
 
       console.log('useMeliData - Payload date_range:', JSON.stringify(requestPayload.date_range, null, 2));
-      console.log('useMeliData - Payload date_range.begin (procesado):', requestPayload.date_range.begin);
-      console.log('useMeliData - Payload date_range.end (procesado):', requestPayload.date_range.end);
+      console.log('🛰 Enviando payload a meli-data:', JSON.stringify(requestPayload, null, 2));
 
       // Check for duplicate requests
       const payloadString = JSON.stringify(requestPayload);
@@ -425,7 +423,7 @@ export function useMeliData({
     }
   }, [userId, meliUserId, dateFilter, dateRange, finalDisableTestData, productCostsCalculator, isConnected, getCacheKey, processResponseData]);
 
-  // Load data when dependencies change - USANDO loadData después de definirlo
+  // Load data when dependencies change
   useEffect(() => {
     const validDateRange = dateFilter !== 'custom' || 
                           (dateRange.fromISO && dateRange.toISO);
