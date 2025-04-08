@@ -25,20 +25,14 @@ export function buildMeliDataPayload(
 
   console.log("Building payload with date range:", { dateFrom, dateTo });
 
-  // Prepare simplified batch requests
+  // Prepare batch requests - ONLY USE orders/search, not orders/search/recent
+  // This ensures date filters work properly
   const batchRequests = [
     {
       endpoint: '/orders/search',
       params: {
         seller: meliUserId,
         sort: 'date_desc',
-        limit: 50,
-      }
-    },
-    {
-      endpoint: `/orders/search/recent`,
-      params: {
-        seller: meliUserId,
         limit: 50,
       }
     }

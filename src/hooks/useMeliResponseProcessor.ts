@@ -37,6 +37,15 @@ export function useMeliResponseProcessor({
   const processResponseData = useCallback((batchData: any) => {
     console.log("🔄 Processing response data:", batchData);
     
+    // Reset data first to ensure we don't display stale data
+    setSalesData([]);
+    setSalesSummary(createEmptySalesSummary());
+    setTopProducts([]);
+    setCostData([]);
+    setProvinceData([]);
+    setOrdersData([]);
+    setPrevSalesSummary(createEmptySalesSummary());
+    
     const isUsingTestData = !!batchData.is_test_data;
     setIsTestData(isUsingTestData);
     
@@ -75,6 +84,12 @@ export function useMeliResponseProcessor({
         setCostData(batchData.dashboard_data.costDistribution);
       } else {
         console.log("No costDistribution data found or empty array");
+        // Set default cost distribution to prevent empty display
+        setCostData([
+          { name: "Comisiones", value: 0 },
+          { name: "Impuestos", value: 0 },
+          { name: "Envíos", value: 0 }
+        ]);
       }
       
       if (batchData.dashboard_data.topProducts?.length > 0) {
