@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { isEqual } from "date-fns";
 import { DateRange } from "@/types/meli";
 import { getPresetDateRange } from "@/utils/date";
 import { 
