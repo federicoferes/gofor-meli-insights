@@ -39,19 +39,11 @@ interface UseMeliDataReturn {
 
 interface SalesSummary {
   gmv: number;
-  commissions: number;
-  taxes: number;
-  shipping: number;
-  discounts: number;
-  refunds: number;
-  iva: number;
   units: number;
   orders: number;
-  avgTicket: number;
   visits: number;
   conversion: number;
-  advertising: number;
-  productCosts: number;
+  avgTicket: number;
 }
 
 // Cache implementation for better performance
@@ -66,20 +58,12 @@ const responseCache = new Map<string, {
  * Creates an object with initialized fields for sales summary
  */
 const createEmptySalesSummary = (): SalesSummary => ({
-  gmv: 0, 
-  commissions: 0, 
-  taxes: 0, 
-  shipping: 0, 
-  discounts: 0,
-  refunds: 0, 
-  iva: 0, 
+  gmv: 0,
   units: 0, 
   orders: 0,
-  avgTicket: 0, 
   visits: 0, 
   conversion: 0,
-  advertising: 0, 
-  productCosts: 0
+  avgTicket: 0
 });
 
 /**
@@ -285,7 +269,7 @@ export function useMeliData({
       console.log('useMeliData - dateFrom (sin procesar):', dateFrom);
       console.log('useMeliData - dateTo (sin procesar):', dateTo);
 
-      // Preparar batch requests simplificados
+      // Preparar batch requests simplificados - removed advertising
       const batchRequests = [
         {
           endpoint: '/orders/search',
@@ -302,12 +286,6 @@ export function useMeliData({
             seller: meliUserId,
             limit: 50,
             // Date parameters will be processed on the server
-          }
-        },
-        {
-          endpoint: `/advertising/campaigns/search`,
-          params: {
-            seller_id: meliUserId
           }
         }
       ];

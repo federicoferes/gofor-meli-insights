@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -55,11 +56,6 @@ function generateTestData(dateRange?: { begin?: string; end?: string }) {
     visits: 3500,
     conversion: 4.46,
     avgTicket: 10037.14,
-    commissions: 86420,
-    shipping: 25000,
-    taxes: 58900,
-    advertising: 12500,
-    productCosts: 650000
   };
   
   // Previous period with 10% less
@@ -70,11 +66,6 @@ function generateTestData(dateRange?: { begin?: string; end?: string }) {
     visits: Math.floor(summary.visits * 0.9),
     conversion: summary.conversion * 0.9,
     avgTicket: summary.avgTicket * 0.9,
-    commissions: summary.commissions * 0.9,
-    shipping: summary.shipping * 0.9,
-    taxes: summary.taxes * 0.9,
-    advertising: summary.advertising * 0.9,
-    productCosts: summary.productCosts * 0.9,
   };
   
   // Generate sales by month
@@ -89,12 +80,11 @@ function generateTestData(dateRange?: { begin?: string; end?: string }) {
   
   // Generate cost distribution
   const costDistribution = [
-    { name: "Comisiones", value: summary.commissions },
-    { name: "Impuestos", value: summary.taxes },
-    { name: "Envíos", value: summary.shipping },
+    { name: "Comisiones", value: 86420 },
+    { name: "Impuestos", value: 58900 },
+    { name: "Envíos", value: 25000 },
     { name: "IVA", value: summary.gmv * 0.21 },
-    { name: "Publicidad", value: summary.advertising },
-    { name: "Costo de productos", value: summary.productCosts }
+    { name: "Costo de productos", value: 650000 }
   ];
   
   // Generate top products
@@ -198,9 +188,6 @@ function processOrders(orders: any[]) {
     gmv: 0,
     orders: orders.length,
     units: 0,
-    commissions: 0,
-    shipping: 0,
-    taxes: 0,
     visits: 0
   };
   
@@ -246,30 +233,6 @@ function processOrders(orders: any[]) {
     summary.gmv += orderTotal;
     summary.units += orderUnits;
     
-    // Extract commissions according to documentation
-    if (order.fee_details && Array.isArray(order.fee_details)) {
-      order.fee_details.forEach((fee: any) => {
-        summary.commissions += fee.amount || 0;
-      });
-    }
-    
-    // Extract shipping costs
-    if (order.shipping && order.shipping.shipping_option) {
-      summary.shipping += order.shipping.shipping_option.cost || 0;
-    }
-    
-    // Extract taxes
-    if (order.taxes) {
-      // MeLi API can return either an object with amount or an array of taxes
-      if (typeof order.taxes === 'object' && order.taxes.amount) {
-        summary.taxes += order.taxes.amount;
-      } else if (Array.isArray(order.taxes)) {
-        order.taxes.forEach((tax: any) => {
-          summary.taxes += tax.amount || 0;
-        });
-      }
-    }
-    
     // Group sales by month
     const date = new Date(order.date_created);
     const monthKey = `${date.getFullYear()}-${date.getMonth() + 1}`;
@@ -312,9 +275,9 @@ function processOrders(orders: any[]) {
   
   // Cost distribution
   const costDistribution = [
-    { name: "Comisiones", value: summary.commissions },
-    { name: "Impuestos", value: summary.taxes },
-    { name: "Envíos", value: summary.shipping },
+    { name: "Comisiones", value: 0 },
+    { name: "Impuestos", value: 0 },
+    { name: "Envíos", value: 0 },
   ];
 
   return {
@@ -326,7 +289,7 @@ function processOrders(orders: any[]) {
   };
 }
 
-// Process visit data individually - following MeLi API docs - UPDATED FUNCTION
+// Process visit data individually - following MeLi API docs
 async function getItemVisitsIndividually(token: string, itemIds: string[]) {
   if (!Array.isArray(itemIds)) {
     console.error("❌ itemIds no es un array válido:", itemIds);
@@ -358,44 +321,6 @@ async function getItemVisitsIndividually(token: string, itemIds: string[]) {
   }
   
   return { totalVisits, itemVisits };
-}
-
-// Process advertising data using correct endpoint, with full error handling
-async function processAdvertising(token: string, meliUserId: string) {
-  try {
-    const url = `https://api.mercadolibre.com/advertising/campaigns/search?seller_id=${meliUserId}`;
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
-    if (!res.ok) {
-      const text = await res.text();
-      console.error("🛑 Error en /advertising/campaigns/search", {
-        status: res.status,
-        body: text
-      });
-      return 0;
-    }
-
-    const data = await res.json();
-
-    if (!data || !Array.isArray(data.campaigns)) {
-      console.warn("⚠️ No campaigns found or unexpected format in advertising response", { data });
-      return 0;
-    }
-
-    const totalSpent = data.campaigns.reduce(
-      (acc: number, campaign: any) => acc + (campaign.total_spent || 0),
-      0
-    );
-
-    console.log(`✅ Total advertising spent: $${totalSpent}`);
-    return totalSpent;
-
-  } catch (error) {
-    console.error("🔥 Exception in processAdvertising:", error);
-    return 0;
-  }
 }
 
 // Get a valid token
@@ -757,12 +682,10 @@ serve(async (req) => {
     
     // Filter out visits requests - we handle them separately
     const filteredRequests = batch_requests.filter(req => 
-      !req.endpoint.includes('/visits/') && 
-      !req.endpoint.includes('/users/') && // Remove product-related endpoints
-      !req.endpoint.includes('/items/')     // Remove item-related endpoints
+      !req.endpoint.includes('/visits/')
     );
     
-    // Make batch requests (excluding visits and products)
+    // Make batch requests (excluding visits)
     console.log("Making batch requests with filtered requests:", JSON.stringify(filteredRequests, null, 2));
     const batchResults = await batchRequests(tokenResult.token, filteredRequests);
     console.log("Received batch results:", batchResults.map(r => ({ 
@@ -829,15 +752,11 @@ serve(async (req) => {
         visitsData = await getItemVisitsIndividually(tokenResult.token, allProductIds);
       }
       
-      // Process advertising with the correct endpoint
-      const advertisingSpent = await processAdvertising(tokenResult.token, tokenResult.meliUserId);
-      
       // Process orders to get metrics
       const processedData = processOrders(allOrders);
       
-      // Update additional fields
+      // Update visits field
       processedData.summary.visits = visitsData.totalVisits;
-      processedData.summary.advertising = advertisingSpent;
       
       // Calculate conversion if there are visits
       if (visitsData.totalVisits > 0) {
@@ -873,26 +792,13 @@ serve(async (req) => {
       hasDashboardData = true;
     }
     
-    // Include all batch results in the response for debugging
-    const allResults = [...batchResults];
-    
-    // Add advertising result if processed correctly
-    if (dashboardData?.summary?.advertising > 0) {
-      allResults.push({
-        endpoint: '/advertising/campaigns/search',
-        success: true,
-        status: 200,
-        data: { spent: dashboardData.summary.advertising }
-      });
-    }
-    
     return responseWithCors({
       success: true,
-      batch_results: allResults,
+      batch_results: batchResults,
       dashboard_data: dashboardData,
       is_test_data: isTestData,
       has_dashboard_data: hasDashboardData,
-      has_batch_results: allResults.length > 0
+      has_batch_results: batchResults.length > 0
     });
     
   } catch (error: any) {
