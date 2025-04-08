@@ -1,8 +1,8 @@
-
 import { useState, useCallback } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { SalesSummary } from '@/types/meli';
-import { createEmptySalesSummary, logSalesSummaryToConsole } from '@/utils/meliDataProcessor';
+import { createEmptySalesSummary } from '@/utils/meliDataProcessor';
+import { logSalesSummaryToConsole } from '@/utils/consoleLogger';
 
 interface UseMeliResponseProcessorProps {
   dateFilter: string;
@@ -31,29 +31,23 @@ export function useMeliResponseProcessor({
   
   const { toast } = useToast();
 
-  // Process the response data and update state
   const processResponseData = useCallback((batchData: any) => {
-    // Explicitly set isTestData based on the response
     setIsTestData(!!batchData.is_test_data);
     
     if (batchData.dashboard_data) {
-      // Process sales by month
       if (batchData.dashboard_data.salesByMonth?.length > 0) {
         setSalesData(batchData.dashboard_data.salesByMonth);
       }
       
-      // Process summary
       if (batchData.dashboard_data.summary) {
         const summary = batchData.dashboard_data.summary;
         
-        // Calculate conversion rate
         if (summary.visits > 0 && summary.units > 0) {
           summary.conversion = (summary.units / summary.visits) * 100;
         } else {
           summary.conversion = 0;
         }
         
-        // Calculate average ticket
         if (summary.gmv > 0 && summary.orders > 0) {
           summary.avgTicket = summary.gmv / summary.orders;
         } else {
@@ -62,11 +56,9 @@ export function useMeliResponseProcessor({
         
         setSalesSummary(summary);
 
-        // Log sales summary in the requested format
         logSalesSummaryToConsole(dateFilter, dateRange, summary);
       }
       
-      // Process previous period summary
       if (batchData.dashboard_data.prev_summary) {
         const prevSummary = batchData.dashboard_data.prev_summary;
         
@@ -85,22 +77,18 @@ export function useMeliResponseProcessor({
         setPrevSalesSummary(prevSummary);
       }
       
-      // Process cost distribution
       if (batchData.dashboard_data.costDistribution?.length > 0) {
         setCostData(batchData.dashboard_data.costDistribution);
       }
       
-      // Process top products
       if (batchData.dashboard_data.topProducts?.length > 0) {
         setTopProducts(batchData.dashboard_data.topProducts);
       }
       
-      // Process province data
       if (batchData.dashboard_data.salesByProvince?.length > 0) {
         setProvinceData(batchData.dashboard_data.salesByProvince);
       }
       
-      // Process orders and calculate product costs if applicable
       if (batchData.dashboard_data.orders) {
         setOrdersData(batchData.dashboard_data.orders);
         
@@ -110,9 +98,6 @@ export function useMeliResponseProcessor({
         }
       }
     } else if (!batchData.has_dashboard_data) {
-      // Handle case when no dashboard data is returned
-      
-      // Clear all data
       setSalesSummary(createEmptySalesSummary());
       setPrevSalesSummary(createEmptySalesSummary());
       setSalesData([]);
@@ -129,7 +114,6 @@ export function useMeliResponseProcessor({
           duration: 5000
         });
       } else if (batchData.is_test_data) {
-        // Test data scenario
         setIsTestData(true);
         
         toast({

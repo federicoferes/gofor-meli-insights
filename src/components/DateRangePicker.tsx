@@ -41,6 +41,7 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
     );
 
     if (value !== "custom") {
+      setSelectedRange(value);
       setDate(getPresetDateRange(value));
     }
   };

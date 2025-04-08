@@ -1,30 +1,8 @@
 
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
 import { DateRange } from "@/types/meli";
 import { getPresetDateRange, getIsoDateRange } from "@/utils/date";
-
-/**
- * Gets a user-friendly display label for date ranges
- */
-export function getDateRangeDisplayLabel(rangeType: string): string {
-  switch (rangeType) {
-    case "today": return "hoy";
-    case "yesterday": return "ayer";
-    case "7d": return "últimos 7 días";
-    case "30d": return "últimos 30 días";
-    default: return rangeType;
-  }
-}
-
-/**
- * Gets a formatted string representation of a date range
- */
-export function formatCustomDateRange(from?: Date, to?: Date): string {
-  const formattedFromDate = from ? format(from, "dd/MM/yyyy", { locale: es }) : '';
-  const formattedToDate = to ? format(to, "dd/MM/yyyy", { locale: es }) : '';
-  return `${formattedFromDate} - ${formattedToDate}`;
-}
+import { logDateRangeSelection, logCustomDateSelection } from "./consoleLogger";
+import { formatCustomDateRange } from "./dateFormatters";
 
 /**
  * Handles date range selection logic
@@ -42,7 +20,6 @@ export function handleDateRangeSelection(
     return;
   }
   
-  console.log(`🔄 DateRangePicker: Range changing to ${rangeType}`);
   lastRange.current = rangeType;
   
   const dateRange = rangeType === "custom" 
@@ -61,16 +38,7 @@ export function handleDateRangeSelection(
     lastFromISO.current = fromISO || null;
     lastToISO.current = toISO || null;
     
-    console.log("📅 DateRangePicker changed:", rangeType, { 
-      from: dateRange.from?.toISOString(), 
-      to: dateRange.to?.toISOString(),
-      fromISO, 
-      toISO 
-    });
-    
-    // Log the filtered date in the requested format
-    const formattedDate = getDateRangeDisplayLabel(rangeType);
-    console.log(`Datos de fecha "${formattedDate}": cargando...`);
+    logDateRangeSelection(rangeType, dateRange, fromISO, toISO);
     
     // Siempre incluimos fromISO y toISO
     onDateRangeChange(rangeType, { ...dateRange, fromISO, toISO });
@@ -108,7 +76,6 @@ export function handleCustomDateSelection(
     }
   }
 
-  console.log("📅 Custom date selection changed:", value);
   setDate({
     from: value.from || undefined,
     to: value.to || undefined
@@ -131,16 +98,7 @@ export function handleCustomDateSelection(
     lastFromISO.current = fromISO || null;
     lastToISO.current = toISO || null;
     
-    console.log("📅 DateRangePicker custom selected:", { 
-      from: value.from?.toISOString(), 
-      to: value.to?.toISOString(),
-      fromISO, 
-      toISO 
-    });
-    
-    // Log the custom date range in the requested format
-    const formattedDateRange = formatCustomDateRange(value.from, value.to);
-    console.log(`Datos de fecha "${formattedDateRange}": cargando...`);
+    logCustomDateSelection(value, fromISO, toISO);
     
     onDateRangeChange("custom", { 
       from: value.from, 
