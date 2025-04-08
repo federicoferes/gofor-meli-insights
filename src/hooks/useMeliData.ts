@@ -127,10 +127,10 @@ export function useMeliData({
       lastRequestPayload.current = payloadString;
       requestAttempts.current++;
       
-      // Fetch data
+      // Fetch data - Pass the toast object correctly
       const { data: batchData, error: fetchError } = await fetchMeliData(
         requestPayload,
-        toast
+        { toast }
       );
       
       if (fetchError) {

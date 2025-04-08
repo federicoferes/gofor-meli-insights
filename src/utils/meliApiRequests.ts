@@ -1,6 +1,6 @@
 
 import { supabase } from '@/integrations/supabase/client';
-import { useToast } from "@/hooks/use-toast";
+import { type Toast } from "@/hooks/use-toast";
 import { DateRange } from '@/types/meli';
 
 /**
@@ -55,7 +55,7 @@ export function buildMeliDataPayload(
  */
 export async function fetchMeliData(
   payload: any, 
-  handleToast: typeof useToast
+  toastFn: { toast: (props: Toast) => void }
 ) {
   console.log('🛰 Enviando payload a meli-data:', JSON.stringify(payload, null, 2));
 
@@ -82,7 +82,7 @@ export async function fetchMeliData(
   } catch (error: any) {
     const errorMessage = error.message || "No se pudieron cargar los datos de Mercado Libre.";
     
-    handleToast({
+    toastFn.toast({
       variant: "destructive",
       title: "Error cargando datos",
       description: errorMessage,
