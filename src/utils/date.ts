@@ -145,8 +145,8 @@ export const getIsoDateRange = (dateRange: { from?: Date; to?: Date }) => {
   }
   
   // Usar el nuevo formato para asegurar que tenemos milisegundos y zona horaria
-  const fromISO = formatDateForApi(dateRange.from);
-  const toISO = formatDateForApi(dateRange.to, true);
+  const fromISO = formatDateForMeLi(dateRange.from);
+  const toISO = formatDateForMeLi(dateRange.to, true);
   
   console.log(`getIsoDateRange - resultado: fromISO: ${fromISO}, toISO: ${toISO}`);
   
