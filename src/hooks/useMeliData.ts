@@ -152,6 +152,23 @@ export function useMeliData({
         }
         
         setSalesSummary(summary);
+
+        // Add the console log with the requested format
+        const dateLabel = dateFilter === "today" ? "hoy" : 
+                         dateFilter === "yesterday" ? "ayer" : 
+                         dateFilter === "7d" ? "últimos 7 días" : 
+                         dateFilter === "30d" ? "últimos 30 días" : 
+                         dateFilter === "custom" && dateRange.from && dateRange.to ? 
+                         `${dateRange.from.toLocaleDateString('es-AR')} - ${dateRange.to.toLocaleDateString('es-AR')}` : dateFilter;
+        
+        console.log(`Datos de fecha "${dateLabel}":`, {
+          "ventas totales (GMV)": summary.gmv,
+          "unidades": summary.units,
+          "órdenes": summary.orders,
+          "visitas": summary.visits,
+          "conversión": summary.conversion.toFixed(2) + "%",
+          "ticket promedio": summary.avgTicket
+        });
       }
       
       // Process previous period summary
@@ -228,7 +245,7 @@ export function useMeliData({
         });
       }
     }
-  }, [finalDisableTestData, productCostsCalculator, toast]);
+  }, [finalDisableTestData, productCostsCalculator, toast, dateFilter, dateRange]);
 
   // Main function to load data
   const loadData = useCallback(async (retryCount = 0) => {

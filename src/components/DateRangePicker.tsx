@@ -86,6 +86,14 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
         toISO 
       });
       
+      // Log the filtered date in the requested format
+      const formattedDate = value === "today" ? "hoy" : 
+                            value === "yesterday" ? "ayer" : 
+                            value === "7d" ? "últimos 7 días" : 
+                            value === "30d" ? "últimos 30 días" : value;
+      
+      console.log(`Datos de fecha "${formattedDate}": cargando...`);
+      
       // Siempre incluimos fromISO y toISO
       onDateRangeChange(value, { ...dateRange, fromISO, toISO });
     } else {
@@ -110,6 +118,13 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
         fromISO, 
         toISO 
       });
+      
+      // Log the custom date range in the requested format
+      const formattedFromDate = date.from ? format(date.from, "dd/MM/yyyy", { locale: es }) : '';
+      const formattedToDate = date.to ? format(date.to, "dd/MM/yyyy", { locale: es }) : '';
+      const formattedDateRange = `${formattedFromDate} - ${formattedToDate}`;
+      
+      console.log(`Datos de fecha "${formattedDateRange}": cargando...`);
       
       onDateRangeChange(value, { ...date, fromISO, toISO });
     }
@@ -157,6 +172,13 @@ const DateRangePicker = ({ onDateRangeChange }: DateRangePickerProps) => {
         fromISO, 
         toISO 
       });
+      
+      // Log the custom date range in the requested format
+      const formattedFromDate = format(value.from, "dd/MM/yyyy", { locale: es });
+      const formattedToDate = format(value.to, "dd/MM/yyyy", { locale: es });
+      const formattedDateRange = `${formattedFromDate} - ${formattedToDate}`;
+      
+      console.log(`Datos de fecha "${formattedDateRange}": cargando...`);
       
       onDateRangeChange("custom", { 
         from: value.from, 
