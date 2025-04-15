@@ -10,44 +10,32 @@ import {
 const FAQ = () => {
   const faqs = [
     {
-      question: "¿Qué es Go For MeLi Metrics y cómo me ayuda a vender más en Mercado Libre?",
-      answer: "Go For MeLi Metrics es una plataforma de análisis enfocada exclusivamente en vendedores de Mercado Libre que te permite visualizar y entender todos tus datos de ventas, costos, comisiones e impuestos en un solo lugar. Te ayuda a vender más porque te proporciona información clara sobre qué productos son más rentables, cuándo es el mejor momento para vender, y dónde están tus mayores gastos, permitiéndote tomar decisiones estratégicas basadas en datos reales."
+      question: "¿Es seguro conectar mi cuenta de Mercado Libre?",
+      answer: "Sí, es 100% seguro. Utilizamos el protocolo OAuth2 oficial de Mercado Libre, que es el mismo estándar que usan grandes plataformas como Google o Facebook. En ningún momento tenemos acceso a tus credenciales de Mercado Libre, solo a los datos que nos autorizás ver. Además, podés revocar el acceso en cualquier momento desde tu panel de Mercado Libre."
     },
     {
-      question: "¿Cómo funciona la conexión con mi cuenta de Mercado Libre? ¿Es segura?",
-      answer: "La conexión es 100% segura y utiliza el protocolo OAuth2 oficial de Mercado Libre, el mismo estándar que usan grandes plataformas como Google o Facebook. En ningún momento tenemos acceso a tus credenciales, solo a los datos que nos autorizás ver. El proceso es muy simple: hacés clic en 'Conectar con MeLi', iniciás sesión en tu cuenta de Mercado Libre y autorizás el acceso. Podés revocar este permiso en cualquier momento desde tu panel de Mercado Libre."
+      question: "¿Puedo usar la app sin conexión API?",
+      answer: "Sí, ofrecemos la opción de utilizar la aplicación subiendo archivos CSV con tus datos de ventas. Esta opción es ideal para quienes prefieren no conectar su cuenta o necesitan analizar datos históricos. Sin embargo, para aprovechar todas las funcionalidades en tiempo real, recomendamos la conexión vía API."
     },
     {
-      question: "¿Puedo calcular mi rentabilidad real teniendo en cuenta todos los costos y comisiones?",
-      answer: "¡Absolutamente! Esta es una de las principales ventajas de Go For MeLi Metrics. La plataforma calcula automáticamente tu rentabilidad real integrando todos los costos asociados: comisiones de Mercado Libre, costos de Mercado Pago, impuestos, costos de envío, descuentos aplicados, y por supuesto, tus costos de productos que puedes cargar manualmente o mediante un archivo CSV. Esto te da una visión precisa de tu margen neto en cada venta."
+      question: "¿Qué información ve la app de mi cuenta de Mercado Libre?",
+      answer: "La aplicación solo accede a la información necesaria para brindarte análisis de valor: datos de ventas, publicaciones, costos de envío, comisiones y mensajes relacionados con tus operaciones. No podemos modificar tus publicaciones, precios o cualquier otro aspecto de tu cuenta sin tu autorización explícita."
     },
     {
-      question: "¿Cuáles son las métricas más importantes que puedo analizar con Go For MeLi Metrics?",
-      answer: "Nuestra plataforma te permite analizar métricas cruciales como: GMV (Gross Merchandise Value), número de órdenes, ticket promedio, tasa de conversión, distribución de costos (comisiones, impuestos, envíos), rentabilidad por producto y categoría, productos más vendidos, tendencias de ventas a lo largo del tiempo, fuentes de tráfico y comportamiento de compradores. Todas estas métricas están diseñadas para darte una visión completa del rendimiento de tu negocio en Mercado Libre."
+      question: "¿Cómo funciona el período de prueba de 7 días?",
+      answer: "Al conectar tu cuenta, automáticamente iniciás un período de prueba de 7 días con acceso completo a todas las funcionalidades. No necesitás ingresar datos de pago para la prueba. Te enviaremos un recordatorio 2 días antes de que finalice el período para que puedas decidir si continuar con la suscripción."
     },
     {
-      question: "¿Go For MeLi Metrics puede ayudarme a mejorar mi posicionamiento en Mercado Libre?",
-      answer: "Sí, aunque no de forma directa, la plataforma te proporciona información valiosa que puedes utilizar para mejorar tu estrategia de posicionamiento. Por ejemplo, te muestra qué productos tienen mayor tasa de conversión, qué días de la semana generan más ventas, o qué categorías tienen mejor rendimiento. Con estos datos, puedes ajustar tus publicaciones, precios, o inventario para maximizar tu visibilidad y ventas en Mercado Libre."
+      question: "¿Cómo agrego mis costos para calcular márgenes precisos?",
+      answer: "Tenés dos opciones: carga manual de costos producto por producto o carga masiva mediante un archivo CSV. Una vez cargados, la aplicación calculará automáticamente tus márgenes netos considerando el costo de producto, comisiones de MeLi, costos de envío y cualquier descuento aplicado."
     },
     {
-      question: "¿Cómo me ayuda Go For MeLi Metrics a optimizar mis costos de venta?",
-      answer: "La plataforma te proporciona un desglose detallado de todos tus costos asociados a cada venta: comisiones de Mercado Libre, costos de procesamiento de pagos, impuestos, envíos, y más. Con esta información puedes identificar rápidamente dónde están tus mayores gastos y tomar medidas para optimizarlos. Por ejemplo, podrías descubrir que ciertos productos tienen costos de envío desproporcionados, o que las comisiones en algunas categorías están afectando seriamente tu margen."
+      question: "¿Puedo cancelar mi suscripción en cualquier momento?",
+      answer: "Sí, podés cancelar tu suscripción cuando quieras desde tu panel de usuario. No hay contratos a largo plazo ni penalizaciones por cancelación. Si cancelás, mantendrás el acceso hasta el final del período facturado."
     },
     {
-      question: "¿Puedo comparar mi rendimiento actual con períodos anteriores?",
-      answer: "Sí, una de las funcionalidades más potentes de Go For MeLi Metrics es la capacidad de comparar tu rendimiento actual con períodos anteriores. Puedes ver cómo han evolucionado tus ventas, conversion rates, ticket promedio y otros KPIs importantes a lo largo del tiempo. Esto te permite identificar tendencias, evaluar el impacto de tus estrategias comerciales, y detectar oportunidades o problemas emergentes en tu negocio de Mercado Libre."
-    },
-    {
-      question: "¿Necesito conocimientos técnicos para usar Go For MeLi Metrics?",
-      answer: "No, la plataforma está diseñada para ser intuitiva y fácil de usar, incluso si no tienes conocimientos técnicos. La interfaz es visual y todos los gráficos e indicadores son autoexplicativos. Además, ofrecemos tours guiados al iniciar y soporte permanente para ayudarte a aprovechar al máximo la herramienta. Cualquier vendedor de Mercado Libre puede comenzar a obtener insights valiosos desde el primer día de uso."
-    },
-    {
-      question: "¿Puedo exportar los datos y análisis para presentarlos a mi equipo o socios?",
-      answer: "Sí, Go For MeLi Metrics te permite exportar todos los datos, gráficos y análisis en varios formatos, incluyendo PDF, Excel y CSV. Esto es especialmente útil si necesitas compartir información con tu equipo de ventas, contadores, o socios comerciales. También puedes programar informes periódicos para que se envíen automáticamente por email a las personas que designes."
-    },
-    {
-      question: "¿Cómo se compara Go For MeLi Metrics con las herramientas oficiales de Mercado Libre?",
-      answer: "Mientras que las herramientas oficiales de Mercado Libre proporcionan información básica sobre tus ventas, Go For MeLi Metrics ofrece un análisis mucho más profundo y orientado a la toma de decisiones. Nuestra plataforma integra datos de múltiples fuentes, calcula métricas avanzadas como rentabilidad real, y presenta todo de manera visualmente intuitiva. Además, te permite realizar análisis comparativos, proyecciones y simulaciones que no están disponibles en las herramientas oficiales."
+      question: "¿Ofrecen descuentos para planes anuales?",
+      answer: "Actualmente trabajamos con un único plan mensual para mantener la simplicidad y flexibilidad para nuestros usuarios. Sin embargo, si tenés un volumen de productos muy alto o necesidades específicas, contactanos para analizar opciones personalizadas."
     }
   ];
 
@@ -79,7 +67,7 @@ const FAQ = () => {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <a 
-              href="https://wa.me/13025729025" 
+              href="https://wa.me/5491100000000" 
               target="_blank" 
               rel="noopener noreferrer"
               className="inline-flex items-center justify-center gap-2 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors"
@@ -90,7 +78,7 @@ const FAQ = () => {
               WhatsApp
             </a>
             <a 
-              href="mailto:hola@gfmarketing.com.ar"
+              href="mailto:info@gofor.com.ar"
               className="inline-flex items-center justify-center gap-2 bg-gofor-purple text-white px-4 py-2 rounded-lg hover:bg-gofor-lightPurple transition-colors"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
