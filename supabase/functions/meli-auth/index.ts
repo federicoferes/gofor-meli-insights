@@ -42,6 +42,7 @@ serve(async (req) => {
     }
 
     console.log(`Exchanging code for access token for user ${user_id}`);
+    console.log(`Using redirect_uri: ${redirect_uri}`);
     
     // Exchange code for access token with Mercado Libre
     const tokenResponse = await fetch("https://api.mercadolibre.com/oauth/token", {
