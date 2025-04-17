@@ -7,76 +7,89 @@ import { Info, AlertTriangle, Code, Webhook } from "lucide-react";
 
 const ConfigurationGuide = () => {
   return (
-    <Card className="w-full max-w-3xl mx-auto">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Info className="h-5 w-5 text-gofor-purple" />
-          Guía de Configuración
-        </CardTitle>
+    <Card className="w-full max-w-3xl mx-auto bg-white">
+      <CardHeader className="bg-gofor-purple text-white">
+        <CardTitle className="text-xl font-poppins">Guía de Configuración</CardTitle>
       </CardHeader>
-      <CardContent>
-        <Tabs defaultValue="meli">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="meli">Mercado Libre</TabsTrigger>
-            <TabsTrigger value="general">General</TabsTrigger>
+      <CardContent className="p-6">
+        <Tabs defaultValue="initial">
+          <TabsList className="mb-6 bg-gray-100">
+            <TabsTrigger value="initial">Primeros pasos</TabsTrigger>
+            <TabsTrigger value="advanced">Configuración avanzada</TabsTrigger>
+            <TabsTrigger value="troubleshooting">Solución de problemas</TabsTrigger>
           </TabsList>
           
-          <TabsContent value="meli" className="space-y-4 mt-4">
-            <Alert>
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Configuración de Mercado Libre Developers</AlertTitle>
-              <AlertDescription>
-                Para que la conexión con Mercado Libre funcione correctamente, debes configurar estos parámetros en tu aplicación de Mercado Libre Developers.
-              </AlertDescription>
-            </Alert>
-            
+          <TabsContent value="initial">
             <div className="space-y-4">
-              <div>
-                <h3 className="font-semibold mb-1">1. URLs de Redirección</h3>
-                <div className="bg-slate-100 p-3 rounded-md">
-                  <p className="text-sm font-mono break-all">https://melimetrics.app/oauth/callback</p>
-                </div>
-                <p className="text-sm text-slate-600 mt-1">Configura esta URL en tu aplicación de Mercado Libre Developers.</p>
-              </div>
+              <Alert>
+                <Info className="h-5 w-5" />
+                <AlertTitle>Conexión con Mercado Libre</AlertTitle>
+                <AlertDescription>
+                  Para comenzar a utilizar el dashboard, primero debes conectar tu cuenta de Mercado Libre haciendo clic en el botón "Conectar con Mercado Libre".
+                </AlertDescription>
+              </Alert>
               
-              <div>
-                <h3 className="font-semibold mb-1">2. Scopes necesarios</h3>
-                <ul className="list-disc pl-5 space-y-1">
-                  <li className="text-sm">read</li>
-                  <li className="text-sm">write</li>
-                  <li className="text-sm">offline_access</li>
-                </ul>
-              </div>
+              <h3 className="text-lg font-medium mt-6">Datos disponibles</h3>
+              <p className="text-gray-600">
+                Una vez conectado, el dashboard mostrará automáticamente tus métricas de ventas, incluyendo:
+              </p>
+              <ul className="list-disc pl-6 mt-2 text-gray-600">
+                <li>Ventas totales (GMV)</li>
+                <li>Unidades vendidas</li>
+                <li>Ticket promedio</li>
+                <li>Comisiones y costos</li>
+                <li>Productos más vendidos</li>
+              </ul>
+              
+              <h3 className="text-lg font-medium mt-6">Filtros de fechas</h3>
+              <p className="text-gray-600">
+                Utiliza el selector de fechas en la parte superior derecha para filtrar los datos por diferentes períodos: hoy, ayer, últimos 7 días, últimos 30 días o un rango personalizado.
+              </p>
             </div>
           </TabsContent>
           
-          <TabsContent value="general" className="space-y-4 mt-4">
-            <Alert>
-              <Info className="h-4 w-4" />
-              <AlertTitle>Configuración General</AlertTitle>
-              <AlertDescription>
-                Asegúrate de que tu dominio esté correctamente configurado.
-              </AlertDescription>
-            </Alert>
-            
+          <TabsContent value="advanced">
             <div className="space-y-4">
-              <div>
-                <h3 className="font-semibold mb-1">1. Configuración de Supabase</h3>
-                <p className="text-sm">Asegúrate de que las siguientes URLs estén configuradas en Supabase:</p>
-                <ul className="list-disc pl-5 space-y-1 mt-2">
-                  <li className="text-sm">
-                    <strong>Site URL:</strong> https://melimetrics.app
-                  </li>
-                  <li className="text-sm">
-                    <strong>Redirect URLs:</strong> https://melimetrics.app/oauth/callback
-                  </li>
-                </ul>
-              </div>
+              <h3 className="text-lg font-medium">Webhooks y notificaciones</h3>
+              <p className="text-gray-600">
+                Para mantener tu dashboard actualizado en tiempo real, puedes configurar webhooks de Mercado Libre para recibir notificaciones cuando se produzcan nuevas ventas o cambios en tus productos.
+              </p>
               
-              <div>
-                <h3 className="font-semibold mb-1">2. Prueba la configuración</h3>
-                <p className="text-sm">Una vez configurados todos los parámetros, intenta conectar tu cuenta de Mercado Libre desde el panel.</p>
-              </div>
+              <Alert className="bg-gray-50">
+                <Webhook className="h-5 w-5" />
+                <AlertTitle>URL del Webhook</AlertTitle>
+                <AlertDescription className="font-mono bg-gray-100 p-2 mt-2 rounded">
+                  https://melimetrics.app/api/webhook/mercadolibre
+                </AlertDescription>
+              </Alert>
+              
+              <h3 className="text-lg font-medium mt-6">Personalización</h3>
+              <p className="text-gray-600">
+                Próximamente: funciones para personalizar las métricas mostradas en el dashboard, exportar datos y más.
+              </p>
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="troubleshooting">
+            <div className="space-y-4">
+              <Alert variant="destructive">
+                <AlertTriangle className="h-5 w-5" />
+                <AlertTitle>Problemas comunes</AlertTitle>
+                <AlertDescription>
+                  Si no puedes ver datos en el dashboard, verifica lo siguiente:
+                </AlertDescription>
+              </Alert>
+              
+              <ul className="list-disc pl-6 mt-4 text-gray-600">
+                <li>Que tu cuenta de Mercado Libre esté correctamente conectada</li>
+                <li>Que tengas ventas en el período seleccionado</li>
+                <li>Que tu token de acceso no haya expirado (vuelve a conectar si es necesario)</li>
+              </ul>
+              
+              <h3 className="text-lg font-medium mt-6">Soporte</h3>
+              <p className="text-gray-600">
+                Si sigues teniendo problemas, contacta a nuestro soporte técnico en <span className="font-medium">soporte@gofor.ar</span>
+              </p>
             </div>
           </TabsContent>
         </Tabs>

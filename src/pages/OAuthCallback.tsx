@@ -43,8 +43,7 @@ const OAuthCallback = () => {
         
         console.log("Processing OAuth callback with code:", code);
         
-        // Determine the correct redirect URI based on environment
-        // In production, use the production domain
+        // Use the production domain for redirect URI
         const redirectUri = 'https://melimetrics.app/oauth/callback';
         
         console.log("Using redirect URI:", redirectUri);
