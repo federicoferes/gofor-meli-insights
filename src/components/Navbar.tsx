@@ -3,11 +3,13 @@ import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Menu, X } from "lucide-react";
 import { Link as ScrollLink } from "react-scroll";
-import { Link as RouterLink } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+  const location = useLocation();
+  const isHomePage = location.pathname === '/';
 
   useEffect(() => {
     const handleScroll = () => {
@@ -47,27 +49,36 @@ const Navbar = () => {
           
           <div className="hidden md:block">
             <div className="ml-10 flex items-center space-x-4">
-              {navLinks.map((link) => (
-                <ScrollLink
-                  key={link.name}
-                  to={link.to}
-                  smooth={true}
-                  duration={500}
-                  className="text-gray-700 hover:text-gofor-purple px-3 py-2 text-sm font-medium cursor-pointer"
-                >
-                  {link.name}
-                </ScrollLink>
-              ))}
-              <RouterLink to="/login">
+              {isHomePage ? (
+                // Show scroll links only on homepage
+                navLinks.map((link) => (
+                  <ScrollLink
+                    key={link.name}
+                    to={link.to}
+                    smooth={true}
+                    duration={500}
+                    className="text-gray-700 hover:text-gofor-purple px-3 py-2 text-sm font-medium cursor-pointer"
+                  >
+                    {link.name}
+                  </ScrollLink>
+                ))
+              ) : (
+                // Show link to homepage on other pages
+                <Link to="/" className="text-gray-700 hover:text-gofor-purple px-3 py-2 text-sm font-medium">
+                  Inicio
+                </Link>
+              )}
+              
+              <Link to="/login">
                 <Button className="bg-gofor-purple hover:bg-gofor-lightPurple text-white">
                   Iniciar Sesión
                 </Button>
-              </RouterLink>
-              <RouterLink to="/register">
+              </Link>
+              <Link to="/register">
                 <Button variant="outline" className="border-2 border-gofor-purple text-gofor-purple hover:bg-gofor-purple hover:text-white">
                   Registro
                 </Button>
-              </RouterLink>
+              </Link>
             </div>
           </div>
           
@@ -86,29 +97,37 @@ const Navbar = () => {
       {isOpen && (
         <div className="md:hidden bg-white shadow-lg">
           <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-            {navLinks.map((link) => (
-              <ScrollLink
-                key={link.name}
-                to={link.to}
-                smooth={true}
-                duration={500}
-                className="text-gray-700 hover:text-gofor-purple block px-3 py-2 text-base font-medium cursor-pointer"
-                onClick={() => setIsOpen(false)}
-              >
-                {link.name}
-              </ScrollLink>
-            ))}
+            {isHomePage ? (
+              // Show scroll links only on homepage
+              navLinks.map((link) => (
+                <ScrollLink
+                  key={link.name}
+                  to={link.to}
+                  smooth={true}
+                  duration={500}
+                  className="text-gray-700 hover:text-gofor-purple block px-3 py-2 text-base font-medium cursor-pointer"
+                  onClick={() => setIsOpen(false)}
+                >
+                  {link.name}
+                </ScrollLink>
+              ))
+            ) : (
+              // Show link to homepage on other pages
+              <Link to="/" className="text-gray-700 hover:text-gofor-purple block px-3 py-2 text-base font-medium">
+                Inicio
+              </Link>
+            )}
             <div className="flex flex-col space-y-2 mt-4">
-              <RouterLink to="/login" className="w-full">
+              <Link to="/login" className="w-full">
                 <Button className="w-full bg-gofor-purple hover:bg-gofor-lightPurple text-white">
                   Iniciar Sesión
                 </Button>
-              </RouterLink>
-              <RouterLink to="/register" className="w-full">
+              </Link>
+              <Link to="/register" className="w-full">
                 <Button variant="outline" className="w-full border-2 border-gofor-purple text-gofor-purple hover:bg-gofor-purple hover:text-white">
                   Registro
                 </Button>
-              </RouterLink>
+              </Link>
             </div>
           </div>
         </div>
