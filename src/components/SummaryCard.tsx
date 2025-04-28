@@ -1,8 +1,7 @@
 
 import React from 'react';
 import { Card, CardContent } from "@/components/ui/card";
-import { TrendingUp, TrendingDown, AlertCircle, Info } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { TrendingUp, TrendingDown } from "lucide-react";
 
 interface SummaryCardProps {
   title: React.ReactNode; 
@@ -13,8 +12,6 @@ interface SummaryCardProps {
   isLoading?: boolean;
   suffix?: string;
   additionalInfo?: string | null; 
-  isTestData?: boolean;
-  tooltip?: string;
 }
 
 const SummaryCard = ({ 
@@ -25,9 +22,7 @@ const SummaryCard = ({
   colorClass = "bg-white",
   isLoading = false,
   suffix = "",
-  additionalInfo,
-  isTestData = false,
-  tooltip
+  additionalInfo
 }: SummaryCardProps) => {
   // Determine if percent change is positive
   const isPositiveChange = percentChange !== undefined && percentChange >= 0;
@@ -36,8 +31,8 @@ const SummaryCard = ({
   const hasPercentChange = percentChange !== undefined && !isNaN(percentChange);
   
   // Improve validation for values
-  const isEmptyValue = value === undefined || value === null || value === '' || value === 0;
-  const displayValue = isLoading ? "Cargando..." : (isEmptyValue ? "Sin datos" : `${value}${suffix}`);
+  const hasValue = value !== undefined && value !== null && value !== '' && value !== 0;
+  const displayValue = isLoading ? "Cargando..." : (hasValue ? `${value}${suffix}` : "Sin datos");
   
   // Dynamic color by percentage
   const percentColor = isPositiveChange ? 'text-green-600' : 'text-red-600';
@@ -47,28 +42,8 @@ const SummaryCard = ({
       <CardContent className="p-4">
         <div className="flex justify-between items-start">
           <div className="w-full">
-            <div className="text-sm text-gray-600 font-medium flex items-center gap-2">
-              {title}
-              {isTestData && (
-                <span className="inline-flex items-center text-amber-500 text-xs font-normal" title="Datos de ejemplo para visualización">
-                  <AlertCircle className="h-3 w-3 mr-1" />
-                  Demo
-                </span>
-              )}
-              {tooltip && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="cursor-help">
-                      <Info className="h-3 w-3 text-gray-400" />
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-xs text-xs p-2">
-                    {tooltip}
-                  </TooltipContent>
-                </Tooltip>
-              )}
-            </div>
-            <p className={`text-2xl font-bold font-poppins mt-1 ${isLoading ? 'opacity-50' : ''} ${isTestData ? 'text-amber-500' : ''}`}>
+            <div className="text-sm text-gray-600 font-medium">{title}</div>
+            <p className={`text-2xl font-bold font-poppins mt-1 ${isLoading ? 'opacity-50' : ''}`}>
               {displayValue}
             </p>
             
@@ -83,7 +58,7 @@ const SummaryCard = ({
                 <span>Cargando datos comparativos...</span>
               </div>
             ) : hasPercentChange ? (
-              <div className={`flex items-center mt-2 text-sm font-medium ${isTestData ? 'text-amber-500' : percentColor}`}>
+              <div className={`flex items-center mt-2 text-sm font-medium ${percentColor}`}>
                 {isPositiveChange ? (
                   <TrendingUp className="h-4 w-4 mr-1" />
                 ) : (
@@ -102,7 +77,7 @@ const SummaryCard = ({
           </div>
           
           {icon && (
-            <div className={`p-2 rounded-full ${isTestData ? 'bg-amber-100 text-amber-500' : 'bg-gofor-purple/10 text-gofor-purple'}`}>
+            <div className="p-2 rounded-full bg-gofor-purple/10 text-gofor-purple">
               {icon}
             </div>
           )}
