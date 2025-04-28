@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Navigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -69,9 +68,7 @@ const Dashboard = () => {
     provinceData,
     prevSalesSummary,
     ordersData,
-    refresh: refreshData,
-    isTestData,
-    error: dataError
+    refresh: refreshData
   } = useMeliData({
     userId: session?.user?.id,
     meliUserId: meliUser,
@@ -197,27 +194,27 @@ const Dashboard = () => {
   }
 
   const currentBalance = calculateBalance(
-    salesSummary.gmv || 0, 
-    salesSummary.commissions || 0, 
-    salesSummary.shipping || 0, 
-    salesSummary.taxes || 0, 
+    salesSummary.gmv, 
+    salesSummary.commissions, 
+    salesSummary.shipping, 
+    salesSummary.taxes, 
     ivaRate,
     salesSummary.advertising || 0,
     salesSummary.productCosts || 0
   );
 
   const previousBalance = calculateBalance(
-    prevSalesSummary.gmv || 0, 
-    prevSalesSummary.commissions || 0, 
-    prevSalesSummary.shipping || 0, 
-    prevSalesSummary.taxes || 0, 
+    prevSalesSummary.gmv, 
+    prevSalesSummary.commissions, 
+    prevSalesSummary.shipping, 
+    prevSalesSummary.taxes, 
     ivaRate,
     prevSalesSummary.advertising || 0,
     prevSalesSummary.productCosts || 0
   );
 
-  const currentIva = ((salesSummary.gmv || 0) * ivaRate) / 100;
-  const previousIva = ((prevSalesSummary.gmv || 0) * ivaRate) / 100;
+  const currentIva = (salesSummary.gmv * ivaRate) / 100;
+  const previousIva = (prevSalesSummary.gmv * ivaRate) / 100;
 
   const advertisingGmvPercent = salesSummary.gmv > 0 && salesSummary.advertising > 0
     ? ((salesSummary.advertising / salesSummary.gmv) * 100).toFixed(1)
@@ -227,37 +224,14 @@ const Dashboard = () => {
     ? ((salesSummary.productCosts / salesSummary.gmv) * 100).toFixed(1)
     : null;
 
-  // FIX: Asegurar que costDistributionData siempre tenga datos válidos
   const costDistributionData = [
-    { name: 'Comisiones', value: salesSummary.commissions || 0 },
-    { name: 'Impuestos', value: salesSummary.taxes || 0 },
-    { name: 'Envíos', value: salesSummary.shipping || 0 },
-    { name: 'IVA', value: currentIva || 0 },
+    { name: 'Comisiones', value: salesSummary.commissions },
+    { name: 'Impuestos', value: salesSummary.taxes },
+    { name: 'Envíos', value: salesSummary.shipping },
+    { name: 'IVA', value: currentIva },
     ...(salesSummary.advertising > 0 ? [{ name: 'Publicidad', value: salesSummary.advertising }] : []),
     ...(salesSummary.productCosts > 0 ? [{ name: 'Costo de productos', value: salesSummary.productCosts }] : [])
   ];
-
-  // Mostrar mensaje de datos de prueba si corresponde
-  const showTestDataNotice = isTestData ? (
-    <Alert className="mb-4 bg-amber-50 border-amber-200">
-      <AlertDescription>
-        <div className="flex items-center text-amber-800">
-          <span className="text-sm">⚠️ Mostrando datos de prueba porque no se encontraron órdenes reales para el período seleccionado</span>
-        </div>
-      </AlertDescription>
-    </Alert>
-  ) : null;
-
-  // Mostrar mensaje de error si hubo un problema
-  const showErrorNotice = dataError ? (
-    <Alert className="mb-4 bg-red-50 border-red-200">
-      <AlertDescription>
-        <div className="flex items-center text-red-800">
-          <span className="text-sm">❌ Error: {dataError}</span>
-        </div>
-      </AlertDescription>
-    </Alert>
-  ) : null;
 
   return (
     <div className="min-h-screen bg-gofor-warmWhite font-poppins p-6">
@@ -298,9 +272,6 @@ const Dashboard = () => {
               </div>
             ) : (
               <>
-                {showErrorNotice}
-                {showTestDataNotice}
-                
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                   <div className="lg:col-span-2">
                     <SummaryCard 
@@ -343,13 +314,12 @@ const Dashboard = () => {
                       isLoading={dataLoading}
                       colorClass="bg-gradient-to-r from-gofor-purple/10 to-gofor-purple/5"
                       tooltip="Balance calculado como GMV - comisiones - envíos - impuestos - IVA - publicidad - costos de productos"
-                      isTestData={isTestData}
                     />
                   </div>
                   <SummaryCard 
                     title="GMV (Ventas totales)"
-                    value={formatCurrency(salesSummary.gmv || 0)}
-                    percentChange={calculatePercentChange(salesSummary.gmv || 0, prevSalesSummary.gmv || 0)}
+                    value={formatCurrency(salesSummary.gmv)}
+                    percentChange={calculatePercentChange(salesSummary.gmv, prevSalesSummary.gmv)}
                     icon={<ShoppingBag className="h-5 w-5" />}
                     isLoading={dataLoading}
                     tooltip="Calculado como la suma de precio unitario * cantidad de todos los items vendidos"
@@ -357,8 +327,8 @@ const Dashboard = () => {
                   />
                   <SummaryCard 
                     title="Unidades vendidas"
-                    value={formatNumber(salesSummary.units || 0)}
-                    percentChange={calculatePercentChange(salesSummary.units || 0, prevSalesSummary.units || 0)}
+                    value={formatNumber(salesSummary.units)}
+                    percentChange={calculatePercentChange(salesSummary.units, prevSalesSummary.units)}
                     icon={<BarChart3 className="h-5 w-5" />}
                     isLoading={dataLoading}
                     tooltip="Total de unidades (quantity) vendidas en todas las órdenes"
@@ -369,8 +339,8 @@ const Dashboard = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                   <SummaryCard 
                     title="Ticket promedio"
-                    value={formatCurrency(salesSummary.avgTicket || 0)}
-                    percentChange={calculatePercentChange(salesSummary.avgTicket || 0, prevSalesSummary.avgTicket || 0)}
+                    value={formatCurrency(salesSummary.avgTicket)}
+                    percentChange={calculatePercentChange(salesSummary.avgTicket, prevSalesSummary.avgTicket)}
                     icon={<CreditCard className="h-5 w-5" />}
                     isLoading={dataLoading}
                     tooltip="GMV / Número de órdenes"
@@ -378,8 +348,8 @@ const Dashboard = () => {
                   />
                   <SummaryCard 
                     title="Visitas"
-                    value={formatNumber(salesSummary.visits || 0)}
-                    percentChange={calculatePercentChange(salesSummary.visits || 0, prevSalesSummary.visits || 0)}
+                    value={formatNumber(salesSummary.visits)}
+                    percentChange={calculatePercentChange(salesSummary.visits, prevSalesSummary.visits)}
                     icon={<Users className="h-5 w-5" />}
                     isLoading={dataLoading}
                     tooltip="Suma de visitas a productos publicados desde /visits/items"
@@ -389,7 +359,7 @@ const Dashboard = () => {
                     title="Tasa de conversión"
                     value={Number(salesSummary.conversion || 0).toFixed(1)}
                     suffix="%"
-                    percentChange={calculatePercentChange(salesSummary.conversion || 0, prevSalesSummary.conversion || 0)}
+                    percentChange={calculatePercentChange(salesSummary.conversion, prevSalesSummary.conversion)}
                     icon={<Percent className="h-5 w-5" />}
                     isLoading={dataLoading}
                     tooltip="(Unidades vendidas / Visitas) * 100"
@@ -409,8 +379,8 @@ const Dashboard = () => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
                   <SummaryCard 
                     title="Comisiones totales"
-                    value={formatCurrency(salesSummary.commissions || 0)}
-                    percentChange={calculatePercentChange(salesSummary.commissions || 0, prevSalesSummary.commissions || 0)}
+                    value={formatCurrency(salesSummary.commissions)}
+                    percentChange={calculatePercentChange(salesSummary.commissions, prevSalesSummary.commissions)}
                     icon={<DollarSign className="h-5 w-5" />}
                     isLoading={dataLoading}
                     tooltip="Suma de fee_details[].amount de todas las órdenes"
@@ -418,8 +388,8 @@ const Dashboard = () => {
                   />
                   <SummaryCard 
                     title="Costos de envío"
-                    value={formatCurrency(salesSummary.shipping || 0)}
-                    percentChange={calculatePercentChange(salesSummary.shipping || 0, prevSalesSummary.shipping || 0)}
+                    value={formatCurrency(salesSummary.shipping)}
+                    percentChange={calculatePercentChange(salesSummary.shipping, prevSalesSummary.shipping)}
                     icon={<Truck className="h-5 w-5" />}
                     isLoading={dataLoading}
                     tooltip="Suma de shipping.shipping_option.cost de todas las órdenes"
@@ -427,8 +397,8 @@ const Dashboard = () => {
                   />
                   <SummaryCard 
                     title="Impuestos"
-                    value={formatCurrency(salesSummary.taxes || 0)}
-                    percentChange={calculatePercentChange(salesSummary.taxes || 0, prevSalesSummary.taxes || 0)}
+                    value={formatCurrency(salesSummary.taxes)}
+                    percentChange={calculatePercentChange(salesSummary.taxes, prevSalesSummary.taxes)}
                     icon={<DollarSign className="h-5 w-5" />}
                     isLoading={dataLoading}
                     tooltip="Suma de taxes[].amount en órdenes"
@@ -447,7 +417,7 @@ const Dashboard = () => {
                     icon={<Megaphone className="h-5 w-5" />}
                     isLoading={dataLoading}
                     additionalInfo={advertisingGmvPercent ? `${advertisingGmvPercent}% del GMV` : null}
-                    tooltip="Gastos de campañas desde /advertising/campaigns/search (0 si no hay datos)"
+                    tooltip="Gastos de campañas desde /ads/campaigns (0 si no hay datos)"
                     isTestData={isTestData}
                   />
                   <SummaryCard 
@@ -563,19 +533,15 @@ const Dashboard = () => {
                       <Card>
                         <CardContent className="p-6">
                           <div className="text-sm text-gray-500 mb-1">Comisiones</div>
-                          <div className="text-2xl font-bold text-gofor-purple">{formatCurrency(salesSummary.commissions || 0)}</div>
-                          <div className="text-sm font-medium text-red-500">
-                            {((Number(salesSummary.commissions || 0) / Math.max(Number(salesSummary.gmv || 0), 1)) * 100).toFixed(1)}% del GMV
-                          </div>
+                          <div className="text-2xl font-bold text-gofor-purple">{formatCurrency(salesSummary.commissions)}</div>
+                          <div className="text-sm font-medium text-red-500">{((Number(salesSummary.commissions) / Math.max(Number(salesSummary.gmv), 1)) * 100).toFixed(1)}% del GMV</div>
                         </CardContent>
                       </Card>
                       <Card>
                         <CardContent className="p-6">
                           <div className="text-sm text-gray-500 mb-1">Impuestos</div>
-                          <div className="text-2xl font-bold text-gofor-purple">{formatCurrency(salesSummary.taxes || 0)}</div>
-                          <div className="text-sm font-medium text-gray-500">
-                            {((Number(salesSummary.taxes || 0) / Math.max(Number(salesSummary.gmv || 0), 1)) * 100).toFixed(1)}% del GMV
-                          </div>
+                          <div className="text-2xl font-bold text-gofor-purple">{formatCurrency(salesSummary.taxes)}</div>
+                          <div className="text-sm font-medium text-gray-500">{((Number(salesSummary.taxes) / Math.max(Number(salesSummary.gmv), 1)) * 100).toFixed(1)}% del GMV</div>
                         </CardContent>
                       </Card>
                       <Card>
@@ -626,36 +592,30 @@ const Dashboard = () => {
                         <CardTitle>Productos más vendidos</CardTitle>
                       </CardHeader>
                       <CardContent>
-                        {topProducts.length > 0 ? (
-                          <div className="overflow-x-auto">
-                            <Table>
-                              <TableHeader>
-                                <TableRow>
-                                  <TableHead className="font-semibold">Producto</TableHead>
-                                  <TableHead className="text-right font-semibold">Unidades</TableHead>
-                                  <TableHead className="text-right font-semibold">Ingresos</TableHead>
-                                  <TableHead className="text-right font-semibold">% del Total</TableHead>
+                        <div className="overflow-x-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="font-semibold">Producto</TableHead>
+                                <TableHead className="text-right font-semibold">Unidades</TableHead>
+                                <TableHead className="text-right font-semibold">Ingresos</TableHead>
+                                <TableHead className="text-right font-semibold">% del Total</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {topProducts.map((product) => (
+                                <TableRow key={product.id} className="hover:bg-gray-50">
+                                  <TableCell>{product.name}</TableCell>
+                                  <TableCell className="text-right">{formatNumber(product.units)}</TableCell>
+                                  <TableCell className="text-right">{formatCurrency(product.revenue)}</TableCell>
+                                  <TableCell className="text-right">
+                                    {((Number(product.revenue) / Math.max(topProducts.reduce((sum, p) => sum + Number(p.revenue), 0), 1)) * 100).toFixed(1)}%
+                                  </TableCell>
                                 </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {topProducts.map((product) => (
-                                  <TableRow key={product.id} className="hover:bg-gray-50">
-                                    <TableCell>{product.name}</TableCell>
-                                    <TableCell className="text-right">{formatNumber(product.units)}</TableCell>
-                                    <TableCell className="text-right">{formatCurrency(product.revenue)}</TableCell>
-                                    <TableCell className="text-right">
-                                      {((Number(product.revenue) / Math.max(topProducts.reduce((sum, p) => sum + Number(p.revenue), 0), 1)) * 100).toFixed(1)}%
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </div>
-                        ) : (
-                          <div className="py-8 text-center text-gray-500">
-                            No hay datos de productos vendidos para el período seleccionado
-                          </div>
-                        )}
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
                       </CardContent>
                     </Card>
                   </TabsContent>
@@ -669,19 +629,6 @@ const Dashboard = () => {
                     />
                   </TabsContent>
                 </Tabs>
-                
-                {/* Añadir botón para forzar actualización de datos */}
-                <div className="flex justify-end mb-8">
-                  <Button 
-                    onClick={refreshData}
-                    variant="outline"
-                    disabled={dataLoading}
-                    className="flex items-center gap-2"
-                  >
-                    {dataLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                    Actualizar datos
-                  </Button>
-                </div>
               </>
             )}
           </>

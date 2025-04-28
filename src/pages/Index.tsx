@@ -18,7 +18,7 @@ import { ArrowUp } from 'lucide-react';
 
 const Index = () => {
   return (
-    <div className="min-h-screen relative" id="hero">
+    <div className="min-h-screen relative">
       <Navbar />
       <Hero />
       <HowItWorks />

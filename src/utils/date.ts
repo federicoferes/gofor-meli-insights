@@ -1,4 +1,3 @@
-
 import { startOfDay, endOfDay, addHours, subDays, format } from 'date-fns';
 
 // UTC-3 Argentina
@@ -10,9 +9,15 @@ const ARG_OFFSET = -3;
  * @returns Objeto con fechas de inicio y fin ajustadas a UTC
  */
 export const getArgDateRange = (base: Date) => {
+  console.log(`Generando rango para fecha base: ${base.toISOString()}`);
+  console.log(`Fecha base en formato local: ${base.toString()}`);
+  
   // Ajustamos a la zona horaria de Argentina (UTC-3)
   const from = addHours(startOfDay(base), -ARG_OFFSET);
   const to = addHours(endOfDay(base), -ARG_OFFSET);
+  
+  console.log(`Rango generado: ${from.toISOString()} - ${to.toISOString()}`);
+  console.log(`Rango en formato local: ${from.toString()} - ${to.toString()}`);
   
   return { from, to };
 };
@@ -23,7 +28,11 @@ export const getArgDateRange = (base: Date) => {
  * @returns Objeto con fechas from y to
  */
 export const getPresetDateRange = (rangeType: string) => {
+  console.log(`Generando preset para: ${rangeType}`);
   const now = new Date();
+  console.log(`Fecha actual (UTC): ${now.toISOString()}`);
+  console.log(`Fecha actual (local): ${now.toString()}`);
+  console.log(`Timestamp: ${now.getTime()}, Offset: ${now.getTimezoneOffset()/60}`);
   
   switch (rangeType) {
     case "today":
@@ -62,12 +71,11 @@ export const formatDateForApi = (date: Date, isEndOfDay = false): string => {
 
 /**
  * Formatea una fecha para la API de MercadoLibre con zona horaria Argentina
- * Formato YYYY-MM-DDTHH:MM:SS (sin milisegundos ni timezone)
  */
 export const formatDateForMeLi = (date: Date, isEndOfDay = false): string => {
   if (!date) return "";
   
-  // Formato YYYY-MM-DDTHH:MM:SS para MeLi API (sin milisegundos ni timezone)
+  // Formato YYYY-MM-DDTHH:MM:SS-03:00 para MeLi API
   const year = date.getUTCFullYear();
   const month = String(date.getUTCMonth() + 1).padStart(2, '0');
   const day = String(date.getUTCDate()).padStart(2, '0');
@@ -76,7 +84,7 @@ export const formatDateForMeLi = (date: Date, isEndOfDay = false): string => {
   let minutes = isEndOfDay ? '59' : '00';
   let seconds = isEndOfDay ? '59' : '00';
   
-  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}-03:00`;
 };
 
 /**
@@ -100,7 +108,9 @@ export const isDateInRange = (dateStr: string, fromStr: string, toStr: string): 
     const from = new Date(fromStr);
     const to = new Date(toStr);
     
+    console.log(`Verificando rango de fechas: ${dateStr} está entre ${fromStr} y ${toStr}?`);
     const result = date >= from && date <= to;
+    console.log(`Resultado de verificación: ${result ? 'SÍ' : 'NO'}`);
     
     return result;
   } catch (error) {
@@ -122,6 +132,7 @@ export const formatDateForDisplay = (date: Date): string => {
  */
 export const getIsoDateRange = (dateRange: { from?: Date; to?: Date }) => {
   if (!dateRange.from || !dateRange.to) {
+    console.log("⚠️ dateRange incompleto:", dateRange);
     return {
       fromISO: undefined,
       toISO: undefined
@@ -131,5 +142,6 @@ export const getIsoDateRange = (dateRange: { from?: Date; to?: Date }) => {
   const fromISO = formatDateForApi(dateRange.from);
   const toISO = formatDateForApi(dateRange.to, true);
   
+  console.log(`ISODateRange generado: ${fromISO} - ${toISO}`);
   return { fromISO, toISO };
 };
